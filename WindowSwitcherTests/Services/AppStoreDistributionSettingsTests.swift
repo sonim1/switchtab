@@ -9,6 +9,7 @@ enum AppStoreDistributionSettingsTests {
         try testSparkleAdapterIsDirectDistributionGuarded()
         try testDirectDistributionScriptGeneratesIsolatedProjectVariant()
         try testDirectDistributionScriptRequiresSparklePublicKey()
+        try testDirectDistributionScriptAutomatesReleaseArtifacts()
         try testReadmeDocumentsDirectDistributionBuild()
     }
 
@@ -79,7 +80,24 @@ enum AppStoreDistributionSettingsTests {
         let contents = try String(contentsOf: scriptURL, encoding: .utf8)
 
         try expectTrue(contents.contains("SPARKLE_PUBLIC_ED_KEY"))
-        try expectTrue(contents.contains("SPARKLE_PUBLIC_ED_KEY is required"))
+        try expectTrue(contents.contains("require_env \"SPARKLE_PUBLIC_ED_KEY\" \"$SPARKLE_PUBLIC_ED_KEY\""))
+    }
+
+    static func testDirectDistributionScriptAutomatesReleaseArtifacts() throws {
+        let scriptURL = projectRoot.appendingPathComponent("scripts/build-direct-distribution.sh")
+        let contents = try String(contentsOf: scriptURL, encoding: .utf8)
+
+        try expectTrue(contents.contains("--release"))
+        try expectTrue(contents.contains("DEVELOPER_ID_APPLICATION"))
+        try expectTrue(contents.contains("NOTARYTOOL_KEYCHAIN_PROFILE"))
+        try expectTrue(contents.contains("DIRECT_RELEASE_OUTPUT_DIR"))
+        try expectTrue(contents.contains("hdiutil create"))
+        try expectTrue(contents.contains("notarytool submit"))
+        try expectTrue(contents.contains("stapler staple"))
+        try expectTrue(contents.contains("stapler validate"))
+        try expectTrue(contents.contains("spctl -a -vv -t open"))
+        try expectTrue(contents.contains("spctl -a -vv -t exec"))
+        try expectTrue(contents.contains("shasum -a 256"))
     }
 
     static func testReadmeDocumentsDirectDistributionBuild() throws {

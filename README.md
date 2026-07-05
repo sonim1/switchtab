@@ -36,6 +36,17 @@ Use `--prepare-only` to generate the patched workspace without building:
 SPARKLE_PUBLIC_ED_KEY="<public-ed25519-key>" scripts/build-direct-distribution.sh --prepare-only
 ```
 
+Use `--release` to produce a signed, notarized, stapled DMG and SHA-256
+checksum:
+
+```bash
+SPARKLE_PUBLIC_ED_KEY="<public-ed25519-key>" \
+SWITCHTAB_UPDATE_FEED_URL="https://updates.switchtab.app/appcast.xml" \
+DEVELOPER_ID_APPLICATION="Developer ID Application: Your Name (TEAMID)" \
+NOTARYTOOL_KEYCHAIN_PROFILE="switchtab-notary" \
+scripts/build-direct-distribution.sh --release
+```
+
 Generated files live under `.build/direct-distribution/`. The generated project
 adds Sparkle, `DIRECT_DISTRIBUTION`, and `Info.direct.plist`; the checked-in
 `WindowSwitcher.xcodeproj` remains unchanged.

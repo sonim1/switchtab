@@ -9,25 +9,74 @@ CONFIGURATION="${CONFIGURATION:-Release}"
 SWITCHTAB_UPDATE_FEED_URL="${SWITCHTAB_UPDATE_FEED_URL:-https://updates.switchtab.app/appcast.xml}"
 SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-}"
 SPARKLE_PACKAGE_VERSION="${SPARKLE_PACKAGE_VERSION:-2.9.3}"
+DEVELOPER_ID_APPLICATION="${DEVELOPER_ID_APPLICATION:-}"
+NOTARYTOOL_KEYCHAIN_PROFILE="${NOTARYTOOL_KEYCHAIN_PROFILE:-}"
+DIRECT_RELEASE_OUTPUT_DIR="${DIRECT_RELEASE_OUTPUT_DIR:-$BUILD_ROOT/release}"
 PREPARE_ONLY=0
+RELEASE=0
 
 usage() {
     cat <<'EOF'
-Usage: scripts/build-direct-distribution.sh [--prepare-only]
+Usage: scripts/build-direct-distribution.sh [--prepare-only] [--release]
 
 Environment:
-  SPARKLE_PUBLIC_ED_KEY       Required Sparkle EdDSA public key.
-  SWITCHTAB_UPDATE_FEED_URL   Optional appcast URL. Defaults to https://updates.switchtab.app/appcast.xml
-  SPARKLE_PACKAGE_VERSION     Optional Sparkle package minimum version. Defaults to 2.9.3
-  CONFIGURATION               Optional Xcode configuration. Defaults to Release
-  DIRECT_BUILD_ROOT           Optional generated workspace root. Defaults to .build/direct-distribution
+  SPARKLE_PUBLIC_ED_KEY          Required Sparkle EdDSA public key.
+  SWITCHTAB_UPDATE_FEED_URL      Optional appcast URL. Defaults to https://updates.switchtab.app/appcast.xml
+  SPARKLE_PACKAGE_VERSION        Optional Sparkle package minimum version. Defaults to 2.9.3
+  CONFIGURATION                  Optional Xcode configuration. Defaults to Release
+  DIRECT_BUILD_ROOT              Optional generated workspace root. Defaults to .build/direct-distribution
+  DIRECT_RELEASE_OUTPUT_DIR      Optional release artifact directory. Defaults to .build/direct-distribution/release
+  DEVELOPER_ID_APPLICATION       Required with --release. Example: Developer ID Application: Name (TEAMID)
+  NOTARYTOOL_KEYCHAIN_PROFILE    Required with --release. Keychain profile created by xcrun notarytool store-credentials.
 EOF
+}
+
+require_env() {
+    local name="$1"
+    local value="$2"
+
+    if [[ -z "$value" ]]; then
+        echo "$name is required" >&2
+        exit 64
+    fi
+}
+
+sign_code() {
+    local path="$1"
+
+    if [[ -e "$path" ]]; then
+        /usr/bin/codesign \
+            --force \
+            --options runtime \
+            --timestamp \
+            --sign "$DEVELOPER_ID_APPLICATION" \
+            "$path"
+    fi
+}
+
+sign_app_bundle() {
+    local app_path="$1"
+    local sparkle_framework="$app_path/Contents/Frameworks/Sparkle.framework"
+    local sparkle_current="$sparkle_framework/Versions/Current"
+
+    sign_code "$sparkle_current/Autoupdate"
+    sign_code "$sparkle_current/Updater.app"
+    sign_code "$sparkle_current/XPCServices/Downloader.xpc"
+    sign_code "$sparkle_current/XPCServices/Installer.xpc"
+    sign_code "$sparkle_framework"
+    sign_code "$app_path"
+
+    /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --prepare-only)
             PREPARE_ONLY=1
+            shift
+            ;;
+        --release)
+            RELEASE=1
             shift
             ;;
         -h|--help)
@@ -42,9 +91,16 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "$SPARKLE_PUBLIC_ED_KEY" ]]; then
-    echo "SPARKLE_PUBLIC_ED_KEY is required" >&2
+require_env "SPARKLE_PUBLIC_ED_KEY" "$SPARKLE_PUBLIC_ED_KEY"
+
+if [[ "$PREPARE_ONLY" == "1" && "$RELEASE" == "1" ]]; then
+    echo "--prepare-only and --release cannot be used together" >&2
     exit 64
+fi
+
+if [[ "$RELEASE" == "1" ]]; then
+    require_env "DEVELOPER_ID_APPLICATION" "$DEVELOPER_ID_APPLICATION"
+    require_env "NOTARYTOOL_KEYCHAIN_PROFILE" "$NOTARYTOOL_KEYCHAIN_PROFILE"
 fi
 
 rm -rf "$WORKSPACE_DIR"
@@ -170,4 +226,48 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
     build
 
 echo "Built direct distribution app:"
-echo "$DERIVED_DATA_DIR/Build/Products/$CONFIGURATION/SwitchTab.app"
+APP_PATH="$DERIVED_DATA_DIR/Build/Products/$CONFIGURATION/SwitchTab.app"
+echo "$APP_PATH"
+
+if [[ "$RELEASE" != "1" ]]; then
+    exit 0
+fi
+
+mkdir -p "$DIRECT_RELEASE_OUTPUT_DIR"
+DMG_PATH="$DIRECT_RELEASE_OUTPUT_DIR/SwitchTab.dmg"
+CHECKSUM_PATH="$DMG_PATH.sha256"
+
+sign_app_bundle "$APP_PATH"
+
+/usr/bin/hdiutil create \
+    -volname "SwitchTab" \
+    -srcfolder "$APP_PATH" \
+    -ov \
+    -format UDZO \
+    "$DMG_PATH"
+
+/usr/bin/codesign \
+    --force \
+    --sign "$DEVELOPER_ID_APPLICATION" \
+    --timestamp \
+    "$DMG_PATH"
+
+/usr/bin/codesign --verify --verbose=2 "$DMG_PATH"
+
+xcrun notarytool submit \
+    "$DMG_PATH" \
+    --keychain-profile "$NOTARYTOOL_KEYCHAIN_PROFILE" \
+    --wait
+
+xcrun stapler staple "$DMG_PATH"
+xcrun stapler validate "$DMG_PATH"
+
+/usr/sbin/spctl -a -vv -t open --context context:primary-signature "$DMG_PATH"
+/usr/sbin/spctl -a -vv -t exec "$APP_PATH"
+
+shasum -a 256 "$DMG_PATH" > "$CHECKSUM_PATH"
+
+echo "Built notarized direct distribution DMG:"
+echo "$DMG_PATH"
+echo "Wrote checksum:"
+echo "$CHECKSUM_PATH"
