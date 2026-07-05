@@ -1,0 +1,17 @@
+.DS_Store
+
+# SwiftPM and release build outputs
+.build/
+
+# Xcode user state
+*.xcuserstate
+xcuserdata/
+
+# Local assistant/tool state
+.claude/settings.local.json
+.gstack/
+
+# Notarization and release artifacts generated locally
+*.dmg
+*.zip
+*.app
