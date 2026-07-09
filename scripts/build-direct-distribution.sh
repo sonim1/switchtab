@@ -8,7 +8,7 @@ DERIVED_DATA_DIR="$BUILD_ROOT/DerivedData"
 CONFIGURATION="${CONFIGURATION:-Release}"
 SWITCHTAB_UPDATE_FEED_URL="${SWITCHTAB_UPDATE_FEED_URL:-https://updates.switchtab.app/appcast.xml}"
 SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-}"
-SPARKLE_PACKAGE_VERSION="${SPARKLE_PACKAGE_VERSION:-2.9.3}"
+SPARKLE_PACKAGE_REVISION="${SPARKLE_PACKAGE_REVISION:-d46d456107feacc80711b21847b82b07bd9fb46e}"
 DEVELOPER_ID_APPLICATION="${DEVELOPER_ID_APPLICATION:-}"
 NOTARYTOOL_KEYCHAIN_PROFILE="${NOTARYTOOL_KEYCHAIN_PROFILE:-}"
 DIRECT_RELEASE_OUTPUT_DIR="${DIRECT_RELEASE_OUTPUT_DIR:-$BUILD_ROOT/release}"
@@ -22,7 +22,7 @@ Usage: scripts/build-direct-distribution.sh [--prepare-only] [--release]
 Environment:
   SPARKLE_PUBLIC_ED_KEY          Required Sparkle EdDSA public key.
   SWITCHTAB_UPDATE_FEED_URL      Optional appcast URL. Defaults to https://updates.switchtab.app/appcast.xml
-  SPARKLE_PACKAGE_VERSION        Optional Sparkle package minimum version. Defaults to 2.9.3
+  SPARKLE_PACKAGE_REVISION       Optional Sparkle package commit revision. Defaults to Sparkle 2.9.3.
   CONFIGURATION                  Optional Xcode configuration. Defaults to Release
   DIRECT_BUILD_ROOT              Optional generated workspace root. Defaults to .build/direct-distribution
   DIRECT_RELEASE_OUTPUT_DIR      Optional release artifact directory. Defaults to .build/direct-distribution/release
@@ -93,6 +93,11 @@ done
 
 require_env "SPARKLE_PUBLIC_ED_KEY" "$SPARKLE_PUBLIC_ED_KEY"
 
+if [[ ! "$SPARKLE_PACKAGE_REVISION" =~ ^[0-9a-fA-F]{40}$ ]]; then
+    echo "SPARKLE_PACKAGE_REVISION must be a 40-character git revision" >&2
+    exit 64
+fi
+
 if [[ "$PREPARE_ONLY" == "1" && "$RELEASE" == "1" ]]; then
     echo "--prepare-only and --release cannot be used together" >&2
     exit 64
@@ -117,12 +122,12 @@ DIRECT_INFO_PLIST="$WORKSPACE_DIR/WindowSwitcher/Resources/Info.direct.plist"
 cp "$WORKSPACE_DIR/WindowSwitcher/Resources/Info.plist" "$DIRECT_INFO_PLIST"
 /usr/bin/plutil -replace SUFeedURL -string "$SWITCHTAB_UPDATE_FEED_URL" "$DIRECT_INFO_PLIST"
 /usr/bin/plutil -replace SUPublicEDKey -string "$SPARKLE_PUBLIC_ED_KEY" "$DIRECT_INFO_PLIST"
-/usr/bin/plutil -replace SUEnableAutomaticChecks -bool YES "$DIRECT_INFO_PLIST"
+/usr/bin/plutil -replace SUEnableAutomaticChecks -bool NO "$DIRECT_INFO_PLIST"
 
 PBXPROJ_PATH="$WORKSPACE_DIR/WindowSwitcher.xcodeproj/project.pbxproj"
-/usr/bin/ruby - "$PBXPROJ_PATH" "$SPARKLE_PACKAGE_VERSION" <<'RUBY'
+/usr/bin/ruby - "$PBXPROJ_PATH" "$SPARKLE_PACKAGE_REVISION" <<'RUBY'
 path = ARGV.fetch(0)
-sparkle_version = ARGV.fetch(1)
+sparkle_revision = ARGV.fetch(1)
 project = File.read(path)
 
 build_file_id = "F10000000000000000000001"
@@ -170,8 +175,8 @@ package_sections = <<~SECTIONS
 \t\t\tisa = XCRemoteSwiftPackageReference;
 \t\t\trepositoryURL = "https://github.com/sparkle-project/Sparkle";
 \t\t\trequirement = {
-\t\t\t\tkind = upToNextMajorVersion;
-\t\t\t\tminimumVersion = #{sparkle_version};
+\t\t\t\tkind = revision;
+\t\t\t\trevision = #{sparkle_revision};
 \t\t\t};
 \t\t};
 /* End XCRemoteSwiftPackageReference section */

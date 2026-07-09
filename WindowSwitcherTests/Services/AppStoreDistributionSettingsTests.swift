@@ -8,6 +8,7 @@ enum AppStoreDistributionSettingsTests {
         try testAppSandboxIsDisabledForGlobalWindowSwitching()
         try testSparkleAdapterIsDirectDistributionGuarded()
         try testDirectDistributionScriptGeneratesIsolatedProjectVariant()
+        try testDirectDistributionScriptPinsSparkleToExactRevision()
         try testDirectDistributionScriptRequiresSparklePublicKey()
         try testDirectDistributionScriptAutomatesReleaseArtifacts()
         try testReadmeDocumentsDirectDistributionBuild()
@@ -29,6 +30,10 @@ enum AppStoreDistributionSettingsTests {
         try expectTrue(contents.contains("<string>$(EXECUTABLE_NAME)</string>"))
         try expectTrue(contents.contains("<key>CFBundlePackageType</key>"))
         try expectTrue(contents.contains("<string>APPL</string>"))
+        try expectTrue(contents.contains("<key>CFBundleShortVersionString</key>"))
+        try expectTrue(contents.contains("<string>$(MARKETING_VERSION)</string>"))
+        try expectTrue(contents.contains("<key>CFBundleVersion</key>"))
+        try expectTrue(contents.contains("<string>$(CURRENT_PROJECT_VERSION)</string>"))
     }
 
     static func testXcodeProjectUsesAppStoreBundleIdentifier() throws {
@@ -64,15 +69,26 @@ enum AppStoreDistributionSettingsTests {
         let scriptURL = projectRoot.appendingPathComponent("scripts/build-direct-distribution.sh")
         let contents = try String(contentsOf: scriptURL, encoding: .utf8)
 
-        try expectTrue(contents.contains("SPARKLE_PACKAGE_VERSION=\"${SPARKLE_PACKAGE_VERSION:-2.9.3}\""))
         try expectTrue(contents.contains("https://github.com/sparkle-project/Sparkle"))
         try expectTrue(contents.contains("WindowSwitcher/Resources/Info.direct.plist"))
         try expectTrue(contents.contains("DIRECT_DISTRIBUTION"))
+        try expectTrue(contents.contains("plutil -replace SUEnableAutomaticChecks -bool NO"))
         try expectTrue(contents.contains("XCRemoteSwiftPackageReference"))
         try expectTrue(contents.contains("XCSwiftPackageProductDependency"))
         try expectTrue(contents.contains("xcodebuild"))
         try expectTrue(contents.contains("PBXPROJ_PATH=\"$WORKSPACE_DIR/WindowSwitcher.xcodeproj/project.pbxproj\""))
         try expectFalse(contents.contains("PBXPROJ_PATH=\"$PROJECT_ROOT/WindowSwitcher.xcodeproj/project.pbxproj\""))
+    }
+
+    static func testDirectDistributionScriptPinsSparkleToExactRevision() throws {
+        let scriptURL = projectRoot.appendingPathComponent("scripts/build-direct-distribution.sh")
+        let contents = try String(contentsOf: scriptURL, encoding: .utf8)
+
+        try expectTrue(contents.contains("SPARKLE_PACKAGE_REVISION=\"${SPARKLE_PACKAGE_REVISION:-d46d456107feacc80711b21847b82b07bd9fb46e}\""))
+        try expectTrue(contents.contains("kind = revision;"))
+        try expectTrue(contents.contains("revision = #{sparkle_revision};"))
+        try expectFalse(contents.contains("kind = upToNextMajorVersion;"))
+        try expectFalse(contents.contains("minimumVersion = #{sparkle_version};"))
     }
 
     static func testDirectDistributionScriptRequiresSparklePublicKey() throws {
