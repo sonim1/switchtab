@@ -9,14 +9,15 @@ Native macOS window switcher prototype for fast keyboard-first current-app windo
 
 ## Build and Test
 
-Open `WindowSwitcher.xcodeproj` in Xcode, select the `WindowSwitcher` app scheme, then use `Product > Build`. Select the `WindowSwitcherTests` scheme and use `Product > Test` for the Xcode test target.
+Open `SwitchTab.xcodeproj` in Xcode, select the `SwitchTab` app scheme, then use `Product > Build`. Select the `SwitchTabTests` scheme and use `Product > Test` for the Xcode test target.
 
 SwitchTab leaves macOS Cmd+Tab app switching untouched. The app focuses on current-app window switching with Cmd+` by default, falling back to Option+Ctrl+` when macOS refuses the reserved shortcut.
 
 This workspace can be tested with Swift Package Manager:
 
 ```bash
-swift run WindowSwitcherTestRunner
+swift build
+swift run SwitchTabTestRunner
 ```
 
 ## Direct Distribution Build
@@ -29,6 +30,8 @@ SPARKLE_PUBLIC_ED_KEY="<public-ed25519-key>" \
 SWITCHTAB_UPDATE_FEED_URL="https://updates.switchtab.app/appcast.xml" \
 scripts/build-direct-distribution.sh
 ```
+
+`SWITCHTAB_UPDATE_FEED_URL` must use `https://`.
 
 Use `--prepare-only` to generate the patched workspace without building:
 
@@ -49,6 +52,9 @@ scripts/build-direct-distribution.sh --release
 
 Generated files live under `.build/direct-distribution/`. The generated project
 adds Sparkle, `DIRECT_DISTRIBUTION`, and `Info.direct.plist`; the checked-in
-`WindowSwitcher.xcodeproj` remains unchanged.
+`SwitchTab.xcodeproj` remains unchanged.
 
-The app sources are laid out for an Xcode macOS menu bar app target at `WindowSwitcher.xcodeproj`. On this machine, `xcodebuild` requires full Xcode to be selected, so automated verification uses `swift run WindowSwitcherTestRunner`.
+The app sources are laid out for an Xcode macOS menu bar app target at
+`SwitchTab.xcodeproj`. Automated verification should include the SwiftPM build,
+the SwiftPM test runner, and an Xcode Debug app build when full Xcode is
+selected.

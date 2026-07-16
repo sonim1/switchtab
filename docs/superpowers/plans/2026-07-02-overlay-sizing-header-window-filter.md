@@ -6,65 +6,65 @@
 
 **Architecture:** Add a persisted `OverlaySizePreference` model, store it through `ApplicationSettingsStore`, route it into overlay layout computation, and make overlay metrics scale tile, thumbnail, icon, padding, and spacing. Keep AX filtering inside `AccessibilityWindowProvider` using a pure inclusion policy plus a small wiring helper tested independently from live macOS APIs.
 
-**Tech Stack:** Swift 5, SwiftUI, AppKit, ApplicationServices Accessibility, UserDefaults, custom `WindowSwitcherTestRunner`.
+**Tech Stack:** Swift 5, SwiftUI, AppKit, ApplicationServices Accessibility, UserDefaults, custom `SwitchTabTestRunner`.
 
 ---
 
 ## File Map
 
-- Add `WindowSwitcher/Models/OverlaySizePreference.swift`
+- Add `SwitchTab/Models/OverlaySizePreference.swift`
   - Define compact/default/large values and display names.
 
-- Modify `WindowSwitcher.xcodeproj/project.pbxproj`
+- Modify `SwitchTab.xcodeproj/project.pbxproj`
   - Add `OverlaySizePreference.swift` to the Models group and app target source phase.
 
-- Modify `WindowSwitcher/Services/ApplicationSettingsStore.swift`
+- Modify `SwitchTab/Services/ApplicationSettingsStore.swift`
   - Persist selected overlay size in UserDefaults.
   - Reuse `.applicationSettingsDidChange` notifications.
 
-- Modify `WindowSwitcher/UI/Settings/ApplicationSettingsViewModel.swift`
+- Modify `SwitchTab/UI/Settings/ApplicationSettingsViewModel.swift`
   - Publish current overlay size.
   - Add `setOverlaySize(_:)`.
 
-- Modify `WindowSwitcher/UI/Settings/ShortcutSettingsView.swift`
+- Modify `SwitchTab/UI/Settings/ShortcutSettingsView.swift`
   - Add segmented `Overlay size` picker under General.
 
-- Modify `WindowSwitcher/UI/Overlay/SwitcherOverlayLayoutPolicy.swift`
+- Modify `SwitchTab/UI/Overlay/SwitcherOverlayLayoutPolicy.swift`
   - Add `SwitcherOverlayLayoutMetrics`.
   - Add `overlaySize` input to `presentationLayout`.
   - Remove `320px` minimum for one/two item layouts.
 
-- Modify `WindowSwitcher/UI/Overlay/SwitcherOverlayController.swift`
+- Modify `SwitchTab/UI/Overlay/SwitcherOverlayController.swift`
   - Read overlay size from `ApplicationSettingsStore` before presenting.
   - Pass layout metrics to root view and grid columns.
 
-- Modify `WindowSwitcher/UI/Overlay/SwitcherOverlayRootView.swift`
+- Modify `SwitchTab/UI/Overlay/SwitcherOverlayRootView.swift`
   - Accept and pass layout metrics.
 
-- Modify `WindowSwitcher/UI/Overlay/SwitcherIconStripView.swift`
+- Modify `SwitchTab/UI/Overlay/SwitcherIconStripView.swift`
   - Move title above thumbnail.
   - Show small app icon beside title.
   - Use layout metrics for tile, thumbnail, and fallback icon sizes.
 
-- Modify `WindowSwitcher/Services/AccessibilityWindowProvider.swift`
+- Modify `SwitchTab/Services/AccessibilityWindowProvider.swift`
   - Add `AccessibilityWindowInclusionPolicy`.
   - Filter AX elements to `AXWindow` + `AXStandardWindow`.
 
 - Modify tests:
-  - `WindowSwitcherTests/Services/ApplicationSettingsStoreTests.swift`
-  - `WindowSwitcherTests/Services/SwitcherOverlayPresentationTests.swift`
-  - `WindowSwitcherTests/Services/AccessibilityWindowProviderTests.swift`
+  - `SwitchTabTests/Services/ApplicationSettingsStoreTests.swift`
+  - `SwitchTabTests/Services/SwitcherOverlayPresentationTests.swift`
+  - `SwitchTabTests/Services/AccessibilityWindowProviderTests.swift`
 
 ---
 
 ### Task 1: Persist Overlay Size Setting
 
 **Files:**
-- Add: `WindowSwitcher/Models/OverlaySizePreference.swift`
-- Modify: `WindowSwitcher/Services/ApplicationSettingsStore.swift`
-- Modify: `WindowSwitcher/UI/Settings/ApplicationSettingsViewModel.swift`
-- Modify: `WindowSwitcher.xcodeproj/project.pbxproj`
-- Modify: `WindowSwitcherTests/Services/ApplicationSettingsStoreTests.swift`
+- Add: `SwitchTab/Models/OverlaySizePreference.swift`
+- Modify: `SwitchTab/Services/ApplicationSettingsStore.swift`
+- Modify: `SwitchTab/UI/Settings/ApplicationSettingsViewModel.swift`
+- Modify: `SwitchTab.xcodeproj/project.pbxproj`
+- Modify: `SwitchTabTests/Services/ApplicationSettingsStoreTests.swift`
 
 - [x] **Step 1: Write failing store/view-model tests**
 
@@ -114,14 +114,14 @@ static func testViewModelUpdatesOverlaySize() throws {
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected: compile failure mentioning missing `overlaySize`, `OverlaySizePreference`, or `setOverlaySize`.
 
 - [x] **Step 3: Add `OverlaySizePreference` model and store methods**
 
-Create `WindowSwitcher/Models/OverlaySizePreference.swift`:
+Create `SwitchTab/Models/OverlaySizePreference.swift`:
 
 ```swift
 public enum OverlaySizePreference: String, CaseIterable, Identifiable, Sendable {
@@ -146,10 +146,10 @@ public enum OverlaySizePreference: String, CaseIterable, Identifiable, Sendable 
 }
 ```
 
-Add `OverlaySizePreference.swift` to `WindowSwitcher.xcodeproj/project.pbxproj` in both places:
+Add `OverlaySizePreference.swift` to `SwitchTab.xcodeproj/project.pbxproj` in both places:
 
 - `Models` group children.
-- `WindowSwitcher` target `PBXSourcesBuildPhase`.
+- `SwitchTab` target `PBXSourcesBuildPhase`.
 
 Add this key inside `ApplicationSettingsStore`:
 
@@ -177,7 +177,7 @@ public func saveOverlaySize(_ size: OverlaySizePreference) {
 
 - [x] **Step 4: Add view-model state**
 
-In `WindowSwitcher/UI/Settings/ApplicationSettingsViewModel.swift`, add published property:
+In `SwitchTab/UI/Settings/ApplicationSettingsViewModel.swift`, add published property:
 
 ```swift
 @Published public private(set) var overlaySize: OverlaySizePreference
@@ -207,7 +207,7 @@ public func setOverlaySize(_ size: OverlaySizePreference) {
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected: this task's new tests pass. Later tasks may still be unimplemented.
@@ -217,7 +217,7 @@ Expected: this task's new tests pass. Later tasks may still be unimplemented.
 ### Task 2: Add Overlay Size Picker to Settings
 
 **Files:**
-- Modify: `WindowSwitcher/UI/Settings/ShortcutSettingsView.swift`
+- Modify: `SwitchTab/UI/Settings/ShortcutSettingsView.swift`
 
 - [x] **Step 1: Add picker UI**
 
@@ -243,7 +243,7 @@ Picker(
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected: all current tests pass.
@@ -253,11 +253,11 @@ Expected: all current tests pass.
 ### Task 3: Scale Overlay Layout and Fix Single-Item Width
 
 **Files:**
-- Modify: `WindowSwitcher/UI/Overlay/SwitcherOverlayLayoutPolicy.swift`
-- Modify: `WindowSwitcher/UI/Overlay/SwitcherOverlayController.swift`
-- Modify: `WindowSwitcher/UI/Overlay/SwitcherOverlayRootView.swift`
-- Modify: `WindowSwitcher/UI/Overlay/SwitcherIconStripView.swift`
-- Modify: `WindowSwitcherTests/Services/SwitcherOverlayPresentationTests.swift`
+- Modify: `SwitchTab/UI/Overlay/SwitcherOverlayLayoutPolicy.swift`
+- Modify: `SwitchTab/UI/Overlay/SwitcherOverlayController.swift`
+- Modify: `SwitchTab/UI/Overlay/SwitcherOverlayRootView.swift`
+- Modify: `SwitchTab/UI/Overlay/SwitcherIconStripView.swift`
+- Modify: `SwitchTabTests/Services/SwitcherOverlayPresentationTests.swift`
 
 - [x] **Step 1: Write failing layout tests**
 
@@ -339,7 +339,7 @@ static func testOverlaySizePreferenceScalesMultiRowLayout() throws {
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected: compile failure because `presentationLayout(... overlaySize:)` does not exist.
@@ -593,7 +593,7 @@ LazyVGrid(columns: gridColumns, spacing: layoutMetrics.gridSpacing) {
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected: layout tests pass. Existing expected widths for 4, 5, 9, and 25 items should remain unchanged for `.standard`.
@@ -603,7 +603,7 @@ Expected: layout tests pass. Existing expected widths for 4, 5, 9, and 25 items 
 ### Task 4: Move Title Above Thumbnail and Show App Icon
 
 **Files:**
-- Modify: `WindowSwitcher/UI/Overlay/SwitcherIconStripView.swift`
+- Modify: `SwitchTab/UI/Overlay/SwitcherIconStripView.swift`
 
 - [x] **Step 1: Replace button content layout**
 
@@ -676,7 +676,7 @@ for fallback app icons and SF Symbols.
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected: tests pass.
@@ -686,8 +686,8 @@ Expected: tests pass.
 ### Task 5: Filter Chrome Find/Non-Standard AX Windows
 
 **Files:**
-- Modify: `WindowSwitcher/Services/AccessibilityWindowProvider.swift`
-- Modify: `WindowSwitcherTests/Services/AccessibilityWindowProviderTests.swift`
+- Modify: `SwitchTab/Services/AccessibilityWindowProvider.swift`
+- Modify: `SwitchTabTests/Services/AccessibilityWindowProviderTests.swift`
 
 - [x] **Step 1: Write failing policy tests**
 
@@ -735,7 +735,7 @@ static func testWindowInclusionPolicyMapsOnlyAcceptedWindows() throws {
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected: compile failure because `AccessibilityWindowInclusionPolicy` is missing.
@@ -824,7 +824,7 @@ inside the mapping loop, using `windowElements[mapping.originalIndex]` and `mapp
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected: all tests pass.
@@ -841,7 +841,7 @@ Expected: all tests pass.
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected: exit code `0`, output includes `All tests passed`.
@@ -851,7 +851,7 @@ Expected: exit code `0`, output includes `All tests passed`.
 Run:
 
 ```bash
-rtk env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project WindowSwitcher.xcodeproj -scheme WindowSwitcher -configuration Debug build
+rtk env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project SwitchTab.xcodeproj -scheme SwitchTab -configuration Debug build
 ```
 
 Expected: exit code `0`, output ends with `** BUILD SUCCEEDED **`.
@@ -862,7 +862,7 @@ Run:
 
 ```bash
 rtk pkill -x SwitchTab
-rtk open /Users/kendrick/Library/Developer/Xcode/DerivedData/WindowSwitcher-frebkfflvyhvsigdhdrulkxzudqc/Build/Products/Debug/SwitchTab.app
+rtk open /Users/kendrick/Library/Developer/Xcode/DerivedData/SwitchTab-frebkfflvyhvsigdhdrulkxzudqc/Build/Products/Debug/SwitchTab.app
 ```
 
 Expected: app starts from menu bar. If macOS asks for Accessibility or Screen Recording again, grant the exact DerivedData app.
@@ -952,8 +952,8 @@ Scope accepted as-is. The plan touches more than 8 files and introduces more tha
 ### Review Findings Applied
 
 1. Architecture: `LazyVGrid` row spacing must use `layoutMetrics.gridSpacing`, not `SwitcherOverlayLayoutPolicy.iconGridSpacing`.
-2. Code Quality: move `OverlaySizePreference` to `WindowSwitcher/Models/OverlaySizePreference.swift`.
-3. Code Quality: add the new model file to `WindowSwitcher.xcodeproj/project.pbxproj` so Xcode app builds include it.
+2. Code Quality: move `OverlaySizePreference` to `SwitchTab/Models/OverlaySizePreference.swift`.
+3. Code Quality: add the new model file to `SwitchTab.xcodeproj/project.pbxproj` so Xcode app builds include it.
 4. Tests: add a pure accepted-window mapping test so AX filter wiring is covered without live macOS AX elements.
 5. Tests: add multi-row Compact/Default/Large layout coverage so size scaling is not only tested for one item.
 
@@ -1001,23 +1001,23 @@ Sequential implementation is preferred. Settings, layout, overlay rendering, and
 
 - [x] **T1 (P2, human: ~20min / CC: ~5min)** - Overlay layout - Route rendered grid row spacing through `layoutMetrics.gridSpacing`.
   - Surfaced by: Architecture Review - calculated layout and rendered grid used different spacing sources.
-  - Files: `WindowSwitcher/UI/Overlay/SwitcherIconStripView.swift`, `WindowSwitcher/UI/Overlay/SwitcherOverlayLayoutPolicy.swift`, `WindowSwitcherTests/Services/SwitcherOverlayPresentationTests.swift`
-  - Verify: `rtk test swift run WindowSwitcherTestRunner`
+  - Files: `SwitchTab/UI/Overlay/SwitcherIconStripView.swift`, `SwitchTab/UI/Overlay/SwitcherOverlayLayoutPolicy.swift`, `SwitchTabTests/Services/SwitcherOverlayPresentationTests.swift`
+  - Verify: `rtk test swift run SwitchTabTestRunner`
 
-- [x] **T2 (P2, human: ~25min / CC: ~8min)** - Settings model - Move `OverlaySizePreference` into `WindowSwitcher/Models` and add Xcode project membership.
+- [x] **T2 (P2, human: ~25min / CC: ~8min)** - Settings model - Move `OverlaySizePreference` into `SwitchTab/Models` and add Xcode project membership.
   - Surfaced by: Code Quality Review - shared UI/layout setting type should not live in a service file.
-  - Files: `WindowSwitcher/Models/OverlaySizePreference.swift`, `WindowSwitcher.xcodeproj/project.pbxproj`, `WindowSwitcher/Services/ApplicationSettingsStore.swift`
-  - Verify: `rtk test swift run WindowSwitcherTestRunner` and `rtk env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project WindowSwitcher.xcodeproj -scheme WindowSwitcher -configuration Debug build`
+  - Files: `SwitchTab/Models/OverlaySizePreference.swift`, `SwitchTab.xcodeproj/project.pbxproj`, `SwitchTab/Services/ApplicationSettingsStore.swift`
+  - Verify: `rtk test swift run SwitchTabTestRunner` and `rtk env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project SwitchTab.xcodeproj -scheme SwitchTab -configuration Debug build`
 
 - [x] **T3 (P2, human: ~35min / CC: ~10min)** - AX filtering - Add accepted-window mapping helper and tests.
   - Surfaced by: Test Review - policy-only tests would not catch snapshot/registry wiring mistakes.
-  - Files: `WindowSwitcher/Services/AccessibilityWindowProvider.swift`, `WindowSwitcherTests/Services/AccessibilityWindowProviderTests.swift`
-  - Verify: `rtk test swift run WindowSwitcherTestRunner`
+  - Files: `SwitchTab/Services/AccessibilityWindowProvider.swift`, `SwitchTabTests/Services/AccessibilityWindowProviderTests.swift`
+  - Verify: `rtk test swift run SwitchTabTestRunner`
 
 - [x] **T4 (P2, human: ~20min / CC: ~5min)** - Layout tests - Add multi-row Compact/Default/Large coverage.
   - Surfaced by: Test Review - single-item size test does not cover multi-row layout path.
-  - Files: `WindowSwitcherTests/Services/SwitcherOverlayPresentationTests.swift`
-  - Verify: `rtk test swift run WindowSwitcherTestRunner`
+  - Files: `SwitchTabTests/Services/SwitcherOverlayPresentationTests.swift`
+  - Verify: `rtk test swift run SwitchTabTestRunner`
 
 ## GSTACK REVIEW REPORT
 

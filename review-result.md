@@ -1,7 +1,7 @@
 # SwitchTab 전체 코드 리뷰 (2026-07-02)
 
 macOS 메뉴바 창 전환 앱(현재 앱 내 창 전환, Cmd+`). Swift 6 SPM + Xcode 프로젝트 이중 구성.
-전체 소스 약 5,500줄 + 테스트 30개 스위트. `swift run WindowSwitcherTestRunner` 전부 통과 확인함.
+전체 소스 약 5,500줄 + 테스트 30개 스위트. `swift run SwitchTabTestRunner` 전부 통과 확인함.
 
 ## 총평
 

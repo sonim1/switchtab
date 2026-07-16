@@ -1,0 +1,789 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A00000000000000000000001 /* SwitchTabApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* SwitchTabApp.swift */; };
+		A00000000000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* AppDelegate.swift */; };
+		A00000000000000000000004 /* SwitcherMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000004 /* SwitcherMode.swift */; };
+		A00000000000000000000005 /* PermissionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000005 /* PermissionState.swift */; };
+		A00000000000000000000006 /* ShortcutSetting.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000006 /* ShortcutSetting.swift */; };
+		A00000000000000000000093 /* ShortcutKeyCodeResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000097 /* ShortcutKeyCodeResolver.swift */; };
+		A00000000000000000000008 /* WindowItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000008 /* WindowItem.swift */; };
+		A00000000000000000000009 /* SwitcherSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000009 /* SwitcherSession.swift */; };
+		A00000000000000000000011 /* PermissionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000011 /* PermissionService.swift */; };
+		A00000000000000000000012 /* ShortcutValidationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000012 /* ShortcutValidationService.swift */; };
+		A00000000000000000000013 /* ShortcutSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000013 /* ShortcutSettingsStore.swift */; };
+		A00000000000000000000015 /* SwitcherOverlayState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000015 /* SwitcherOverlayState.swift */; };
+		A00000000000000000000016 /* SwitcherOverlayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000016 /* SwitcherOverlayController.swift */; };
+		A00000000000000000000017 /* MenuBarContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000017 /* MenuBarContentView.swift */; };
+		A00000000000000000000018 /* CoreModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000018 /* CoreModelsTests.swift */; };
+		A00000000000000000000019 /* SwitcherItemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000019 /* SwitcherItemTests.swift */; };
+		A00000000000000000000021 /* PermissionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000021 /* PermissionServiceTests.swift */; };
+		A00000000000000000000022 /* ShortcutValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000022 /* ShortcutValidationTests.swift */; };
+		A00000000000000000000023 /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000023 /* TestSupport.swift */; };
+		A00000000000000000000025 /* HotkeyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000029 /* HotkeyService.swift */; };
+		A00000000000000000000027 /* PermissionStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000031 /* PermissionStatusView.swift */; };
+		A00000000000000000000029 /* SwitcherOverlayStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000033 /* SwitcherOverlayStateTests.swift */; };
+		A00000000000000000000031 /* AccessibilityWindowProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000035 /* AccessibilityWindowProvider.swift */; };
+		A00000000000000000000032 /* WindowThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000036 /* WindowThumbnailService.swift */; };
+		A00000000000000000000033 /* WindowFocusService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000037 /* WindowFocusService.swift */; };
+		A00000000000000000000035 /* AccessibilityWindowProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000039 /* AccessibilityWindowProviderTests.swift */; };
+		A00000000000000000000036 /* WindowThumbnailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000040 /* WindowThumbnailTests.swift */; };
+		A00000000000000000000037 /* WindowFocusServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000041 /* WindowFocusServiceTests.swift */; };
+		A00000000000000000000038 /* SwitchTabSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000042 /* SwitchTabSessionTests.swift */; };
+		A00000000000000000000039 /* WindowEdgeCaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000043 /* WindowEdgeCaseTests.swift */; };
+		A00000000000000000000040 /* ShortcutSettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000044 /* ShortcutSettingsViewModel.swift */; };
+		A00000000000000000000041 /* ShortcutSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000045 /* ShortcutSettingsView.swift */; };
+		A00000000000000000000042 /* ShortcutSettingsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000046 /* ShortcutSettingsStoreTests.swift */; };
+		A00000000000000000000043 /* HotkeyServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000047 /* HotkeyServiceTests.swift */; };
+		A00000000000000000000044 /* SwitcherPerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000048 /* SwitcherPerformanceTests.swift */; };
+		A00000000000000000000045 /* PermissionRecoveryCopyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000049 /* PermissionRecoveryCopyTests.swift */; };
+		A00000000000000000000046 /* SwitcherOverlayRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000050 /* SwitcherOverlayRootView.swift */; };
+		A00000000000000000000047 /* ShortcutCaptureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000051 /* ShortcutCaptureTests.swift */; };
+		A00000000000000000000048 /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000052 /* SettingsWindowController.swift */; };
+		A00000000000000000000051 /* SwitcherIconStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000055 /* SwitcherIconStripView.swift */; };
+		A00000000000000000000054 /* SwitcherOverlayPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000058 /* SwitcherOverlayPresentationTests.swift */; };
+		A00000000000000000000055 /* SwitcherOverlayConfirmationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000059 /* SwitcherOverlayConfirmationTests.swift */; };
+		A00000000000000000000058 /* ShortcutSettingsViewModelPermissionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000062 /* ShortcutSettingsViewModelPermissionTests.swift */; };
+		A00000000000000000000060 /* SwitcherRecencyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000064 /* SwitcherRecencyStore.swift */; };
+		A00000000000000000000061 /* SwitcherRecencyStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000065 /* SwitcherRecencyStoreTests.swift */; };
+		A00000000000000000000062 /* SwitcherOverlayPresentationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000066 /* SwitcherOverlayPresentationPolicy.swift */; };
+		A00000000000000000000063 /* SwitcherOverlayPresentationPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000067 /* SwitcherOverlayPresentationPolicyTests.swift */; };
+		A00000000000000000000064 /* PermissionSettingsDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000068 /* PermissionSettingsDestination.swift */; };
+		A00000000000000000000065 /* SwitcherOverlayLayoutPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000069 /* SwitcherOverlayLayoutPolicy.swift */; };
+		A00000000000000000000066 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000070 /* Assets.xcassets */; };
+		A00000000000000000000067 /* UsageMetricsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000071 /* UsageMetricsStore.swift */; };
+		A00000000000000000000068 /* AboutSwitchTabContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000072 /* AboutSwitchTabContent.swift */; };
+		A00000000000000000000069 /* AboutSwitchTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000073 /* AboutSwitchTabView.swift */; };
+		A00000000000000000000070 /* AboutWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000074 /* AboutWindowController.swift */; };
+		A00000000000000000000071 /* UsageMetricsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000075 /* UsageMetricsStoreTests.swift */; };
+		A00000000000000000000072 /* AboutSwitchTabContentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000076 /* AboutSwitchTabContentTests.swift */; };
+		A00000000000000000000073 /* ApplicationIconStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000077 /* ApplicationIconStore.swift */; };
+		A00000000000000000000074 /* ApplicationIconStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000078 /* ApplicationIconStoreTests.swift */; };
+		A00000000000000000000077 /* SwitcherPresentationSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000081 /* SwitcherPresentationSnapshot.swift */; };
+		A00000000000000000000078 /* SwitcherPresentationSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000082 /* SwitcherPresentationSnapshotTests.swift */; };
+		A00000000000000000000081 /* OverlaySourceHygieneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000085 /* OverlaySourceHygieneTests.swift */; };
+		A00000000000000000000082 /* MenuBarIconAssetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000086 /* MenuBarIconAssetTests.swift */; };
+		A00000000000000000000083 /* SettingsActivationPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000087 /* SettingsActivationPolicyTests.swift */; };
+		A00000000000000000000084 /* ShortcutModifierResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000088 /* ShortcutModifierResolver.swift */; };
+		A00000000000000000000085 /* ApplicationSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000089 /* ApplicationSettingsStore.swift */; };
+		A00000000000000000000086 /* ApplicationSettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000090 /* ApplicationSettingsViewModel.swift */; };
+		A00000000000000000000087 /* ApplicationSettingsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000091 /* ApplicationSettingsStoreTests.swift */; };
+		A00000000000000000000088 /* SwitcherReadableText.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000092 /* SwitcherReadableText.swift */; };
+		A00000000000000000000089 /* OverlaySizePreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000093 /* OverlaySizePreference.swift */; };
+		A00000000000000000000090 /* UpdateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000094 /* UpdateController.swift */; };
+		A00000000000000000000091 /* UpdateControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000095 /* UpdateControllerTests.swift */; };
+		A00000000000000000000092 /* SparkleUpdateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000096 /* SparkleUpdateController.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C00000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E00000000000000000000001;
+			remoteInfo = SwitchTab;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		B00000000000000000000001 /* SwitchTabApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchTabApp.swift; sourceTree = "<group>"; };
+		B00000000000000000000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		B00000000000000000000004 /* SwitcherMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherMode.swift; sourceTree = "<group>"; };
+		B00000000000000000000005 /* PermissionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionState.swift; sourceTree = "<group>"; };
+		B00000000000000000000006 /* ShortcutSetting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutSetting.swift; sourceTree = "<group>"; };
+		B00000000000000000000097 /* ShortcutKeyCodeResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutKeyCodeResolver.swift; sourceTree = "<group>"; };
+		B00000000000000000000008 /* WindowItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowItem.swift; sourceTree = "<group>"; };
+		B00000000000000000000009 /* SwitcherSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherSession.swift; sourceTree = "<group>"; };
+		B00000000000000000000011 /* PermissionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionService.swift; sourceTree = "<group>"; };
+		B00000000000000000000012 /* ShortcutValidationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutValidationService.swift; sourceTree = "<group>"; };
+		B00000000000000000000013 /* ShortcutSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutSettingsStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000015 /* SwitcherOverlayState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayState.swift; sourceTree = "<group>"; };
+		B00000000000000000000016 /* SwitcherOverlayController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayController.swift; sourceTree = "<group>"; };
+		B00000000000000000000017 /* MenuBarContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContentView.swift; sourceTree = "<group>"; };
+		B00000000000000000000018 /* CoreModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreModelsTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000019 /* SwitcherItemTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherItemTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000021 /* PermissionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionServiceTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000022 /* ShortcutValidationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutValidationTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000023 /* TestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
+		B00000000000000000000024 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B00000000000000000000025 /* SwitchTab.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SwitchTab.entitlements; sourceTree = "<group>"; };
+		B00000000000000000000026 /* SwitchTab.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SwitchTab.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B00000000000000000000027 /* SwitchTabTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SwitchTabTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B00000000000000000000029 /* HotkeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyService.swift; sourceTree = "<group>"; };
+		B00000000000000000000031 /* PermissionStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionStatusView.swift; sourceTree = "<group>"; };
+		B00000000000000000000033 /* SwitcherOverlayStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayStateTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000035 /* AccessibilityWindowProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityWindowProvider.swift; sourceTree = "<group>"; };
+		B00000000000000000000036 /* WindowThumbnailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowThumbnailService.swift; sourceTree = "<group>"; };
+		B00000000000000000000037 /* WindowFocusService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFocusService.swift; sourceTree = "<group>"; };
+		B00000000000000000000039 /* AccessibilityWindowProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityWindowProviderTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000040 /* WindowThumbnailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowThumbnailTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000041 /* WindowFocusServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFocusServiceTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000042 /* SwitchTabSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchTabSessionTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000043 /* WindowEdgeCaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowEdgeCaseTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000044 /* ShortcutSettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutSettingsViewModel.swift; sourceTree = "<group>"; };
+		B00000000000000000000045 /* ShortcutSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutSettingsView.swift; sourceTree = "<group>"; };
+		B00000000000000000000046 /* ShortcutSettingsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutSettingsStoreTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000047 /* HotkeyServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyServiceTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000048 /* SwitcherPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherPerformanceTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000049 /* PermissionRecoveryCopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionRecoveryCopyTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000050 /* SwitcherOverlayRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayRootView.swift; sourceTree = "<group>"; };
+		B00000000000000000000051 /* ShortcutCaptureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutCaptureTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000052 /* SettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowController.swift; sourceTree = "<group>"; };
+		B00000000000000000000055 /* SwitcherIconStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherIconStripView.swift; sourceTree = "<group>"; };
+		B00000000000000000000058 /* SwitcherOverlayPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayPresentationTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000059 /* SwitcherOverlayConfirmationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayConfirmationTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000062 /* ShortcutSettingsViewModelPermissionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutSettingsViewModelPermissionTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000064 /* SwitcherRecencyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherRecencyStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000065 /* SwitcherRecencyStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherRecencyStoreTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000066 /* SwitcherOverlayPresentationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayPresentationPolicy.swift; sourceTree = "<group>"; };
+		B00000000000000000000067 /* SwitcherOverlayPresentationPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayPresentationPolicyTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000068 /* PermissionSettingsDestination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionSettingsDestination.swift; sourceTree = "<group>"; };
+		B00000000000000000000069 /* SwitcherOverlayLayoutPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayLayoutPolicy.swift; sourceTree = "<group>"; };
+		B00000000000000000000070 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B00000000000000000000071 /* UsageMetricsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageMetricsStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000072 /* AboutSwitchTabContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutSwitchTabContent.swift; sourceTree = "<group>"; };
+		B00000000000000000000073 /* AboutSwitchTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutSwitchTabView.swift; sourceTree = "<group>"; };
+		B00000000000000000000074 /* AboutWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutWindowController.swift; sourceTree = "<group>"; };
+		B00000000000000000000075 /* UsageMetricsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageMetricsStoreTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000076 /* AboutSwitchTabContentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutSwitchTabContentTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000077 /* ApplicationIconStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationIconStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000078 /* ApplicationIconStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationIconStoreTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000081 /* SwitcherPresentationSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherPresentationSnapshot.swift; sourceTree = "<group>"; };
+		B00000000000000000000082 /* SwitcherPresentationSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherPresentationSnapshotTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000085 /* OverlaySourceHygieneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlaySourceHygieneTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000086 /* MenuBarIconAssetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconAssetTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000087 /* SettingsActivationPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsActivationPolicyTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000088 /* ShortcutModifierResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutModifierResolver.swift; sourceTree = "<group>"; };
+		B00000000000000000000089 /* ApplicationSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationSettingsStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000090 /* ApplicationSettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationSettingsViewModel.swift; sourceTree = "<group>"; };
+		B00000000000000000000091 /* ApplicationSettingsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationSettingsStoreTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000092 /* SwitcherReadableText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherReadableText.swift; sourceTree = "<group>"; };
+		B00000000000000000000093 /* OverlaySizePreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlaySizePreference.swift; sourceTree = "<group>"; };
+		B00000000000000000000094 /* UpdateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateController.swift; sourceTree = "<group>"; };
+		B00000000000000000000095 /* UpdateControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateControllerTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000096 /* SparkleUpdateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleUpdateController.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		F00000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F00000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		G00000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				G00000000000000000000002 /* SwitchTab */,
+				G00000000000000000000009 /* SwitchTabTests */,
+				G00000000000000000000015 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		G00000000000000000000002 /* SwitchTab */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000001 /* SwitchTabApp.swift */,
+				B00000000000000000000002 /* AppDelegate.swift */,
+				G00000000000000000000003 /* Models */,
+				G00000000000000000000004 /* Services */,
+				G00000000000000000000005 /* UI */,
+				G00000000000000000000008 /* Resources */,
+			);
+			path = SwitchTab;
+			sourceTree = "<group>";
+		};
+		G00000000000000000000003 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000004 /* SwitcherMode.swift */,
+				B00000000000000000000005 /* PermissionState.swift */,
+				B00000000000000000000006 /* ShortcutSetting.swift */,
+				B00000000000000000000097 /* ShortcutKeyCodeResolver.swift */,
+					B00000000000000000000008 /* WindowItem.swift */,
+					B00000000000000000000009 /* SwitcherSession.swift */,
+					B00000000000000000000092 /* SwitcherReadableText.swift */,
+					B00000000000000000000093 /* OverlaySizePreference.swift */,
+				);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		G00000000000000000000004 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000011 /* PermissionService.swift */,
+				B00000000000000000000012 /* ShortcutValidationService.swift */,
+				B00000000000000000000088 /* ShortcutModifierResolver.swift */,
+				B00000000000000000000013 /* ShortcutSettingsStore.swift */,
+				B00000000000000000000089 /* ApplicationSettingsStore.swift */,
+				B00000000000000000000064 /* SwitcherRecencyStore.swift */,
+				B00000000000000000000071 /* UsageMetricsStore.swift */,
+				B00000000000000000000077 /* ApplicationIconStore.swift */,
+				B00000000000000000000081 /* SwitcherPresentationSnapshot.swift */,
+				B00000000000000000000094 /* UpdateController.swift */,
+				B00000000000000000000096 /* SparkleUpdateController.swift */,
+				B00000000000000000000068 /* PermissionSettingsDestination.swift */,
+				B00000000000000000000029 /* HotkeyService.swift */,
+				B00000000000000000000035 /* AccessibilityWindowProvider.swift */,
+				B00000000000000000000036 /* WindowThumbnailService.swift */,
+				B00000000000000000000037 /* WindowFocusService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		G00000000000000000000005 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				G00000000000000000000006 /* Overlay */,
+				G00000000000000000000007 /* MenuBar */,
+				G00000000000000000000016 /* Permissions */,
+				G00000000000000000000017 /* Settings */,
+				G00000000000000000000018 /* About */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		G00000000000000000000006 /* Overlay */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000015 /* SwitcherOverlayState.swift */,
+				B00000000000000000000016 /* SwitcherOverlayController.swift */,
+				B00000000000000000000066 /* SwitcherOverlayPresentationPolicy.swift */,
+				B00000000000000000000069 /* SwitcherOverlayLayoutPolicy.swift */,
+				B00000000000000000000050 /* SwitcherOverlayRootView.swift */,
+				B00000000000000000000055 /* SwitcherIconStripView.swift */,
+			);
+			path = Overlay;
+			sourceTree = "<group>";
+		};
+		G00000000000000000000007 /* MenuBar */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000017 /* MenuBarContentView.swift */,
+			);
+			path = MenuBar;
+			sourceTree = "<group>";
+		};
+		G00000000000000000000008 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000070 /* Assets.xcassets */,
+				B00000000000000000000024 /* Info.plist */,
+				B00000000000000000000025 /* SwitchTab.entitlements */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		G00000000000000000000009 /* SwitchTabTests */ = {
+			isa = PBXGroup;
+			children = (
+				G00000000000000000000010 /* Models */,
+				G00000000000000000000011 /* Services */,
+				G00000000000000000000012 /* Support */,
+			);
+			path = SwitchTabTests;
+			sourceTree = "<group>";
+		};
+		G00000000000000000000010 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000018 /* CoreModelsTests.swift */,
+				B00000000000000000000019 /* SwitcherItemTests.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		G00000000000000000000011 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000021 /* PermissionServiceTests.swift */,
+				B00000000000000000000022 /* ShortcutValidationTests.swift */,
+				B00000000000000000000033 /* SwitcherOverlayStateTests.swift */,
+				B00000000000000000000039 /* AccessibilityWindowProviderTests.swift */,
+				B00000000000000000000040 /* WindowThumbnailTests.swift */,
+				B00000000000000000000041 /* WindowFocusServiceTests.swift */,
+				B00000000000000000000042 /* SwitchTabSessionTests.swift */,
+				B00000000000000000000043 /* WindowEdgeCaseTests.swift */,
+				B00000000000000000000046 /* ShortcutSettingsStoreTests.swift */,
+				B00000000000000000000065 /* SwitcherRecencyStoreTests.swift */,
+				B00000000000000000000047 /* HotkeyServiceTests.swift */,
+				B00000000000000000000048 /* SwitcherPerformanceTests.swift */,
+				B00000000000000000000049 /* PermissionRecoveryCopyTests.swift */,
+				B00000000000000000000051 /* ShortcutCaptureTests.swift */,
+				B00000000000000000000058 /* SwitcherOverlayPresentationTests.swift */,
+				B00000000000000000000059 /* SwitcherOverlayConfirmationTests.swift */,
+				B00000000000000000000062 /* ShortcutSettingsViewModelPermissionTests.swift */,
+				B00000000000000000000067 /* SwitcherOverlayPresentationPolicyTests.swift */,
+				B00000000000000000000075 /* UsageMetricsStoreTests.swift */,
+				B00000000000000000000076 /* AboutSwitchTabContentTests.swift */,
+				B00000000000000000000078 /* ApplicationIconStoreTests.swift */,
+				B00000000000000000000082 /* SwitcherPresentationSnapshotTests.swift */,
+				B00000000000000000000086 /* MenuBarIconAssetTests.swift */,
+				B00000000000000000000087 /* SettingsActivationPolicyTests.swift */,
+				B00000000000000000000091 /* ApplicationSettingsStoreTests.swift */,
+				B00000000000000000000095 /* UpdateControllerTests.swift */,
+				B00000000000000000000085 /* OverlaySourceHygieneTests.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		G00000000000000000000012 /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000023 /* TestSupport.swift */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+		G00000000000000000000015 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000026 /* SwitchTab.app */,
+				B00000000000000000000027 /* SwitchTabTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		G00000000000000000000016 /* Permissions */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000031 /* PermissionStatusView.swift */,
+			);
+			path = Permissions;
+			sourceTree = "<group>";
+		};
+		G00000000000000000000017 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000044 /* ShortcutSettingsViewModel.swift */,
+				B00000000000000000000090 /* ApplicationSettingsViewModel.swift */,
+				B00000000000000000000045 /* ShortcutSettingsView.swift */,
+				B00000000000000000000052 /* SettingsWindowController.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		G00000000000000000000018 /* About */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000072 /* AboutSwitchTabContent.swift */,
+				B00000000000000000000073 /* AboutSwitchTabView.swift */,
+				B00000000000000000000074 /* AboutWindowController.swift */,
+			);
+			path = About;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		E00000000000000000000001 /* SwitchTab */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = H00000000000000000000002 /* Build configuration list for PBXNativeTarget "SwitchTab" */;
+			buildPhases = (
+				I00000000000000000000001 /* Sources */,
+				F00000000000000000000001 /* Frameworks */,
+				J00000000000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SwitchTab;
+			productName = SwitchTab;
+			productReference = B00000000000000000000026 /* SwitchTab.app */;
+			productType = "com.apple.product-type.application";
+		};
+		E00000000000000000000002 /* SwitchTabTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = H00000000000000000000003 /* Build configuration list for PBXNativeTarget "SwitchTabTests" */;
+			buildPhases = (
+				I00000000000000000000002 /* Sources */,
+				F00000000000000000000002 /* Frameworks */,
+				J00000000000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				K00000000000000000000001 /* PBXTargetDependency */,
+			);
+			name = SwitchTabTests;
+			productName = SwitchTabTests;
+			productReference = B00000000000000000000027 /* SwitchTabTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D00000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 2650;
+				TargetAttributes = {
+					E00000000000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					E00000000000000000000002 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = E00000000000000000000001;
+					};
+				};
+			};
+			buildConfigurationList = H00000000000000000000001 /* Build configuration list for PBXProject "SwitchTab" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = G00000000000000000000001;
+			productRefGroup = G00000000000000000000015 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				E00000000000000000000001 /* SwitchTab */,
+				E00000000000000000000002 /* SwitchTabTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		J00000000000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00000000000000000000066 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		J00000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		I00000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00000000000000000000001 /* SwitchTabApp.swift in Sources */,
+				A00000000000000000000002 /* AppDelegate.swift in Sources */,
+				A00000000000000000000004 /* SwitcherMode.swift in Sources */,
+				A00000000000000000000005 /* PermissionState.swift in Sources */,
+				A00000000000000000000006 /* ShortcutSetting.swift in Sources */,
+				A00000000000000000000093 /* ShortcutKeyCodeResolver.swift in Sources */,
+					A00000000000000000000008 /* WindowItem.swift in Sources */,
+					A00000000000000000000009 /* SwitcherSession.swift in Sources */,
+					A00000000000000000000088 /* SwitcherReadableText.swift in Sources */,
+					A00000000000000000000089 /* OverlaySizePreference.swift in Sources */,
+					A00000000000000000000011 /* PermissionService.swift in Sources */,
+				A00000000000000000000012 /* ShortcutValidationService.swift in Sources */,
+				A00000000000000000000084 /* ShortcutModifierResolver.swift in Sources */,
+				A00000000000000000000013 /* ShortcutSettingsStore.swift in Sources */,
+				A00000000000000000000085 /* ApplicationSettingsStore.swift in Sources */,
+				A00000000000000000000060 /* SwitcherRecencyStore.swift in Sources */,
+				A00000000000000000000067 /* UsageMetricsStore.swift in Sources */,
+				A00000000000000000000073 /* ApplicationIconStore.swift in Sources */,
+				A00000000000000000000077 /* SwitcherPresentationSnapshot.swift in Sources */,
+				A00000000000000000000090 /* UpdateController.swift in Sources */,
+				A00000000000000000000092 /* SparkleUpdateController.swift in Sources */,
+				A00000000000000000000064 /* PermissionSettingsDestination.swift in Sources */,
+				A00000000000000000000015 /* SwitcherOverlayState.swift in Sources */,
+				A00000000000000000000016 /* SwitcherOverlayController.swift in Sources */,
+				A00000000000000000000062 /* SwitcherOverlayPresentationPolicy.swift in Sources */,
+				A00000000000000000000065 /* SwitcherOverlayLayoutPolicy.swift in Sources */,
+				A00000000000000000000017 /* MenuBarContentView.swift in Sources */,
+				A00000000000000000000068 /* AboutSwitchTabContent.swift in Sources */,
+				A00000000000000000000069 /* AboutSwitchTabView.swift in Sources */,
+				A00000000000000000000070 /* AboutWindowController.swift in Sources */,
+				A00000000000000000000025 /* HotkeyService.swift in Sources */,
+				A00000000000000000000051 /* SwitcherIconStripView.swift in Sources */,
+				A00000000000000000000027 /* PermissionStatusView.swift in Sources */,
+				A00000000000000000000031 /* AccessibilityWindowProvider.swift in Sources */,
+				A00000000000000000000032 /* WindowThumbnailService.swift in Sources */,
+				A00000000000000000000033 /* WindowFocusService.swift in Sources */,
+				A00000000000000000000040 /* ShortcutSettingsViewModel.swift in Sources */,
+				A00000000000000000000086 /* ApplicationSettingsViewModel.swift in Sources */,
+				A00000000000000000000041 /* ShortcutSettingsView.swift in Sources */,
+				A00000000000000000000046 /* SwitcherOverlayRootView.swift in Sources */,
+				A00000000000000000000048 /* SettingsWindowController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		I00000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00000000000000000000018 /* CoreModelsTests.swift in Sources */,
+				A00000000000000000000019 /* SwitcherItemTests.swift in Sources */,
+				A00000000000000000000021 /* PermissionServiceTests.swift in Sources */,
+				A00000000000000000000022 /* ShortcutValidationTests.swift in Sources */,
+				A00000000000000000000023 /* TestSupport.swift in Sources */,
+				A00000000000000000000029 /* SwitcherOverlayStateTests.swift in Sources */,
+				A00000000000000000000035 /* AccessibilityWindowProviderTests.swift in Sources */,
+				A00000000000000000000036 /* WindowThumbnailTests.swift in Sources */,
+				A00000000000000000000037 /* WindowFocusServiceTests.swift in Sources */,
+				A00000000000000000000038 /* SwitchTabSessionTests.swift in Sources */,
+				A00000000000000000000039 /* WindowEdgeCaseTests.swift in Sources */,
+				A00000000000000000000042 /* ShortcutSettingsStoreTests.swift in Sources */,
+				A00000000000000000000061 /* SwitcherRecencyStoreTests.swift in Sources */,
+				A00000000000000000000043 /* HotkeyServiceTests.swift in Sources */,
+				A00000000000000000000044 /* SwitcherPerformanceTests.swift in Sources */,
+				A00000000000000000000045 /* PermissionRecoveryCopyTests.swift in Sources */,
+				A00000000000000000000047 /* ShortcutCaptureTests.swift in Sources */,
+				A00000000000000000000054 /* SwitcherOverlayPresentationTests.swift in Sources */,
+				A00000000000000000000055 /* SwitcherOverlayConfirmationTests.swift in Sources */,
+				A00000000000000000000058 /* ShortcutSettingsViewModelPermissionTests.swift in Sources */,
+				A00000000000000000000063 /* SwitcherOverlayPresentationPolicyTests.swift in Sources */,
+				A00000000000000000000071 /* UsageMetricsStoreTests.swift in Sources */,
+				A00000000000000000000072 /* AboutSwitchTabContentTests.swift in Sources */,
+				A00000000000000000000074 /* ApplicationIconStoreTests.swift in Sources */,
+				A00000000000000000000078 /* SwitcherPresentationSnapshotTests.swift in Sources */,
+				A00000000000000000000082 /* MenuBarIconAssetTests.swift in Sources */,
+				A00000000000000000000083 /* SettingsActivationPolicyTests.swift in Sources */,
+				A00000000000000000000087 /* ApplicationSettingsStoreTests.swift in Sources */,
+				A00000000000000000000091 /* UpdateControllerTests.swift in Sources */,
+				A00000000000000000000081 /* OverlaySourceHygieneTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		K00000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E00000000000000000000001 /* SwitchTab */;
+			targetProxy = C00000000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		L00000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		L00000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		L00000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_ENTITLEMENTS = SwitchTab/Resources/SwitchTab.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SwitchTab/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.royjen.switchtab;
+				PRODUCT_NAME = SwitchTab;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		L00000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_ENTITLEMENTS = SwitchTab/Resources/SwitchTab.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SwitchTab/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.royjen.switchtab;
+				PRODUCT_NAME = SwitchTab;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		L00000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.local.SwitchTabTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SwitchTab.app/Contents/MacOS/SwitchTab";
+				WRAPPER_EXTENSION = xctest;
+			};
+			name = Debug;
+		};
+		L00000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.local.SwitchTabTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SwitchTab.app/Contents/MacOS/SwitchTab";
+				WRAPPER_EXTENSION = xctest;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		H00000000000000000000001 /* Build configuration list for PBXProject "SwitchTab" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				L00000000000000000000001 /* Debug */,
+				L00000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		H00000000000000000000002 /* Build configuration list for PBXNativeTarget "SwitchTab" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				L00000000000000000000003 /* Debug */,
+				L00000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		H00000000000000000000003 /* Build configuration list for PBXNativeTarget "SwitchTabTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				L00000000000000000000005 /* Debug */,
+				L00000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = D00000000000000000000001 /* Project object */;
+}

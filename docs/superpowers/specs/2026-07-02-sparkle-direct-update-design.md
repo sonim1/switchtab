@@ -152,7 +152,7 @@ Cloudflare upload.
 
 ## Direct Build Contract
 
-The default `WindowSwitcher` app target remains Sparkle-free. A direct
+The default `SwitchTab` app target remains Sparkle-free. A direct
 distribution build must supply three things together:
 
 1. The `DIRECT_DISTRIBUTION` Swift compilation condition.

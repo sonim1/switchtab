@@ -6,24 +6,24 @@
 
 **Architecture:** Add a small `UpdateChecking` boundary owned by `AppDelegate`. Menu bar and Settings send user-initiated update requests through that boundary. Sparkle is isolated behind `DIRECT_DISTRIBUTION && canImport(Sparkle)`, so the normal build and test runner use an unavailable fallback.
 
-**Tech Stack:** Swift, SwiftUI, AppKit, NotificationCenter, Sparkle 2, current custom `WindowSwitcherTestRunner`.
+**Tech Stack:** Swift, SwiftUI, AppKit, NotificationCenter, Sparkle 2, current custom `SwitchTabTestRunner`.
 
 ---
 
 ## File Map
 
-- Create `WindowSwitcher/Services/UpdateController.swift`: update protocol, unavailable fallback, version display helper, update request notification, factory.
-- Create `WindowSwitcher/Services/SparkleUpdateController.swift`: Sparkle adapter compiled only for direct distribution builds.
-- Modify `WindowSwitcher/AppDelegate.swift`: own the update controller and observe update-check requests.
-- Modify `WindowSwitcher/UI/MenuBar/MenuBarContentView.swift`: show `Check for Updates...` when update checking is available.
-- Modify `WindowSwitcher/UI/Settings/ApplicationSettingsViewModel.swift`: expose update availability, current version, manual check action, and automatic-check preference.
-- Modify `WindowSwitcher/UI/Settings/ShortcutSettingsView.swift`: add the Settings `Updates` section.
-- Modify `WindowSwitcher/UI/Settings/SettingsWindowController.swift`: inject the shared update controller.
+- Create `SwitchTab/Services/UpdateController.swift`: update protocol, unavailable fallback, version display helper, update request notification, factory.
+- Create `SwitchTab/Services/SparkleUpdateController.swift`: Sparkle adapter compiled only for direct distribution builds.
+- Modify `SwitchTab/AppDelegate.swift`: own the update controller and observe update-check requests.
+- Modify `SwitchTab/UI/MenuBar/MenuBarContentView.swift`: show `Check for Updates...` when update checking is available.
+- Modify `SwitchTab/UI/Settings/ApplicationSettingsViewModel.swift`: expose update availability, current version, manual check action, and automatic-check preference.
+- Modify `SwitchTab/UI/Settings/ShortcutSettingsView.swift`: add the Settings `Updates` section.
+- Modify `SwitchTab/UI/Settings/SettingsWindowController.swift`: inject the shared update controller.
 - Modify `Package.swift`: no Sparkle dependency for the default package target; new source files are picked up automatically.
-- Modify `WindowSwitcher.xcodeproj/project.pbxproj`: add the two new service files to the app target. Do not link Sparkle to the default app target.
-- Create `WindowSwitcherTests/Services/UpdateControllerTests.swift`: pure tests for fallback, notification posting, version display, and menu model.
-- Modify `WindowSwitcherTests/Services/ApplicationSettingsStoreTests.swift`: add view model update-control tests.
-- Modify `WindowSwitcherTests/TestRunner.swift`: run `UpdateControllerTests`.
+- Modify `SwitchTab.xcodeproj/project.pbxproj`: add the two new service files to the app target. Do not link Sparkle to the default app target.
+- Create `SwitchTabTests/Services/UpdateControllerTests.swift`: pure tests for fallback, notification posting, version display, and menu model.
+- Modify `SwitchTabTests/Services/ApplicationSettingsStoreTests.swift`: add view model update-control tests.
+- Modify `SwitchTabTests/TestRunner.swift`: run `UpdateControllerTests`.
 
 The workspace currently has no `.git` directory. Commit steps in this plan are verification checkpoints; when this project is inside a git worktree, run the listed commit commands.
 
@@ -32,18 +32,18 @@ The workspace currently has no `.git` directory. Commit steps in this plan are v
 ## Task 1: Update Boundary
 
 **Files:**
-- Create: `WindowSwitcher/Services/UpdateController.swift`
-- Create: `WindowSwitcherTests/Services/UpdateControllerTests.swift`
-- Modify: `WindowSwitcherTests/TestRunner.swift`
-- Modify: `WindowSwitcher.xcodeproj/project.pbxproj`
+- Create: `SwitchTab/Services/UpdateController.swift`
+- Create: `SwitchTabTests/Services/UpdateControllerTests.swift`
+- Modify: `SwitchTabTests/TestRunner.swift`
+- Modify: `SwitchTab.xcodeproj/project.pbxproj`
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `WindowSwitcherTests/Services/UpdateControllerTests.swift`:
+Create `SwitchTabTests/Services/UpdateControllerTests.swift`:
 
 ```swift
 import Foundation
-import WindowSwitcher
+import SwitchTab
 
 enum UpdateControllerTests {
     @MainActor
@@ -129,7 +129,7 @@ private final class UpdateNotificationRecorder: @unchecked Sendable {
 }
 ```
 
-Add this call to `WindowSwitcherTests/TestRunner.swift` after `ApplicationSettingsStoreTests.run()`:
+Add this call to `SwitchTabTests/TestRunner.swift` after `ApplicationSettingsStoreTests.run()`:
 
 ```swift
 try UpdateControllerTests.run()
@@ -140,20 +140,20 @@ try UpdateControllerTests.run()
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected: FAIL at compile time with missing symbols such as `UnavailableUpdateController`, `ApplicationVersionProvider`, `UpdateRequestPoster`, or `MenuBarMenuModel`.
 
 - [ ] **Step 3: Add the minimal update boundary**
 
-Create `WindowSwitcher/Services/UpdateController.swift`:
+Create `SwitchTab/Services/UpdateController.swift`:
 
 ```swift
 import Foundation
 
 public extension Notification.Name {
-    static let checkForUpdates = Notification.Name("WindowSwitcher.checkForUpdates")
+    static let checkForUpdates = Notification.Name("SwitchTab.checkForUpdates")
 }
 
 @MainActor
@@ -223,13 +223,13 @@ public enum UpdateRequestPoster {
 }
 ```
 
-Add `UpdateController.swift` to `WindowSwitcher.xcodeproj/project.pbxproj`:
+Add `UpdateController.swift` to `SwitchTab.xcodeproj/project.pbxproj`:
 
 ```text
 PBXBuildFile: UpdateController.swift in Sources
 PBXFileReference: UpdateController.swift
 PBXGroup Services: UpdateController.swift
-PBXSourcesBuildPhase WindowSwitcher: UpdateController.swift in Sources
+PBXSourcesBuildPhase SwitchTab: UpdateController.swift in Sources
 ```
 
 - [ ] **Step 4: Run the tests to verify the next expected failure**
@@ -237,14 +237,14 @@ PBXSourcesBuildPhase WindowSwitcher: UpdateController.swift in Sources
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected: FAIL because `MenuBarMenuModel` and `MenuBarMenuItemKind` are not defined yet.
 
 - [ ] **Step 5: Add the pure menu model**
 
-Modify `WindowSwitcher/UI/MenuBar/MenuBarContentView.swift` near the top:
+Modify `SwitchTab/UI/MenuBar/MenuBarContentView.swift` near the top:
 
 ```swift
 public enum MenuBarMenuItemKind: Equatable {
@@ -271,7 +271,7 @@ public enum MenuBarMenuModel {
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected: PASS and output includes `All tests passed`.
@@ -281,7 +281,7 @@ Expected: PASS and output includes `All tests passed`.
 If `.git` exists:
 
 ```bash
-rtk git add WindowSwitcher/Services/UpdateController.swift WindowSwitcher/UI/MenuBar/MenuBarContentView.swift WindowSwitcherTests/Services/UpdateControllerTests.swift WindowSwitcherTests/TestRunner.swift WindowSwitcher.xcodeproj/project.pbxproj
+rtk git add SwitchTab/Services/UpdateController.swift SwitchTab/UI/MenuBar/MenuBarContentView.swift SwitchTabTests/Services/UpdateControllerTests.swift SwitchTabTests/TestRunner.swift SwitchTab.xcodeproj/project.pbxproj
 rtk git commit -m "feat: add update checking boundary"
 ```
 
@@ -292,9 +292,9 @@ Expected in the current workspace: skip commit because `rtk git status --short` 
 ## Task 2: Menu Bar and AppDelegate Wiring
 
 **Files:**
-- Modify: `WindowSwitcher/AppDelegate.swift`
-- Modify: `WindowSwitcher/UI/MenuBar/MenuBarContentView.swift`
-- Modify: `WindowSwitcherTests/Services/UpdateControllerTests.swift`
+- Modify: `SwitchTab/AppDelegate.swift`
+- Modify: `SwitchTab/UI/MenuBar/MenuBarContentView.swift`
+- Modify: `SwitchTabTests/Services/UpdateControllerTests.swift`
 
 - [ ] **Step 1: Write the failing notification wiring test**
 
@@ -332,14 +332,14 @@ static func testMenuUpdateActionPostsUpdateRequest() throws {
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected: FAIL because `MenuBarUpdateAction` does not exist.
 
 - [ ] **Step 3: Add menu bar update action and menu item**
 
-Modify `WindowSwitcher/UI/MenuBar/MenuBarContentView.swift`:
+Modify `SwitchTab/UI/MenuBar/MenuBarContentView.swift`:
 
 ```swift
 public enum MenuBarUpdateAction {
@@ -409,7 +409,7 @@ Add the action:
 
 - [ ] **Step 4: Wire AppDelegate to observe update requests**
 
-Modify `WindowSwitcher/AppDelegate.swift`:
+Modify `SwitchTab/AppDelegate.swift`:
 
 ```swift
 private let updateChecker: any UpdateChecking = UpdateControllerFactory.make()
@@ -452,8 +452,8 @@ private func observeUpdateCheckRequests() {
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
-rtk env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project WindowSwitcher.xcodeproj -scheme WindowSwitcher -configuration Debug build
+rtk test swift run SwitchTabTestRunner
+rtk env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project SwitchTab.xcodeproj -scheme SwitchTab -configuration Debug build
 ```
 
 Expected: tests pass and Xcode build ends with `** BUILD SUCCEEDED **`.
@@ -463,7 +463,7 @@ Expected: tests pass and Xcode build ends with `** BUILD SUCCEEDED **`.
 If `.git` exists:
 
 ```bash
-rtk git add WindowSwitcher/AppDelegate.swift WindowSwitcher/UI/MenuBar/MenuBarContentView.swift WindowSwitcherTests/Services/UpdateControllerTests.swift
+rtk git add SwitchTab/AppDelegate.swift SwitchTab/UI/MenuBar/MenuBarContentView.swift SwitchTabTests/Services/UpdateControllerTests.swift
 rtk git commit -m "feat: wire update checks from menu bar"
 ```
 
@@ -474,11 +474,11 @@ Expected in the current workspace: skip commit because `rtk git status --short` 
 ## Task 3: Settings Update Controls
 
 **Files:**
-- Modify: `WindowSwitcher/UI/Settings/ApplicationSettingsViewModel.swift`
-- Modify: `WindowSwitcher/UI/Settings/ShortcutSettingsView.swift`
-- Modify: `WindowSwitcher/UI/Settings/SettingsWindowController.swift`
-- Modify: `WindowSwitcher/AppDelegate.swift`
-- Modify: `WindowSwitcherTests/Services/ApplicationSettingsStoreTests.swift`
+- Modify: `SwitchTab/UI/Settings/ApplicationSettingsViewModel.swift`
+- Modify: `SwitchTab/UI/Settings/ShortcutSettingsView.swift`
+- Modify: `SwitchTab/UI/Settings/SettingsWindowController.swift`
+- Modify: `SwitchTab/AppDelegate.swift`
+- Modify: `SwitchTabTests/Services/ApplicationSettingsStoreTests.swift`
 
 - [ ] **Step 1: Write the failing view model tests**
 
@@ -567,14 +567,14 @@ private final class FakeUpdateChecker: UpdateChecking {
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected: FAIL because `ApplicationSettingsViewModel` has no update checker initializer argument or update properties.
 
 - [ ] **Step 3: Extend the application settings view model**
 
-Modify `WindowSwitcher/UI/Settings/ApplicationSettingsViewModel.swift`:
+Modify `SwitchTab/UI/Settings/ApplicationSettingsViewModel.swift`:
 
 ```swift
 @Published public private(set) var updateCheckingAvailable: Bool
@@ -631,7 +631,7 @@ public func setAutomaticallyChecksForUpdates(_ enabled: Bool) {
 
 - [ ] **Step 4: Add Settings UI**
 
-Modify `WindowSwitcher/UI/Settings/ShortcutSettingsView.swift` under the overlay size picker and before the first divider:
+Modify `SwitchTab/UI/Settings/ShortcutSettingsView.swift` under the overlay size picker and before the first divider:
 
 ```swift
 if applicationSettingsViewModel.updateCheckingAvailable {
@@ -667,7 +667,7 @@ if applicationSettingsViewModel.updateCheckingAvailable {
 
 - [ ] **Step 5: Inject the shared update controller into Settings**
 
-Modify `WindowSwitcher/UI/Settings/SettingsWindowController.swift`:
+Modify `SwitchTab/UI/Settings/SettingsWindowController.swift`:
 
 ```swift
 public init(
@@ -684,7 +684,7 @@ public init(
 }
 ```
 
-Modify `WindowSwitcher/AppDelegate.swift` in `showSettingsWindow()`:
+Modify `SwitchTab/AppDelegate.swift` in `showSettingsWindow()`:
 
 ```swift
 settingsWindowController = SettingsWindowController(
@@ -700,8 +700,8 @@ settingsWindowController = SettingsWindowController(
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
-rtk env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project WindowSwitcher.xcodeproj -scheme WindowSwitcher -configuration Debug build
+rtk test swift run SwitchTabTestRunner
+rtk env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project SwitchTab.xcodeproj -scheme SwitchTab -configuration Debug build
 ```
 
 Expected: tests pass and Xcode build ends with `** BUILD SUCCEEDED **`.
@@ -711,7 +711,7 @@ Expected: tests pass and Xcode build ends with `** BUILD SUCCEEDED **`.
 If `.git` exists:
 
 ```bash
-rtk git add WindowSwitcher/UI/Settings/ApplicationSettingsViewModel.swift WindowSwitcher/UI/Settings/ShortcutSettingsView.swift WindowSwitcher/UI/Settings/SettingsWindowController.swift WindowSwitcher/AppDelegate.swift WindowSwitcherTests/Services/ApplicationSettingsStoreTests.swift
+rtk git add SwitchTab/UI/Settings/ApplicationSettingsViewModel.swift SwitchTab/UI/Settings/ShortcutSettingsView.swift SwitchTab/UI/Settings/SettingsWindowController.swift SwitchTab/AppDelegate.swift SwitchTabTests/Services/ApplicationSettingsStoreTests.swift
 rtk git commit -m "feat: add settings update controls"
 ```
 
@@ -722,9 +722,9 @@ Expected in the current workspace: skip commit because `rtk git status --short` 
 ## Task 4: Sparkle Adapter Source
 
 **Files:**
-- Create: `WindowSwitcher/Services/SparkleUpdateController.swift`
-- Modify: `WindowSwitcher.xcodeproj/project.pbxproj`
-- Modify: `WindowSwitcherTests/Services/AppStoreDistributionSettingsTests.swift`
+- Create: `SwitchTab/Services/SparkleUpdateController.swift`
+- Modify: `SwitchTab.xcodeproj/project.pbxproj`
+- Modify: `SwitchTabTests/Services/AppStoreDistributionSettingsTests.swift`
 
 - [ ] **Step 1: Write the source hygiene test**
 
@@ -738,13 +738,13 @@ Add this test:
 
 ```swift
 static func testSparkleAdapterIsDirectDistributionGuarded() throws {
-    let adapterURL = projectRoot.appendingPathComponent("WindowSwitcher/Services/SparkleUpdateController.swift")
+    let adapterURL = projectRoot.appendingPathComponent("SwitchTab/Services/SparkleUpdateController.swift")
     let contents = try String(contentsOf: adapterURL, encoding: .utf8)
 
     try expectTrue(contents.contains("#if DIRECT_DISTRIBUTION && canImport(Sparkle)"))
     try expectTrue(contents.contains("import Sparkle"))
 
-    let projectURL = projectRoot.appendingPathComponent("WindowSwitcher.xcodeproj/project.pbxproj")
+    let projectURL = projectRoot.appendingPathComponent("SwitchTab.xcodeproj/project.pbxproj")
     let projectContents = try String(contentsOf: projectURL, encoding: .utf8)
 
     try expectFalse(projectContents.contains("DIRECT_DISTRIBUTION;"))
@@ -756,14 +756,14 @@ static func testSparkleAdapterIsDirectDistributionGuarded() throws {
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected: FAIL because `SparkleUpdateController.swift` does not exist.
 
 - [ ] **Step 3: Add the guarded Sparkle adapter**
 
-Create `WindowSwitcher/Services/SparkleUpdateController.swift`:
+Create `SwitchTab/Services/SparkleUpdateController.swift`:
 
 ```swift
 #if DIRECT_DISTRIBUTION && canImport(Sparkle)
@@ -807,24 +807,24 @@ public final class SparkleUpdateController: NSObject, UpdateChecking {
 #endif
 ```
 
-Add `SparkleUpdateController.swift` to `WindowSwitcher.xcodeproj/project.pbxproj`:
+Add `SparkleUpdateController.swift` to `SwitchTab.xcodeproj/project.pbxproj`:
 
 ```text
 PBXBuildFile: SparkleUpdateController.swift in Sources
 PBXFileReference: SparkleUpdateController.swift
 PBXGroup Services: SparkleUpdateController.swift
-PBXSourcesBuildPhase WindowSwitcher: SparkleUpdateController.swift in Sources
+PBXSourcesBuildPhase SwitchTab: SparkleUpdateController.swift in Sources
 ```
 
-Do not add Sparkle package references to `WindowSwitcher.xcodeproj/project.pbxproj` in this task. Without the `DIRECT_DISTRIBUTION` compilation condition and Sparkle package product, this source compiles to an empty file.
+Do not add Sparkle package references to `SwitchTab.xcodeproj/project.pbxproj` in this task. Without the `DIRECT_DISTRIBUTION` compilation condition and Sparkle package product, this source compiles to an empty file.
 
 - [ ] **Step 4: Run default-build tests**
 
 Run:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
-rtk env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project WindowSwitcher.xcodeproj -scheme WindowSwitcher -configuration Debug build
+rtk test swift run SwitchTabTestRunner
+rtk env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project SwitchTab.xcodeproj -scheme SwitchTab -configuration Debug build
 ```
 
 Expected: tests pass and Xcode build ends with `** BUILD SUCCEEDED **`. Settings and menu bar do not show update controls in this default build.
@@ -834,7 +834,7 @@ Expected: tests pass and Xcode build ends with `** BUILD SUCCEEDED **`. Settings
 If `.git` exists:
 
 ```bash
-rtk git add WindowSwitcher/Services/SparkleUpdateController.swift WindowSwitcher.xcodeproj/project.pbxproj WindowSwitcherTests/Services/AppStoreDistributionSettingsTests.swift
+rtk git add SwitchTab/Services/SparkleUpdateController.swift SwitchTab.xcodeproj/project.pbxproj SwitchTabTests/Services/AppStoreDistributionSettingsTests.swift
 rtk git commit -m "feat: add guarded sparkle update adapter"
 ```
 
@@ -855,7 +855,7 @@ Append this section to `docs/superpowers/specs/2026-07-02-sparkle-direct-update-
 ```markdown
 ## Direct Build Contract
 
-The default `WindowSwitcher` app target remains Sparkle-free. A direct
+The default `SwitchTab` app target remains Sparkle-free. A direct
 distribution build must supply three things together:
 
 1. The `DIRECT_DISTRIBUTION` Swift compilation condition.
@@ -892,9 +892,9 @@ Scope for the release automation pass:
 Run:
 
 ```bash
-rtk grep "DIRECT_DISTRIBUTION" WindowSwitcher docs/superpowers
-rtk grep "Sparkle" WindowSwitcher.xcodeproj/project.pbxproj
-rtk test swift run WindowSwitcherTestRunner
+rtk grep "DIRECT_DISTRIBUTION" SwitchTab docs/superpowers
+rtk grep "Sparkle" SwitchTab.xcodeproj/project.pbxproj
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected:
@@ -921,7 +921,7 @@ Expected in the current workspace: skip commit because `rtk git status --short` 
 - [ ] Run the fast test runner:
 
 ```bash
-rtk test swift run WindowSwitcherTestRunner
+rtk test swift run SwitchTabTestRunner
 ```
 
 Expected: `All tests passed`.
@@ -929,7 +929,7 @@ Expected: `All tests passed`.
 - [ ] Run the Xcode app build:
 
 ```bash
-rtk env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project WindowSwitcher.xcodeproj -scheme WindowSwitcher -configuration Debug build
+rtk env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project SwitchTab.xcodeproj -scheme SwitchTab -configuration Debug build
 ```
 
 Expected: `** BUILD SUCCEEDED **`.
@@ -937,7 +937,7 @@ Expected: `** BUILD SUCCEEDED **`.
 - [ ] Confirm default build stays Sparkle-free:
 
 ```bash
-rtk grep "XCRemoteSwiftPackageReference|XCSwiftPackageProductDependency|DIRECT_DISTRIBUTION;" WindowSwitcher.xcodeproj/project.pbxproj
+rtk grep "XCRemoteSwiftPackageReference|XCSwiftPackageProductDependency|DIRECT_DISTRIBUTION;" SwitchTab.xcodeproj/project.pbxproj
 ```
 
 Expected: no matches for package references or default direct-distribution flags.

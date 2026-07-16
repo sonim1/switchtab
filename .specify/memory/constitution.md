@@ -21,7 +21,7 @@ Templates requiring updates:
 - AGENTS.md: reviewed, no update required
 Follow-up TODOs: None
 -->
-# Window Switcher Constitution
+# SwitchTab Constitution
 
 ## Core Principles
 

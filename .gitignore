@@ -11,6 +11,13 @@ xcuserdata/
 .claude/settings.local.json
 .gstack/
 
+# Local secret material
+.env
+.env.*
+*.p8
+*.p12
+*.pem
+
 # Notarization and release artifacts generated locally
 *.dmg
 *.zip

@@ -6,25 +6,25 @@ let package = Package(
     name: "SwitchTab",
     platforms: [.macOS(.v14)],
     products: [
-        .library(name: "WindowSwitcher", targets: ["WindowSwitcher"]),
-        .executable(name: "WindowSwitcherTestRunner", targets: ["WindowSwitcherTestRunner"])
+        .library(name: "SwitchTab", targets: ["SwitchTab"]),
+        .executable(name: "SwitchTabTestRunner", targets: ["SwitchTabTestRunner"])
     ],
     targets: [
         .target(
-            name: "WindowSwitcher",
-            path: "WindowSwitcher",
+            name: "SwitchTab",
+            path: "SwitchTab",
             exclude: [
                 "Resources/Info.plist",
-                "Resources/WindowSwitcher.entitlements",
+                "Resources/SwitchTab.entitlements",
                 "Resources/MenuBarIcon.svg",
                 "Resources/AppIconCandidates",
                 "Resources/Assets.xcassets"
             ]
         ),
         .executableTarget(
-            name: "WindowSwitcherTestRunner",
-            dependencies: ["WindowSwitcher"],
-            path: "WindowSwitcherTests"
+            name: "SwitchTabTestRunner",
+            dependencies: ["SwitchTab"],
+            path: "SwitchTabTests"
         )
     ]
 )

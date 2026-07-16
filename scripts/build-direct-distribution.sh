@@ -8,7 +8,7 @@ DERIVED_DATA_DIR="$BUILD_ROOT/DerivedData"
 CONFIGURATION="${CONFIGURATION:-Release}"
 SWITCHTAB_UPDATE_FEED_URL="${SWITCHTAB_UPDATE_FEED_URL:-https://updates.switchtab.app/appcast.xml}"
 SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-}"
-SPARKLE_PACKAGE_REVISION="${SPARKLE_PACKAGE_REVISION:-d46d456107feacc80711b21847b82b07bd9fb46e}"
+SPARKLE_PACKAGE_REVISION="${SPARKLE_PACKAGE_REVISION:-b6496a74a087257ef5e6da1c5b29a447a60f5bd7}"
 DEVELOPER_ID_APPLICATION="${DEVELOPER_ID_APPLICATION:-}"
 NOTARYTOOL_KEYCHAIN_PROFILE="${NOTARYTOOL_KEYCHAIN_PROFILE:-}"
 DIRECT_RELEASE_OUTPUT_DIR="${DIRECT_RELEASE_OUTPUT_DIR:-$BUILD_ROOT/release}"
@@ -22,7 +22,7 @@ Usage: scripts/build-direct-distribution.sh [--prepare-only] [--release]
 Environment:
   SPARKLE_PUBLIC_ED_KEY          Required Sparkle EdDSA public key.
   SWITCHTAB_UPDATE_FEED_URL      Optional appcast URL. Defaults to https://updates.switchtab.app/appcast.xml
-  SPARKLE_PACKAGE_REVISION       Optional Sparkle package commit revision. Defaults to Sparkle 2.9.3.
+  SPARKLE_PACKAGE_REVISION       Optional Sparkle package commit revision. Defaults to Sparkle 2.9.4.
   CONFIGURATION                  Optional Xcode configuration. Defaults to Release
   DIRECT_BUILD_ROOT              Optional generated workspace root. Defaults to .build/direct-distribution
   DIRECT_RELEASE_OUTPUT_DIR      Optional release artifact directory. Defaults to .build/direct-distribution/release
@@ -98,6 +98,11 @@ if [[ ! "$SPARKLE_PACKAGE_REVISION" =~ ^[0-9a-fA-F]{40}$ ]]; then
     exit 64
 fi
 
+if [[ ! "$SWITCHTAB_UPDATE_FEED_URL" == https://* ]]; then
+    echo "SWITCHTAB_UPDATE_FEED_URL must start with https://" >&2
+    exit 64
+fi
+
 if [[ "$PREPARE_ONLY" == "1" && "$RELEASE" == "1" ]]; then
     echo "--prepare-only and --release cannot be used together" >&2
     exit 64
@@ -118,13 +123,13 @@ rsync -a \
     "$PROJECT_ROOT/" \
     "$WORKSPACE_DIR/"
 
-DIRECT_INFO_PLIST="$WORKSPACE_DIR/WindowSwitcher/Resources/Info.direct.plist"
-cp "$WORKSPACE_DIR/WindowSwitcher/Resources/Info.plist" "$DIRECT_INFO_PLIST"
+DIRECT_INFO_PLIST="$WORKSPACE_DIR/SwitchTab/Resources/Info.direct.plist"
+cp "$WORKSPACE_DIR/SwitchTab/Resources/Info.plist" "$DIRECT_INFO_PLIST"
 /usr/bin/plutil -replace SUFeedURL -string "$SWITCHTAB_UPDATE_FEED_URL" "$DIRECT_INFO_PLIST"
 /usr/bin/plutil -replace SUPublicEDKey -string "$SPARKLE_PUBLIC_ED_KEY" "$DIRECT_INFO_PLIST"
 /usr/bin/plutil -replace SUEnableAutomaticChecks -bool NO "$DIRECT_INFO_PLIST"
 
-PBXPROJ_PATH="$WORKSPACE_DIR/WindowSwitcher.xcodeproj/project.pbxproj"
+PBXPROJ_PATH="$WORKSPACE_DIR/SwitchTab.xcodeproj/project.pbxproj"
 /usr/bin/ruby - "$PBXPROJ_PATH" "$SPARKLE_PACKAGE_REVISION" <<'RUBY'
 path = ARGV.fetch(0)
 sparkle_revision = ARGV.fetch(1)
@@ -157,8 +162,8 @@ replace_once!(
 
 replace_once!(
   project,
-  "\t\t\tdependencies = (\n\t\t\t);\n\t\t\tname = WindowSwitcher;\n\t\t\tproductName = WindowSwitcher;\n",
-  "\t\t\tdependencies = (\n\t\t\t);\n\t\t\tname = WindowSwitcher;\n\t\t\tpackageProductDependencies = (\n\t\t\t\t#{product_dep_id} /* Sparkle */,\n\t\t\t);\n\t\t\tproductName = WindowSwitcher;\n",
+  "\t\t\tdependencies = (\n\t\t\t);\n\t\t\tname = SwitchTab;\n\t\t\tproductName = SwitchTab;\n",
+  "\t\t\tdependencies = (\n\t\t\t);\n\t\t\tname = SwitchTab;\n\t\t\tpackageProductDependencies = (\n\t\t\t\t#{product_dep_id} /* Sparkle */,\n\t\t\t);\n\t\t\tproductName = SwitchTab;\n",
   "app target package product dependency"
 )
 
@@ -198,7 +203,7 @@ replace_once!(
   "Swift package sections"
 )
 
-project.gsub!("INFOPLIST_FILE = WindowSwitcher/Resources/Info.plist;", "INFOPLIST_FILE = WindowSwitcher/Resources/Info.direct.plist;")
+project.gsub!("INFOPLIST_FILE = SwitchTab/Resources/Info.plist;", "INFOPLIST_FILE = SwitchTab/Resources/Info.direct.plist;")
 
 count = 0
 project.gsub!("PRODUCT_NAME = SwitchTab;\n\t\t\t\tSWIFT_VERSION = 5.0;") do
@@ -224,8 +229,8 @@ fi
 
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
     xcodebuild \
-    -project "$WORKSPACE_DIR/WindowSwitcher.xcodeproj" \
-    -scheme WindowSwitcher \
+    -project "$WORKSPACE_DIR/SwitchTab.xcodeproj" \
+    -scheme SwitchTab \
     -configuration "$CONFIGURATION" \
     -derivedDataPath "$DERIVED_DATA_DIR" \
     build
