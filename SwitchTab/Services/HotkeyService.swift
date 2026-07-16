@@ -59,6 +59,26 @@ public final class HotkeyService {
         return finishRegistrationAttempt(requestedDisplayText, mode: mode)
     }
 
+    public func register<Settings: Sequence>(
+        setting: ShortcutSetting,
+        existing settings: Settings,
+        mode: SwitcherMode,
+        handler: @escaping () -> Void
+    ) -> HotkeyRegistrationResult where Settings.Element == ShortcutSetting {
+        var requestedDisplayText: String?
+        guard registerIfUsable(
+            setting,
+            existing: settings,
+            mode: mode,
+            requestedDisplayText: &requestedDisplayText,
+            handler: handler
+        ) else {
+            return finishRegistrationAttempt(requestedDisplayText, mode: mode)
+        }
+
+        return .registered
+    }
+
     public func unregisterAll() {
         let hasRegisteredHotkeys = !registeredSettingsByMode.isEmpty
         guard hasRegisteredHotkeys || !registrationMessages.isEmpty else {

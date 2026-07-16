@@ -6,8 +6,7 @@ let package = Package(
     name: "SwitchTab",
     platforms: [.macOS(.v14)],
     products: [
-        .library(name: "SwitchTab", targets: ["SwitchTab"]),
-        .executable(name: "SwitchTabTestRunner", targets: ["SwitchTabTestRunner"])
+        .library(name: "SwitchTab", targets: ["SwitchTab"])
     ],
     targets: [
         .target(
@@ -21,8 +20,8 @@ let package = Package(
                 "Resources/Assets.xcassets"
             ]
         ),
-        .executableTarget(
-            name: "SwitchTabTestRunner",
+        .testTarget(
+            name: "SwitchTabTests",
             dependencies: ["SwitchTab"],
             path: "SwitchTabTests"
         )

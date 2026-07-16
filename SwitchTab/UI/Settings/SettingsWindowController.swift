@@ -93,10 +93,12 @@ public final class SettingsWindowController {
 
     public init(
         activationCoordinator: SettingsActivationPolicyCoordinator,
-        updateChecker: (any UpdateChecking)? = nil
+        updateChecker: (any UpdateChecking)? = nil,
+        onShortcutChange: @escaping (ShortcutSetting, ShortcutSetting) -> Bool = { _, _ in true }
     ) {
         let hostingController = FloatingPanelFactory.hostingController(
             rootView: ShortcutSettingsView(
+                viewModel: ShortcutSettingsViewModel(onValidSettingsChanged: onShortcutChange),
                 applicationSettingsViewModel: ApplicationSettingsViewModel(updateChecker: updateChecker)
             ),
             contentSize: SettingsWindowSizingPolicy.contentSize

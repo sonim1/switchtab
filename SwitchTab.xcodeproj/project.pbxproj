@@ -67,7 +67,6 @@
 		A00000000000000000000074 /* ApplicationIconStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000078 /* ApplicationIconStoreTests.swift */; };
 		A00000000000000000000077 /* SwitcherPresentationSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000081 /* SwitcherPresentationSnapshot.swift */; };
 		A00000000000000000000078 /* SwitcherPresentationSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000082 /* SwitcherPresentationSnapshotTests.swift */; };
-		A00000000000000000000081 /* OverlaySourceHygieneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000085 /* OverlaySourceHygieneTests.swift */; };
 		A00000000000000000000082 /* MenuBarIconAssetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000086 /* MenuBarIconAssetTests.swift */; };
 		A00000000000000000000083 /* SettingsActivationPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000087 /* SettingsActivationPolicyTests.swift */; };
 		A00000000000000000000084 /* ShortcutModifierResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000088 /* ShortcutModifierResolver.swift */; };
@@ -156,7 +155,6 @@
 		B00000000000000000000078 /* ApplicationIconStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationIconStoreTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000081 /* SwitcherPresentationSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherPresentationSnapshot.swift; sourceTree = "<group>"; };
 		B00000000000000000000082 /* SwitcherPresentationSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherPresentationSnapshotTests.swift; sourceTree = "<group>"; };
-		B00000000000000000000085 /* OverlaySourceHygieneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlaySourceHygieneTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000086 /* MenuBarIconAssetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconAssetTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000087 /* SettingsActivationPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsActivationPolicyTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000088 /* ShortcutModifierResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutModifierResolver.swift; sourceTree = "<group>"; };
@@ -339,7 +337,6 @@
 				B00000000000000000000087 /* SettingsActivationPolicyTests.swift */,
 				B00000000000000000000091 /* ApplicationSettingsStoreTests.swift */,
 				B00000000000000000000095 /* UpdateControllerTests.swift */,
-				B00000000000000000000085 /* OverlaySourceHygieneTests.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -566,7 +563,6 @@
 				A00000000000000000000083 /* SettingsActivationPolicyTests.swift in Sources */,
 				A00000000000000000000087 /* ApplicationSettingsStoreTests.swift in Sources */,
 				A00000000000000000000091 /* UpdateControllerTests.swift in Sources */,
-				A00000000000000000000081 /* OverlaySourceHygieneTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

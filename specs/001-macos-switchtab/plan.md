@@ -186,7 +186,7 @@ No constitution violations.
 
 ## Implementation Verification Notes
 
-- Automated verification in this workspace uses `swift run SwitchTabTestRunner`
+- Automated verification in this workspace uses `swift test`
   for fast service and model coverage.
 - Xcode Debug app builds are verified with `xcodebuild -project
   SwitchTab.xcodeproj -scheme SwitchTab -configuration Debug

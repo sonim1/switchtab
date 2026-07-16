@@ -129,11 +129,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
-            self.recencyStore.recordSelection(id: selectedWindow.id)
-            _ = self.windowFocusService.focus(selectedWindow, permissionState: permissionState)
-            // Persist immediately: menu bar apps rarely terminate cleanly, so
-            // waiting for applicationWillTerminate loses history on force quit.
-            self.recencyStore.flush()
+            let selectionCoordinator = WindowSelectionCoordinator(
+                focusService: self.windowFocusService,
+                recencyStore: self.recencyStore
+            )
+            selectionCoordinator.confirm(selectedWindow, permissionState: permissionState)
             self.usageMetricsStore.flush()
         }
         thumbnailLoaderForRefresh().refresh(windows: windows, permissionState: permissionState)
@@ -282,7 +282,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 activationCoordinator: SettingsActivationPolicyCoordinator(
                     policyApplier: NSApplicationActivationPolicyApplier()
                 ),
-                updateChecker: updateChecker
+                updateChecker: updateChecker,
+                onShortcutChange: { [weak self] candidate, previous in
+                    self?.replaceWindowHotkeys(candidate: candidate, previous: previous) ?? false
+                }
             )
         }
 
@@ -366,6 +369,44 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         if shortcutStore.saveRegistrationMessages(registrationMessages) {
             NotificationCenter.default.post(name: .shortcutRegistrationDidChange, object: nil)
         }
+    }
+
+    private func replaceWindowHotkeys(
+        candidate: ShortcutSetting,
+        previous: ShortcutSetting
+    ) -> Bool {
+        guard registerExactWindowHotkeys(setting: candidate) else {
+            registerWindowHotkeys(setting: previous)
+            return false
+        }
+
+        return true
+    }
+
+    private func registerExactWindowHotkeys(setting windowSetting: ShortcutSetting) -> Bool {
+        hotkeyService.unregisterAll()
+
+        let forwardResult = hotkeyService.register(
+            setting: windowSetting,
+            existing: [] as [ShortcutSetting],
+            mode: .currentAppWindowSwitching
+        ) { [weak self] in
+            self?.showCurrentAppSwitcher()
+        }
+        guard forwardResult == .registered else {
+            return false
+        }
+
+        let reverseSetting = windowSetting.reverseVariant(id: "\(windowSetting.id)-reverse")
+        let reverseResult = hotkeyService.register(
+            setting: reverseSetting,
+            existing: [windowSetting],
+            mode: .currentAppWindowSwitching
+        ) { [weak self] in
+            self?.showCurrentAppSwitcher(reverse: true)
+        }
+
+        return reverseResult == .registered
     }
 
     private func debugLog(_ message: String) {

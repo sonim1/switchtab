@@ -9,7 +9,7 @@ Native macOS window switcher prototype for fast keyboard-first current-app windo
 
 ## Build and Test
 
-Open `SwitchTab.xcodeproj` in Xcode, select the `SwitchTab` app scheme, then use `Product > Build`. Select the `SwitchTabTests` scheme and use `Product > Test` for the Xcode test target.
+Open `SwitchTab.xcodeproj` in Xcode, select the `SwitchTab` scheme, then use `Product > Build` or `Product > Test`.
 
 SwitchTab leaves macOS Cmd+Tab app switching untouched. The app focuses on current-app window switching with Cmd+` by default, falling back to Option+Ctrl+` when macOS refuses the reserved shortcut.
 
@@ -17,7 +17,7 @@ This workspace can be tested with Swift Package Manager:
 
 ```bash
 swift build
-swift run SwitchTabTestRunner
+swift test
 ```
 
 ## Direct Distribution Build
@@ -56,5 +56,5 @@ adds Sparkle, `DIRECT_DISTRIBUTION`, and `Info.direct.plist`; the checked-in
 
 The app sources are laid out for an Xcode macOS menu bar app target at
 `SwitchTab.xcodeproj`. Automated verification should include the SwiftPM build,
-the SwiftPM test runner, and an Xcode Debug app build when full Xcode is
+the SwiftPM test suite, and an Xcode Debug app build when full Xcode is
 selected.

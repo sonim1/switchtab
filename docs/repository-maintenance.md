@@ -66,7 +66,7 @@ Run these before treating repo cleanup as complete:
 
 ```bash
 swift build
-swift run SwitchTabTestRunner
+swift test
 xcodebuild -project SwitchTab.xcodeproj -scheme SwitchTab -configuration Debug -destination 'platform=macOS,arch=arm64' build
 SPARKLE_PUBLIC_ED_KEY=dummy scripts/build-direct-distribution.sh --prepare-only
 git diff --check

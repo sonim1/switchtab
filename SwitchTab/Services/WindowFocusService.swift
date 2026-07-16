@@ -11,6 +11,15 @@ public protocol WindowFocusing {
     func focus(window: WindowItem) -> Bool
 }
 
+public protocol WindowFocusServicing {
+    func focus(_ window: WindowItem, permissionState: PermissionState) -> WindowFocusResult
+}
+
+public protocol WindowSelectionRecencyRecording: AnyObject {
+    func recordSelection(id: String)
+    func flush()
+}
+
 public struct WindowFocusService {
     private let focuser: any WindowFocusing
 
@@ -38,6 +47,53 @@ public struct WindowFocusService {
     }
 }
 
+extension WindowFocusService: WindowFocusServicing {}
+
+extension SwitcherRecencyStore: WindowSelectionRecencyRecording {}
+
+public struct WindowSelectionCoordinator {
+    private let focusService: any WindowFocusServicing
+    private let recencyStore: any WindowSelectionRecencyRecording
+
+    public init(
+        focusService: any WindowFocusServicing,
+        recencyStore: any WindowSelectionRecencyRecording
+    ) {
+        self.focusService = focusService
+        self.recencyStore = recencyStore
+    }
+
+    @discardableResult
+    public func confirm(
+        _ window: WindowItem,
+        permissionState: PermissionState
+    ) -> WindowFocusResult {
+        let result = focusService.focus(window, permissionState: permissionState)
+        guard result == .focused else {
+            return result
+        }
+
+        recencyStore.recordSelection(id: window.id)
+        recencyStore.flush()
+        return result
+    }
+}
+
+public enum AXWindowFocusResultPolicy {
+    public static func didFocus(
+        didActivateApplication: Bool,
+        didSetFocusedWindow: Bool,
+        didSetMainWindow: Bool,
+        didRaiseWindow: Bool
+    ) -> Bool {
+        guard didActivateApplication else {
+            return false
+        }
+
+        return didSetFocusedWindow || (didSetMainWindow && didRaiseWindow)
+    }
+}
+
 public final class AXWindowFocuser: WindowFocusing {
     public init() {}
 
@@ -51,23 +107,42 @@ public final class AXWindowFocuser: WindowFocusing {
         let didActivateBeforeRaise = activate(application)
 
         guard let windowElement = AXWindowElementRegistry.shared.element(for: window.windowIdentifier) else {
-            return didActivateBeforeRaise
+            return false
         }
 
         if window.isMinimized {
-            AXUIElementSetAttributeValue(windowElement, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+            guard AXUIElementSetAttributeValue(
+                windowElement,
+                kAXMinimizedAttribute as CFString,
+                kCFBooleanFalse
+            ) == .success else {
+                return false
+            }
         }
 
         let appElement = AXUIElementCreateApplication(processIdentifier)
-        AXUIElementSetAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, windowElement)
-        AXUIElementSetAttributeValue(windowElement, kAXMainAttribute as CFString, kCFBooleanTrue)
-        AXUIElementPerformAction(windowElement, kAXRaiseAction as CFString)
+        let didSetFocusedWindow = AXUIElementSetAttributeValue(
+            appElement,
+            kAXFocusedWindowAttribute as CFString,
+            windowElement
+        ) == .success
+        let didSetMainWindow = AXUIElementSetAttributeValue(
+            windowElement,
+            kAXMainAttribute as CFString,
+            kCFBooleanTrue
+        ) == .success
+        let didRaiseWindow = AXUIElementPerformAction(
+            windowElement,
+            kAXRaiseAction as CFString
+        ) == .success
+        let didActivateApplication = didActivateBeforeRaise || activate(application)
 
-        guard !didActivateBeforeRaise else {
-            return true
-        }
-
-        return activate(application)
+        return AXWindowFocusResultPolicy.didFocus(
+            didActivateApplication: didActivateApplication,
+            didSetFocusedWindow: didSetFocusedWindow,
+            didSetMainWindow: didSetMainWindow,
+            didRaiseWindow: didRaiseWindow
+        )
     }
 
     private func activate(_ application: NSRunningApplication) -> Bool {

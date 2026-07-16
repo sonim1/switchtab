@@ -44,7 +44,8 @@ enum AppStoreDistributionSettingsTests {
         let scriptURL = projectRoot.appendingPathComponent("scripts/build-direct-distribution.sh")
         let scriptContents = try String(contentsOf: scriptURL, encoding: .utf8)
 
-        try expectTrue(packageContents.contains("name: \"SwitchTabTestRunner\""))
+        try expectTrue(packageContents.contains(".testTarget("))
+        try expectTrue(packageContents.contains("name: \"SwitchTabTests\""))
         try expectTrue(packageContents.contains("path: \"SwitchTab\""))
         try expectTrue(packageContents.contains("path: \"SwitchTabTests\""))
         try expectTrue(scriptContents.contains("SwitchTab.xcodeproj/project.pbxproj"))

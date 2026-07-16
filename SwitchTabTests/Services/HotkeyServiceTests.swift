@@ -3,6 +3,7 @@ import SwitchTab
 enum HotkeyServiceTests {
     static func run() throws {
         try testFallbackRegistrationRecordsWarningWhenRequestedShortcutUnavailable()
+        try testExactRegistrationDoesNotUseFallbackWhenRequestedShortcutIsUnavailable()
         try testSameModeForwardAndReverseHotkeysCanHaveSeparateHandlers()
         try testModeInvocationKeepsFirstRegisteredSettingWhenHandlerIsUpdated()
         try testPreferredRegistrarUsesPrimaryBeforeFallback()
@@ -28,6 +29,21 @@ enum HotkeyServiceTests {
         try expectEqual(registrationMessages.first?.mode, .currentAppWindowSwitching)
         try expectTrue(registrationMessages.first?.message.contains("Cmd + `") == true)
         try expectTrue(registrationMessages.first?.message.contains("Option + Ctrl + `") == true)
+    }
+
+    static func testExactRegistrationDoesNotUseFallbackWhenRequestedShortcutIsUnavailable() throws {
+        let registrar = SelectivelyFailingHotkeyRegistrar(blockedDisplayText: "Cmd + `")
+        let service = HotkeyService(registrar: registrar)
+
+        let result = service.register(
+            setting: .defaultCurrentAppWindowSwitching,
+            existing: [] as [ShortcutSetting],
+            mode: .currentAppWindowSwitching
+        ) {}
+
+        try expectEqual(result, .noUsableShortcut)
+        try expectEqual(service.registeredSetting(for: .currentAppWindowSwitching), nil)
+        try expectEqual(registrar.attemptedDisplayTexts, ["Cmd + `"])
     }
 
     static func testSameModeForwardAndReverseHotkeysCanHaveSeparateHandlers() throws {
@@ -149,13 +165,15 @@ enum HotkeyServiceTests {
 
 final class SelectivelyFailingHotkeyRegistrar: HotkeyRegistering {
     let blockedDisplayText: String
+    private(set) var attemptedDisplayTexts: [String] = []
 
     init(blockedDisplayText: String) {
         self.blockedDisplayText = blockedDisplayText
     }
 
     func register(setting: ShortcutSetting, handler: @escaping () -> Void) -> Bool {
-        setting.displayText != blockedDisplayText
+        attemptedDisplayTexts.append(setting.displayText)
+        return setting.displayText != blockedDisplayText
     }
 
     func unregisterAll() {}

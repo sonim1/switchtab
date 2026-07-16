@@ -6,6 +6,7 @@ enum ShortcutSettingsStoreTests {
     static func run() throws {
         try testStoreLoadsDefaultsWhenEmpty()
         try testInvalidSaveKeepsLastPersistedShortcut()
+        try testRegistrationFailureKeepsLastPersistedShortcut()
         try testSavingDefaultShortcutDoesNotPersistWhenAlreadyImplicit()
         try testSavingDefaultShortcutClearsPersistedCustomShortcut()
         try testSavingUnchangedShortcutDoesNotRewrite()
@@ -48,6 +49,33 @@ enum ShortcutSettingsStoreTests {
         try expectTrue(saved)
         try expectFalse(rejected)
         try expectEqual(store.load().keyEquivalent, "K")
+    }
+
+    static func testRegistrationFailureKeepsLastPersistedShortcut() throws {
+        let defaults = makeDefaults()
+        let store = ShortcutSettingsStore(userDefaults: defaults)
+        let previous = ShortcutSetting(
+            id: "current-app-window-switching",
+            mode: .currentAppWindowSwitching,
+            keyEquivalent: "K",
+            modifiers: ["command"],
+            isUsable: true
+        )
+        try store.save(previous)
+        let viewModel = ShortcutSettingsViewModel(
+            store: store,
+            onValidSettingsChanged: { _, _ in false }
+        )
+
+        let didSave = viewModel.save(
+            keyEquivalent: "J",
+            modifiers: ["command"],
+            isUsable: true
+        )
+
+        try expectFalse(didSave)
+        try expectEqual(viewModel.currentAppWindowShortcut, previous)
+        try expectEqual(store.load(), previous)
     }
 
     static func testSavingUnchangedShortcutDoesNotRewrite() throws {
@@ -102,8 +130,9 @@ enum ShortcutSettingsStoreTests {
         var notificationCount = 0
         let viewModel = ShortcutSettingsViewModel(
             store: ShortcutSettingsStore(userDefaults: defaults),
-            onValidSettingsChanged: { _ in
+            onValidSettingsChanged: { _, _ in
                 notificationCount += 1
+                return true
             }
         )
 

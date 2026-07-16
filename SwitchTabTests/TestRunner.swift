@@ -1,7 +1,8 @@
-@main
-enum TestRunner {
+import XCTest
+
+final class SwitchTabTests: XCTestCase {
     @MainActor
-    static func main() async throws {
+    func testAllSuites() async throws {
         try CoreModelsTests.run()
         try SwitcherItemTests.run()
         try PermissionServiceTests.run()
@@ -31,6 +32,5 @@ enum TestRunner {
         try SettingsActivationPolicyTests.run()
         try SwitcherPerformanceTests.run()
         try PermissionRecoveryCopyTests.run()
-        print("All tests passed")
     }
 }

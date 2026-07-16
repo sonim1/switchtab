@@ -25,14 +25,14 @@ public final class ShortcutSettingsViewModel: ObservableObject {
     private let store: ShortcutSettingsStore
     private let validator: ShortcutValidationService
     private let permissionStateProvider: () -> PermissionState
-    private let onValidSettingsChanged: ([ShortcutSetting]) -> Void
+    private let onValidSettingsChanged: (ShortcutSetting, ShortcutSetting) -> Bool
     private var registrationMessageCancellable: AnyCancellable?
 
     public init(
         store: ShortcutSettingsStore = ShortcutSettingsStore(),
         validator: ShortcutValidationService = ShortcutValidationService(),
         permissionStateProvider: @escaping () -> PermissionState = { PermissionService().currentState() },
-        onValidSettingsChanged: @escaping ([ShortcutSetting]) -> Void = { _ in }
+        onValidSettingsChanged: @escaping (ShortcutSetting, ShortcutSetting) -> Bool = { _, _ in true }
     ) {
         let savedShortcut = store.load()
         let loadedRegistrationMessages = store.loadRegistrationMessages()
@@ -105,10 +105,15 @@ public final class ShortcutSettingsViewModel: ObservableObject {
 
         do {
             try store.save(candidate)
+            guard onValidSettingsChanged(candidate, current) else {
+                try store.save(current)
+                setErrorMessage("Shortcut could not be registered. The previous shortcut is still active.")
+                return false
+            }
+
             assign(candidate)
             setErrorMessage(nil)
             let updatedSettings = [currentAppWindowShortcut]
-            onValidSettingsChanged(updatedSettings)
             NotificationCenter.default.post(
                 name: .shortcutSettingsDidChange,
                 object: nil,
