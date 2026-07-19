@@ -2,11 +2,11 @@ import SwiftUI
 
 public struct PermissionStatusView: View {
     public let items: [PermissionStatusItem]
-    public let onOpenSettings: (PermissionSettingsDestination) -> Void
+    public let onOpenSettings: @MainActor (PermissionSettingsDestination) -> Void
 
     public init(
         items: [PermissionStatusItem],
-        onOpenSettings: @escaping (PermissionSettingsDestination) -> Void = { _ in }
+        onOpenSettings: @escaping @MainActor (PermissionSettingsDestination) -> Void = { _ in }
     ) {
         self.items = items
         self.onOpenSettings = onOpenSettings
@@ -50,8 +50,8 @@ public struct PermissionStatusView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
-                        .help("Open \(item.permissionName) Settings")
-                        .accessibilityLabel(Text("Open \(item.permissionName) Settings"))
+                        .help(item.recoveryActionHelp)
+                        .accessibilityLabel(Text(item.recoveryActionHelp))
                     } else {
                         Text("Enabled")
                             .font(.caption.weight(.semibold))

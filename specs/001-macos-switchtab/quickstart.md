@@ -36,8 +36,14 @@ For window previews:
 
 1. Launch the current-app window switcher without Screen Recording permission.
 2. Confirm window rows still show safe fallback content.
-3. Grant Screen Recording permission in macOS Settings.
-4. Relaunch the app if macOS requires it.
+3. Open Settings and click Allow on the Screen Recording permission row.
+4. Confirm System Settings opens to the Screen & System Audio Recording privacy
+   pane, then Finder becomes the final foreground app with the currently running
+   SwitchTab.app selected.
+5. If macOS requires adding the app, manually drag the selected SwitchTab.app
+   from Finder into the matching privacy pane, then enable/grant Screen
+   Recording in System Settings.
+6. Relaunch the app if macOS requires it.
 
 Expected:
 - Missing Screen Recording permission blocks previews only.
@@ -52,13 +58,19 @@ Accessibility:
    or turn the permission off.
 2. Launch SwitchTab and open Settings.
 3. Click Allow on the Accessibility permission row.
-4. Confirm System Settings opens to the Accessibility privacy pane.
-5. Enable SwitchTab manually if macOS shows it in the list, or add it using the
-   System Settings UI if macOS requires that step.
-6. Return to SwitchTab.
+4. Confirm System Settings opens to the Accessibility privacy pane, then Finder
+   becomes the final foreground app with the currently running SwitchTab.app
+   selected.
+5. If macOS requires adding the app, manually drag the selected SwitchTab.app
+   from Finder into the matching privacy pane, then enable/grant Accessibility
+   in System Settings.
+6. Return to SwitchTab and relaunch if macOS requires it.
 
 Expected:
-- SwitchTab does not perform automatic clicks, drops, toggles, or TCC changes.
+- The Allow action opens the matching pane, reveals the currently running app
+  in Finder for drag-and-drop, and leaves Finder as the final foreground app.
+- SwitchTab does not toggle or grant permission, alter TCC, install or copy
+  itself, or automate clicks, drops, or drag-and-drop.
 - Permission state refreshes to granted after the user grants access.
 
 Screen Recording:
@@ -67,13 +79,20 @@ Screen Recording:
    System Audio Recording` or turn the permission off.
 2. Launch SwitchTab and open Settings.
 3. Click Allow on the Screen Recording permission row.
-4. Confirm System Settings opens to the Screen & System Audio Recording pane.
-5. Enable SwitchTab manually if macOS shows it in the list, or add it using the
-   System Settings UI if macOS requires that step.
+4. Confirm System Settings opens to the Screen & System Audio Recording pane,
+   then Finder becomes the final foreground app with the currently running
+   SwitchTab.app selected.
+5. If macOS requires adding the app, manually drag the selected SwitchTab.app
+   from Finder into the matching privacy pane, then enable/grant Screen
+   Recording in System Settings.
 6. Grant permission and relaunch SwitchTab if macOS requests it.
 
 Expected:
 - Permission copy references Screen Recording/window previews.
+- The Allow action opens the matching pane, reveals the currently running app
+  in Finder for drag-and-drop, and leaves Finder as the final foreground app.
+- SwitchTab does not toggle or grant permission, alter TCC, install or copy
+  itself, or automate the drag.
 - Missing permission continues to block previews until macOS reports access.
 - If macOS requires relaunch after granting access, relaunch SwitchTab before
   treating preview validation as complete.

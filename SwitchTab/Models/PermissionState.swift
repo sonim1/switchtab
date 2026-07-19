@@ -14,6 +14,10 @@ public struct PermissionStatusItem: Equatable, Sendable {
     public let recoveryActionTitle: String
     public let settingsDestination: PermissionSettingsDestination
 
+    public var recoveryActionHelp: String {
+        "Open \(permissionName) Settings and show SwitchTab in Finder."
+    }
+
     public init(
         permissionName: String,
         settingsDestination: PermissionSettingsDestination,

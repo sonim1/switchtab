@@ -319,6 +319,7 @@ private struct ShortcutSettingsPanel: View {
 
 private struct PermissionsSettingsPanel: View {
     @ObservedObject var viewModel: ShortcutSettingsViewModel
+    @State private var permissionRecoveryTask: Task<Void, Never>?
 
     var body: some View {
         SettingsSection(
@@ -327,8 +328,15 @@ private struct PermissionsSettingsPanel: View {
             symbolName: "lock.shield"
         ) {
             PermissionStatusView(items: viewModel.permissionState.permissionStatusItems) { destination in
-                NSWorkspace.shared.open(destination.systemSettingsURL)
+                permissionRecoveryTask?.cancel()
+                permissionRecoveryTask = Task { @MainActor in
+                    _ = try? await PermissionRecoveryCoordinator().recover(destination)
+                }
             }
+        }
+        .onDisappear {
+            permissionRecoveryTask?.cancel()
+            permissionRecoveryTask = nil
         }
     }
 }
