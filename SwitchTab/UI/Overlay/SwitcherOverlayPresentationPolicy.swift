@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 
 enum WindowPlacementPolicy {
     static func centeredOrigin(windowSize: CGSize, screenFrame: CGRect) -> CGPoint {
@@ -50,4 +51,30 @@ public enum SwitcherOverlayEventMonitorPolicy {
         .otherMouseDown,
         .flagsChanged
     ]
+}
+
+enum SwitcherOverlayEventTapDecision: Equatable, Sendable {
+    case passThrough
+    case consume(SwitcherCommand)
+    case reenable
+}
+
+enum SwitcherOverlayEventTapPolicy {
+    static func decision(
+        eventType: CGEventType,
+        keyCode: UInt16,
+        isAutorepeat _: Bool
+    ) -> SwitcherOverlayEventTapDecision {
+        switch eventType {
+        case .tapDisabledByTimeout, .tapDisabledByUserInput:
+            return .reenable
+        case .keyDown:
+            guard let command = SwitcherCommand(keyCode: keyCode) else {
+                return .passThrough
+            }
+            return .consume(command)
+        default:
+            return .passThrough
+        }
+    }
 }

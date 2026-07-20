@@ -1,5 +1,7 @@
-import SwitchTab
+import CoreGraphics
+@testable import SwitchTab
 
+@MainActor
 enum HotkeyServiceTests {
     static func run() throws {
         try testFallbackRegistrationRecordsWarningWhenRequestedShortcutUnavailable()
@@ -8,6 +10,7 @@ enum HotkeyServiceTests {
         try testModeInvocationKeepsFirstRegisteredSettingWhenHandlerIsUpdated()
         try testPreferredRegistrarUsesPrimaryBeforeFallback()
         try testPreferredRegistrarFallsBackWhenPrimaryRejectsShortcut()
+        try testPreferredRegistrarPrimaryAndFallbackOrderedChainsCoexist()
         try testUnregisterAllSkipsRegistrarWhenAlreadyClean()
         try testUnregisterAllClearsMessagesWithoutRegistrarWhenNoHotkeysRegistered()
     }
@@ -124,6 +127,72 @@ enum HotkeyServiceTests {
         try expectEqual(fallback.registerCallCount, 1)
     }
 
+    static func testPreferredRegistrarPrimaryAndFallbackOrderedChainsCoexist() throws {
+        try assertOrderedChain(primaryAccepts: true)
+        try assertOrderedChain(primaryAccepts: false)
+    }
+
+    private static func assertOrderedChain(primaryAccepts: Bool) throws {
+        let primary = CountingHotkeyRegistrar(name: "CarbonPrimary", shouldRegister: primaryAccepts)
+        let fallback = CountingHotkeyRegistrar(name: "EventTapFallback", shouldRegister: true)
+        let preferred = PreferredHotkeyRegistrar(primary: primary, fallback: fallback)
+        let service = HotkeyService(registrar: preferred)
+        let tapBackend = OrderedChainEventTapBackend()
+        let tapSink = OrderedChainEventSink()
+        var overlayCommands: [SwitcherCommand] = []
+        let tapOwner = SwitcherOverlayEventTapOwner(
+            backend: tapBackend,
+            eventSink: tapSink
+        ) { command in
+            overlayCommands.append(command)
+        }
+        var triggerCount = 0
+
+        let result = service.registerFirstUsable(
+            primaryCandidate: .defaultCurrentAppWindowSwitching,
+            fallbackCandidate: .fallbackCurrentAppWindowSwitching,
+            existing: [] as [ShortcutSetting],
+            mode: .currentAppWindowSwitching
+        ) {
+            triggerCount += 1
+        }
+
+        try expectEqual(result, .registered)
+        if primaryAccepts {
+            primary.invoke()
+            try expectEqual(primary.registerCallCount, 1)
+            try expectEqual(fallback.registerCallCount, 0)
+            try expectEqual(primary.registeredKeyCodes, [50])
+        } else {
+            try expectEqual(primary.registerCallCount, 1)
+            try expectEqual(fallback.name, "EventTapFallback")
+            fallback.invoke()
+            try expectEqual(fallback.registerCallCount, 1)
+            try expectEqual(fallback.registeredKeyCodes, [50])
+            try expectFalse(fallback.registeredKeyCodes.contains(124))
+        }
+        try expectEqual(triggerCount, 1)
+        try expectTrue(tapOwner.install())
+        guard let tap = tapBackend.connection else {
+            throw TestFailure.failed("Expected ordered-chain overlay tap")
+        }
+        try expectFalse(tap.emit(keyCode: 50))
+        try expectTrue(tap.emit(keyCode: 124))
+        try expectEqual(overlayCommands, [.moveDown])
+        try expectFalse(tap.emit(eventType: .tapDisabledByTimeout, keyCode: 124))
+        try expectEqual(tap.reenableCount, 1)
+        try expectTrue(tap.emit(keyCode: 124, isAutorepeat: true))
+        try expectEqual(overlayCommands, [.moveDown, .moveDown])
+        try expectEqual(triggerCount, 1)
+        try expectEqual(primary.registerCallCount, 1)
+        try expectEqual(fallback.registerCallCount, primaryAccepts ? 0 : 1)
+        try expectTrue(tap.emit(keyCode: 36))
+        try expectTrue(tap.emit(keyCode: 53))
+        try expectFalse(tap.emit(keyCode: 0))
+        try expectEqual(overlayCommands, [.moveDown, .moveDown, .confirm, .cancel])
+        tapOwner.remove()
+    }
+
     static func testUnregisterAllSkipsRegistrarWhenAlreadyClean() throws {
         let registrar = InMemoryHotkeyRegistrar()
         let service = HotkeyService(registrar: registrar)
@@ -161,6 +230,52 @@ enum HotkeyServiceTests {
         try expectEqual(service.registrationMessageSnapshot().count, 0)
         try expectEqual(registrar.unregisterAllCallCount, 0)
     }
+}
+
+@MainActor
+private final class OrderedChainEventTapBackend: SwitcherOverlayEventTapBackend {
+    private(set) var connection: OrderedChainEventTapConnection?
+
+    func install(
+        handler: @escaping @MainActor (SwitcherOverlayEventTapInput) -> Bool
+    ) -> (any SwitcherOverlayEventTapConnection)? {
+        let connection = OrderedChainEventTapConnection(handler: handler)
+        self.connection = connection
+        return connection
+    }
+}
+
+@MainActor
+private final class OrderedChainEventTapConnection: SwitcherOverlayEventTapConnection {
+    private let handler: @MainActor (SwitcherOverlayEventTapInput) -> Bool
+    private(set) var reenableCount = 0
+
+    init(handler: @escaping @MainActor (SwitcherOverlayEventTapInput) -> Bool) {
+        self.handler = handler
+    }
+
+    func emit(
+        eventType: CGEventType = .keyDown,
+        keyCode: UInt16,
+        isAutorepeat: Bool = false
+    ) -> Bool {
+        handler(SwitcherOverlayEventTapInput(
+            eventType: eventType,
+            keyCode: keyCode,
+            isAutorepeat: isAutorepeat
+        ))
+    }
+
+    func reenable() {
+        reenableCount += 1
+    }
+
+    func invalidate() {}
+}
+
+@MainActor
+private final class OrderedChainEventSink: SwitcherOverlayEventRecording {
+    func record(_: SwitcherOverlayDiagnosticEvent) {}
 }
 
 final class SelectivelyFailingHotkeyRegistrar: HotkeyRegistering {
@@ -224,17 +339,31 @@ final class RejectingHotkeyRegistrar: HotkeyRegistering {
 }
 
 final class CountingHotkeyRegistrar: HotkeyRegistering {
+    let name: String
     let shouldRegister: Bool
     private(set) var registerCallCount = 0
     private(set) var unregisterAllCallCount = 0
+    private(set) var registeredKeyCodes: [UInt16] = []
+    private var handler: (() -> Void)?
 
-    init(shouldRegister: Bool) {
+    init(name: String = "Counting", shouldRegister: Bool) {
+        self.name = name
         self.shouldRegister = shouldRegister
     }
 
-    func register(setting _: ShortcutSetting, handler _: @escaping () -> Void) -> Bool {
+    func register(setting: ShortcutSetting, handler: @escaping () -> Void) -> Bool {
         registerCallCount += 1
+        if let keyCode = setting.keyCode {
+            registeredKeyCodes.append(keyCode)
+        }
+        if shouldRegister {
+            self.handler = handler
+        }
         return shouldRegister
+    }
+
+    func invoke() {
+        handler?()
     }
 
     func unregisterAll() {

@@ -1,4 +1,6 @@
 import AppKit
+import CoreGraphics
+import os
 import SwiftUI
 
 @MainActor
@@ -8,6 +10,7 @@ final class SwitcherOverlayController {
     private var hostingController: NSHostingController<SwitcherOverlayRootView>?
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
+    private var eventTapOwner: SwitcherOverlayEventTapOwner?
     private var activationObserver: NSObjectProtocol?
     private var onConfirm: ((SwitcherListItem, Int) -> Void)?
     private var triggerReleaseModifiers: SwitcherShortcutModifiers?
@@ -18,15 +21,21 @@ final class SwitcherOverlayController {
     private let thumbnailStore: WindowThumbnailStore
     private let applicationIconStore: ApplicationIconStore
     private let applicationSettingsStore: ApplicationSettingsStore
+    private let eventTapBackend: any SwitcherOverlayEventTapBackend
+    private let eventSink: any SwitcherOverlayEventRecording
 
     init(
         thumbnailStore: WindowThumbnailStore,
         applicationIconStore: ApplicationIconStore? = nil,
-        applicationSettingsStore: ApplicationSettingsStore = ApplicationSettingsStore()
+        applicationSettingsStore: ApplicationSettingsStore = ApplicationSettingsStore(),
+        eventTapBackend: (any SwitcherOverlayEventTapBackend)? = nil,
+        eventSink: (any SwitcherOverlayEventRecording)? = nil
     ) {
         self.thumbnailStore = thumbnailStore
         self.applicationIconStore = applicationIconStore ?? ApplicationIconStore()
         self.applicationSettingsStore = applicationSettingsStore
+        self.eventTapBackend = eventTapBackend ?? SystemSwitcherOverlayEventTapBackend()
+        self.eventSink = eventSink ?? DefaultSwitcherOverlayEventSink()
     }
 
     var isPresented: Bool {
@@ -75,7 +84,24 @@ final class SwitcherOverlayController {
     }
 
     func handle(_ command: SwitcherCommand) -> SwitcherInteractionResult {
+        handle(command, recordsDiagnostic: false)
+    }
+
+    private func handle(
+        _ command: SwitcherCommand,
+        recordsDiagnostic: Bool
+    ) -> SwitcherInteractionResult {
+        let beforeIndex = state.session?.selectedIndex ?? -1
         let result = state.handle(command)
+        if recordsDiagnostic {
+            let afterIndex = state.session?.selectedIndex ?? beforeIndex
+            eventSink.record(.command(
+                commandCode: command.diagnosticCode,
+                beforeIndex: beforeIndex,
+                afterIndex: afterIndex,
+                resultCode: result.diagnosticCode
+            ))
+        }
         switch result {
         case .updated:
             render()
@@ -105,7 +131,33 @@ final class SwitcherOverlayController {
         render()
         center(panel: panel, screenFrame: screenFrame)
         panel.makeKeyAndOrderFront(nil)
+        let tapInstalled = installEventTap()
         installEventMonitor()
+        eventSink.record(.presented(
+            itemCount: session.items.count,
+            selectedIndex: session.selectedIndex,
+            tapInstalled: tapInstalled
+        ))
+    }
+
+    @discardableResult
+    private func installEventTap() -> Bool {
+        removeEventTap()
+        let owner = SwitcherOverlayEventTapOwner(
+            backend: eventTapBackend,
+            eventSink: eventSink
+        ) { @MainActor [weak self] command in
+            guard let self else {
+                return
+            }
+            _ = self.handle(command, recordsDiagnostic: true)
+        }
+        eventTapOwner = owner
+        guard owner.install() else {
+            eventTapOwner = nil
+            return false
+        }
+        return true
     }
 
     // Present on the screen under the pointer: the frontmost app's windows are
@@ -262,6 +314,12 @@ final class SwitcherOverlayController {
         }
     }
 
+    private func removeEventTap() {
+        let owner = eventTapOwner
+        eventTapOwner = nil
+        owner?.remove()
+    }
+
     private func handle(event: NSEvent) -> Bool {
         switch event.type {
         case .flagsChanged:
@@ -359,10 +417,301 @@ final class SwitcherOverlayController {
 
     private func endPresentation() {
         panel?.orderOut(nil)
+        removeEventTap()
         removeEventMonitor()
         onDismiss?()
     }
 
+    isolated deinit {
+        removeEventTap()
+    }
+
+}
+
+struct SwitcherOverlayEventTapInput: Equatable, Sendable {
+    let eventType: CGEventType
+    let keyCode: UInt16
+    let isAutorepeat: Bool
+}
+
+@MainActor
+protocol SwitcherOverlayEventTapConnection: AnyObject {
+    func reenable()
+    func invalidate()
+}
+
+@MainActor
+protocol SwitcherOverlayEventTapBackend: AnyObject {
+    func install(
+        handler: @escaping @MainActor (SwitcherOverlayEventTapInput) -> Bool
+    ) -> (any SwitcherOverlayEventTapConnection)?
+}
+
+enum SwitcherOverlayDiagnosticEvent: Equatable, Sendable {
+    case presented(itemCount: Int, selectedIndex: Int, tapInstalled: Bool)
+    case command(commandCode: Int, beforeIndex: Int, afterIndex: Int, resultCode: Int)
+    case tapReenabled(reasonCode: Int)
+    case tapRemoved
+}
+
+@MainActor
+protocol SwitcherOverlayEventRecording: AnyObject {
+    func record(_ event: SwitcherOverlayDiagnosticEvent)
+}
+
+@MainActor
+final class SwitcherOverlayEventTapOwner {
+    private final class Session {
+        var isActive = true
+    }
+
+    private let backend: any SwitcherOverlayEventTapBackend
+    private let eventSink: any SwitcherOverlayEventRecording
+    private let commandHandler: @MainActor (SwitcherCommand) -> Void
+    private var connection: (any SwitcherOverlayEventTapConnection)?
+    private var session: Session?
+
+    init(
+        backend: any SwitcherOverlayEventTapBackend,
+        eventSink: any SwitcherOverlayEventRecording,
+        commandHandler: @escaping @MainActor (SwitcherCommand) -> Void
+    ) {
+        self.backend = backend
+        self.eventSink = eventSink
+        self.commandHandler = commandHandler
+    }
+
+    @discardableResult
+    func install() -> Bool {
+        remove()
+        let session = Session()
+        self.session = session
+        guard let connection = backend.install(handler: { [weak self, session] input in
+            guard session.isActive, let self else {
+                return false
+            }
+            return self.handle(input)
+        }) else {
+            session.isActive = false
+            self.session = nil
+            return false
+        }
+        self.connection = connection
+        return true
+    }
+
+    func remove() {
+        guard connection != nil || session != nil else {
+            return
+        }
+        let connection = connection
+        self.connection = nil
+        session?.isActive = false
+        session = nil
+        connection?.invalidate()
+        eventSink.record(.tapRemoved)
+    }
+
+    private func handle(_ input: SwitcherOverlayEventTapInput) -> Bool {
+        switch SwitcherOverlayEventTapPolicy.decision(
+            eventType: input.eventType,
+            keyCode: input.keyCode,
+            isAutorepeat: input.isAutorepeat
+        ) {
+        case .passThrough:
+            return false
+        case .consume(let command):
+            commandHandler(command)
+            return true
+        case .reenable:
+            connection?.reenable()
+            eventSink.record(.tapReenabled(reasonCode: input.eventType.diagnosticReasonCode))
+            return false
+        }
+    }
+
+    deinit {
+        MainActor.assumeIsolated {
+            remove()
+        }
+    }
+}
+
+@MainActor
+final class SystemSwitcherOverlayEventTapBackend: SwitcherOverlayEventTapBackend {
+    func install(
+        handler: @escaping @MainActor (SwitcherOverlayEventTapInput) -> Bool
+    ) -> (any SwitcherOverlayEventTapConnection)? {
+        let context = SystemSwitcherOverlayEventTapContext(handler: handler)
+        let contextPointer = Unmanaged.passRetained(context).toOpaque()
+        let callback: CGEventTapCallBack = { _, type, event, userInfo in
+            guard let userInfo else {
+                return Unmanaged.passUnretained(event)
+            }
+
+            let unmanaged = Unmanaged<SystemSwitcherOverlayEventTapContext>.fromOpaque(userInfo)
+            _ = unmanaged.retain()
+            let context = unmanaged.takeUnretainedValue()
+            defer { unmanaged.release() }
+
+            let shouldConsume = MainActor.assumeIsolated {
+                guard context.isActive, let handler = context.handler else {
+                    return false
+                }
+                let input = SwitcherOverlayEventTapInput(
+                    eventType: type,
+                    keyCode: UInt16(event.getIntegerValueField(.keyboardEventKeycode)),
+                    isAutorepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+                )
+                return handler(input)
+            }
+            return shouldConsume ? nil : Unmanaged.passUnretained(event)
+        }
+
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
+            callback: callback,
+            userInfo: contextPointer
+        ) else {
+            context.isActive = false
+            context.handler = nil
+            Unmanaged<SystemSwitcherOverlayEventTapContext>.fromOpaque(contextPointer).release()
+            return nil
+        }
+
+        guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) else {
+            context.isActive = false
+            context.handler = nil
+            CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
+            Unmanaged<SystemSwitcherOverlayEventTapContext>.fromOpaque(contextPointer).release()
+            return nil
+        }
+
+        context.tap = tap
+        context.source = source
+        let connection = SystemSwitcherOverlayEventTapConnection(contextPointer: contextPointer)
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        return connection
+    }
+}
+
+private final class SystemSwitcherOverlayEventTapContext: @unchecked Sendable {
+    var isActive = true
+    var handler: (@MainActor (SwitcherOverlayEventTapInput) -> Bool)?
+    var tap: CFMachPort?
+    var source: CFRunLoopSource?
+
+    init(handler: @escaping @MainActor (SwitcherOverlayEventTapInput) -> Bool) {
+        self.handler = handler
+    }
+}
+
+@MainActor
+private final class SystemSwitcherOverlayEventTapConnection: SwitcherOverlayEventTapConnection {
+    private var contextPointer: UnsafeMutableRawPointer?
+
+    init(contextPointer: UnsafeMutableRawPointer) {
+        self.contextPointer = contextPointer
+    }
+
+    func reenable() {
+        guard let contextPointer else {
+            return
+        }
+        let context = Unmanaged<SystemSwitcherOverlayEventTapContext>
+            .fromOpaque(contextPointer)
+            .takeUnretainedValue()
+        if let tap = context.tap {
+            CGEvent.tapEnable(tap: tap, enable: true)
+        }
+    }
+
+    func invalidate() {
+        guard let contextPointer else {
+            return
+        }
+        self.contextPointer = nil
+        let unmanaged = Unmanaged<SystemSwitcherOverlayEventTapContext>.fromOpaque(contextPointer)
+        let context = unmanaged.takeUnretainedValue()
+        context.isActive = false
+        context.handler = nil
+        if let source = context.source {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+        }
+        if let tap = context.tap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
+        }
+        context.source = nil
+        context.tap = nil
+        unmanaged.release()
+    }
+
+    deinit {
+        MainActor.assumeIsolated {
+            invalidate()
+        }
+    }
+}
+
+@MainActor
+final class DefaultSwitcherOverlayEventSink: SwitcherOverlayEventRecording {
+#if DEBUG
+    private let logger = Logger(subsystem: "com.royjen.switchtab", category: "SwitcherKeyboard")
+#endif
+
+    func record(_ event: SwitcherOverlayDiagnosticEvent) {
+#if DEBUG
+        switch event {
+        case .presented(let itemCount, let selectedIndex, let tapInstalled):
+            logger.debug("presented itemCount=\(itemCount, privacy: .public) selectedIndex=\(selectedIndex, privacy: .public) tapInstalled=\(tapInstalled, privacy: .public)")
+        case .command(let commandCode, let beforeIndex, let afterIndex, let resultCode):
+            logger.debug("command commandCode=\(commandCode, privacy: .public) beforeIndex=\(beforeIndex, privacy: .public) afterIndex=\(afterIndex, privacy: .public) resultCode=\(resultCode, privacy: .public)")
+        case .tapReenabled(let reasonCode):
+            logger.debug("tapReenabled reasonCode=\(reasonCode, privacy: .public)")
+        case .tapRemoved:
+            logger.debug("tapRemoved")
+        }
+#endif
+    }
+}
+
+private extension SwitcherCommand {
+    var diagnosticCode: Int {
+        switch self {
+        case .moveUp: 1
+        case .moveDown: 2
+        case .confirm: 3
+        case .releaseShortcut: 4
+        case .cancel: 5
+        }
+    }
+}
+
+private extension SwitcherInteractionResult {
+    var diagnosticCode: Int {
+        switch self {
+        case .none: 0
+        case .updated: 1
+        case .confirmed: 2
+        case .cancelled: 3
+        }
+    }
+}
+
+private extension CGEventType {
+    var diagnosticReasonCode: Int {
+        switch self {
+        case .tapDisabledByTimeout: 1
+        case .tapDisabledByUserInput: 2
+        default: 0
+        }
+    }
 }
 
 private final class SwitcherOverlayPanel: NSPanel {

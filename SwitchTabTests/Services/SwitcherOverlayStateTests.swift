@@ -8,6 +8,8 @@ enum SwitcherOverlayStateTests {
         try testTypingKeyDoesNotMapToSwitcherCommand()
         try testHorizontalArrowKeyCodesMoveSelection()
         try testConfirmAndCancelProduceExplicitResults()
+        try testArrowThenShortcutReleaseConfirmsChangedSelection()
+        try testShiftReleaseThenArrowThenCommandReleaseConfirmsSelection()
     }
 
     static func testArrowKeysMoveSelection() throws {
@@ -103,5 +105,68 @@ enum SwitcherOverlayStateTests {
 
         try expectEqual(state.handle(.cancel), .cancelled)
         try expectFalse(state.isPresented)
+    }
+
+    static func testArrowThenShortcutReleaseConfirmsChangedSelection() throws {
+        var state = SwitcherOverlayState()
+        state.present(
+            mode: .currentAppWindowSwitching,
+            items: [
+                SwitcherListItem(id: "finder", title: "Finder", subtitle: nil),
+                SwitcherListItem(id: "safari", title: "Safari", subtitle: nil),
+                SwitcherListItem(id: "notes", title: "Notes", subtitle: nil)
+            ],
+            selectedIndex: 0
+        )
+
+        _ = state.handle(.moveDown)
+
+        try expectEqual(
+            state.handle(.releaseShortcut),
+            .confirmed(
+                item: SwitcherListItem(id: "safari", title: "Safari", subtitle: nil),
+                index: 1
+            )
+        )
+    }
+
+    static func testShiftReleaseThenArrowThenCommandReleaseConfirmsSelection() throws {
+        let reverse = ShortcutSetting.defaultCurrentAppWindowSwitching
+            .reverseVariant(id: "current-app-window-switching-reverse")
+        var state = SwitcherOverlayState()
+        state.present(
+            mode: .currentAppWindowSwitching,
+            items: [
+                SwitcherListItem(id: "finder", title: "Finder", subtitle: nil),
+                SwitcherListItem(id: "safari", title: "Safari", subtitle: nil),
+                SwitcherListItem(id: "notes", title: "Notes", subtitle: nil)
+            ],
+            selectedIndex: 1
+        )
+
+        try expectEqual(
+            SwitcherOverlayExternalEventPolicy.decision(
+                for: .flagsChanged(activeModifiers: .command),
+                triggerReleaseModifiers: SwitcherShortcutModifiers.releaseRelevantModifiers(reverse)
+            ),
+            .none
+        )
+
+        _ = state.handle(.moveDown)
+
+        try expectEqual(
+            SwitcherOverlayExternalEventPolicy.decision(
+                for: .flagsChanged(activeModifiers: []),
+                triggerReleaseModifiers: SwitcherShortcutModifiers.releaseRelevantModifiers(reverse)
+            ),
+            .releaseShortcut
+        )
+        try expectEqual(
+            state.handle(.releaseShortcut),
+            .confirmed(
+                item: SwitcherListItem(id: "notes", title: "Notes", subtitle: nil),
+                index: 2
+            )
+        )
     }
 }
