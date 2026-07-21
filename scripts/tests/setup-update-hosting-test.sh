@@ -336,6 +336,16 @@ assert_status 42
 assert_output_equals "HTTP 404 from zone endpoint"
 [[ "$(grep -c '^r2 bucket create' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "bucket was created after an unrelated 404"
 
+# Endpoint context and an auth error on separate lines are not bucket absence.
+reset_fixture
+FAKE_BUCKET_INFO_STATUS=47
+FAKE_BUCKET_INFO_ERROR=$'request failed for /r2/buckets/switchtab-updates\nAPI token not found'
+invoke_script
+assert_status 47
+assert_output_equals "$FAKE_BUCKET_INFO_ERROR"
+[[ "$(grep -c '^r2 bucket create' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "bucket was created from split-line diagnostics"
+[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed from split-line bucket diagnostics"
+
 # An endpoint-style bucket 404 is a legitimate bucket absence.
 reset_fixture
 FAKE_BUCKET_INFO_STATUS=46
@@ -354,6 +364,16 @@ assert_status 0
 assert_output_contains "https://updates.switchtab.app/appcast.xml"
 [[ -f "$WRANGLER_STATE/domain" ]] || fail "endpoint-style domain absence was not added"
 [[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 1 ]] || fail "endpoint-style domain absence did not add exactly once"
+
+# Endpoint context and a zone error on separate lines are not domain absence.
+reset_fixture
+FAKE_DOMAIN_GET_STATUS=48
+FAKE_DOMAIN_GET_ERROR=$'request failed for /r2/buckets/switchtab-updates/domains/custom/updates.switchtab.app\nzone not found'
+invoke_script
+assert_status 48
+assert_output_equals "$FAKE_DOMAIN_GET_ERROR"
+[[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "domain was added from split-line diagnostics"
+[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed from split-line domain diagnostics"
 
 # A zone error is not treated as an absent domain.
 reset_fixture

@@ -57,49 +57,65 @@ run_wrangler_quiet() {
 run_wrangler_quiet whoami
 
 is_bucket_absent_error() {
-    local message bucket_name
+    local diagnostic_line line bucket_name
 
-    message="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
     bucket_name="$(printf '%s' "$R2_BUCKET_NAME" | tr '[:upper:]' '[:lower:]')"
 
-    if [[ "$message" == *"404"* \
-        && "$message" == *"/r2/buckets/$bucket_name"* \
-        && "$message" != *"/domains/"* ]]; then
-        return 0
-    fi
+    while IFS= read -r diagnostic_line || [[ -n "$diagnostic_line" ]]; do
+        line="$(printf '%s' "$diagnostic_line" | tr '[:upper:]' '[:lower:]')"
 
-    if [[ "$message" == *"no such bucket"* ]]; then
-        return 0
-    fi
+        if [[ "$line" == *"404"* \
+            && "$line" == *"/r2/buckets/$bucket_name"* \
+            && "$line" != *"/domains/"* ]]; then
+            return 0
+        fi
 
-    [[ "$message" == *"bucket"* \
-        && ( "$message" == *"not found"* || "$message" == *"does not exist"* ) \
-        && ( "$message" == *"bucket not found"* \
-            || "$message" == *"bucket does not exist"* \
-            || "$message" == *"$bucket_name"* ) ]]
+        if [[ "$line" == "no such bucket" \
+            || ( "$line" == *"no such bucket"* && "$line" == *"$bucket_name"* ) ]]; then
+            return 0
+        fi
+
+        if [[ "$line" == *"bucket"* \
+            && ( "$line" == *"not found"* || "$line" == *"does not exist"* ) \
+            && ( "$line" == "bucket not found" \
+                || "$line" == "bucket does not exist" \
+                || "$line" == *"$bucket_name"* ) ]]; then
+            return 0
+        fi
+    done <<< "$1"
+
+    return 1
 }
 
 is_domain_absent_error() {
-    local message bucket_name domain_name
+    local diagnostic_line line bucket_name domain_name
 
-    message="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
     bucket_name="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
     domain_name="$(printf '%s' "$UPDATE_DOMAIN" | tr '[:upper:]' '[:lower:]')"
 
-    if [[ "$message" == *"404"* \
-        && "$message" == *"/r2/buckets/$bucket_name/domains/custom/$domain_name"* ]]; then
-        return 0
-    fi
+    while IFS= read -r diagnostic_line || [[ -n "$diagnostic_line" ]]; do
+        line="$(printf '%s' "$diagnostic_line" | tr '[:upper:]' '[:lower:]')"
 
-    if [[ "$message" == *"no such domain"* ]]; then
-        return 0
-    fi
+        if [[ "$line" == *"404"* \
+            && "$line" == *"/r2/buckets/$bucket_name/domains/custom/$domain_name"* ]]; then
+            return 0
+        fi
 
-    [[ "$message" == *"domain"* \
-        && ( "$message" == *"not found"* || "$message" == *"does not exist"* ) \
-        && ( "$message" == *"domain not found"* \
-            || "$message" == *"domain does not exist"* \
-            || "$message" == *"$domain_name"* ) ]]
+        if [[ "$line" == "no such domain" \
+            || ( "$line" == *"no such domain"* && "$line" == *"$domain_name"* ) ]]; then
+            return 0
+        fi
+
+        if [[ "$line" == *"domain"* \
+            && ( "$line" == *"not found"* || "$line" == *"does not exist"* ) \
+            && ( "$line" == "domain not found" \
+                || "$line" == "domain does not exist" \
+                || "$line" == *"$domain_name"* ) ]]; then
+            return 0
+        fi
+    done <<< "$1"
+
+    return 1
 }
 
 extract_domain_label() {
