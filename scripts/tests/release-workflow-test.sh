@@ -78,7 +78,7 @@ uses_steps = steps.select { |step| step.key?("uses") }
 assert(uses_steps.length == 1, "only the pinned checkout action is allowed")
 checkout = steps.fetch(names.index("Checkout release tag"))
 assert(checkout["uses"] == "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "checkout must use the approved full SHA")
-assert(checkout.dig("with", "ref") == "${{ env.RELEASE_TAG }}", "checkout must use RELEASE_TAG")
+assert(checkout.dig("with", "ref") == "refs/tags/${{ env.RELEASE_TAG }}", "checkout must use the fully qualified release tag ref")
 assert(checkout.dig("with", "fetch-depth") == 0, "checkout must fetch complete history")
 assert(checkout.dig("with", "persist-credentials") == false, "checkout credentials must not persist into validation or tests")
 uses_steps.each do |step|
@@ -87,7 +87,15 @@ end
 
 validation = steps.fetch(names.index("Validate release tag and provenance")).fetch("run")
 assert(validation.include?("^v[0-9]+(\\.[0-9]+)*$"), "tag shape validation is missing")
-assert(validation.include?("git rev-parse \"${RELEASE_TAG}^{commit}\""), "tag commit lookup is missing")
+assert(validation.include?('tag_ref="refs/tags/$RELEASE_TAG"'), "validation must construct the exact tag ref")
+assert(validation.include?('git show-ref --verify --quiet "$tag_ref"'), "validation must verify the exact tag ref exists")
+assert(validation.include?('git rev-parse "$tag_ref^{commit}"'), "validation must resolve the exact tag ref commit")
+assert(!validation.include?('git rev-parse "${RELEASE_TAG}^{commit}"'), "validation must never resolve the bare release tag")
+assert(validation.lines.grep(/git rev-parse/).none? { |line| line.include?("RELEASE_TAG") }, "validation must never pass RELEASE_TAG directly to rev-parse")
+tag_ref_position = validation.index('tag_ref="refs/tags/$RELEASE_TAG"')
+tag_verify_position = validation.index('git show-ref --verify --quiet "$tag_ref"')
+tag_resolve_position = validation.index('git rev-parse "$tag_ref^{commit}"')
+assert(tag_ref_position < tag_verify_position && tag_verify_position < tag_resolve_position, "exact tag construction, verification, and resolution are out of order")
 assert(validation.include?("git rev-parse HEAD"), "HEAD lookup is missing")
 assert(validation.include?("MARKETING_VERSION"), "project marketing version validation is missing")
 assert(!validation.include?("print $3; exit"), "MARKETING_VERSION extraction must consume xcodebuild output under pipefail")
@@ -256,6 +264,8 @@ NOTARY_HARNESS="$TEMP_ROOT/notary-harness.sh"
 NOTARY_LOG="$TEMP_ROOT/notary.log"
 PREPARE_HARNESS="$TEMP_ROOT/prepare-signing-workspace.sh"
 CLEANUP_HARNESS="$TEMP_ROOT/cleanup-signing-workspace.sh"
+VALIDATION_SOURCE="$TEMP_ROOT/validate-release.sh"
+TAG_REF_HARNESS="$TEMP_ROOT/validate-tag-ref.sh"
 mkdir -p "$FAKE_BIN"
 
 extract_workflow_step() {
@@ -278,6 +288,49 @@ RUBY
 
 extract_workflow_step "Prepare signing workspace" "$PREPARE_HARNESS"
 extract_workflow_step "Cleanup Apple credentials" "$CLEANUP_HARNESS"
+extract_workflow_step "Validate release tag and provenance" "$VALIDATION_SOURCE"
+
+{
+    printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail'
+    /usr/bin/awk '
+        /tag_ref="refs\/tags\/\$RELEASE_TAG"/ { capture = 1 }
+        capture { print }
+        capture && /tag_commit=.*git rev-parse/ { exit }
+    ' "$VALIDATION_SOURCE"
+    printf '%s\n' 'printf "%s\n" "$tag_commit"'
+} > "$TAG_REF_HARNESS"
+chmod +x "$TAG_REF_HARNESS"
+
+# A same-named branch must never satisfy exact release-tag validation.
+TAG_REPOSITORY="$TEMP_ROOT/tag-repository"
+mkdir -p "$TAG_REPOSITORY"
+(
+    cd -- "$TAG_REPOSITORY"
+    git init -q
+    git -c user.name='SwitchTab Test' -c user.email='switchtab@example.invalid' \
+        -c commit.gpgsign=false commit --allow-empty -q -m 'branch target'
+    git branch v1.2
+)
+BRANCH_COMMIT="$(cd -- "$TAG_REPOSITORY" && git rev-parse 'refs/heads/v1.2^{commit}')"
+[[ "$(cd -- "$TAG_REPOSITORY" && git rev-parse 'v1.2^{commit}')" == "$BRANCH_COMMIT" ]] || \
+    fail "local ambiguity fixture did not resolve the bare branch"
+set +e
+output="$(cd -- "$TAG_REPOSITORY" && RELEASE_TAG='v1.2' /bin/bash "$TAG_REF_HARNESS" 2>&1)"
+status=$?
+set -e
+[[ "$status" -eq 64 ]] || fail "same-named branch satisfied exact tag validation; status=$status output=$output"
+
+# When both names exist at different commits, validation must resolve refs/tags/v1.2.
+(
+    cd -- "$TAG_REPOSITORY"
+    git -c user.name='SwitchTab Test' -c user.email='switchtab@example.invalid' \
+        -c commit.gpgsign=false commit --allow-empty -q -m 'tag target'
+    git tag v1.2
+)
+TAG_COMMIT="$(cd -- "$TAG_REPOSITORY" && git rev-parse 'refs/tags/v1.2^{commit}')"
+[[ "$TAG_COMMIT" != "$BRANCH_COMMIT" ]] || fail "tag/branch ambiguity fixture did not use distinct commits"
+output="$(cd -- "$TAG_REPOSITORY" && RELEASE_TAG='v1.2' /bin/bash "$TAG_REF_HARNESS")"
+[[ "$output" == "$TAG_COMMIT" ]] || fail "exact tag validation resolved the branch instead of the tag: $output"
 
 # The non-secret preparation creates a random private directory and exports only its safe paths.
 RUNNER_FIXTURE="$TEMP_ROOT/runner"

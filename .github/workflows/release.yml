@@ -28,7 +28,7 @@ jobs:
       - name: Checkout release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: "${{ env.RELEASE_TAG }}"
+          ref: "refs/tags/${{ env.RELEASE_TAG }}"
           fetch-depth: 0
           persist-credentials: false
 
@@ -41,7 +41,12 @@ jobs:
             exit 64
           fi
 
-          tag_commit="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+          tag_ref="refs/tags/$RELEASE_TAG"
+          if ! git show-ref --verify --quiet "$tag_ref"; then
+            echo "Exact release tag does not exist: $tag_ref" >&2
+            exit 64
+          fi
+          tag_commit="$(git rev-parse "$tag_ref^{commit}")"
           head_commit="$(git rev-parse HEAD)"
           if [[ "$head_commit" != "$tag_commit" ]]; then
             echo "Checked-out HEAD does not match $RELEASE_TAG" >&2
