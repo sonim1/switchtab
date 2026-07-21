@@ -96,10 +96,11 @@ run_external() {
     local result
     if "$@"; then
         return 0
+    else
+        result=$?
+        echo "$label failed" >&2
+        return "$result"
     fi
-    result=$?
-    echo "$label failed" >&2
-    return "$result"
 }
 
 if [[ -z "$SPARKLE_PUBLIC_ED_KEY" ]]; then
@@ -142,10 +143,11 @@ plist_value() {
     if value="$("$PLUTIL_BIN" -extract "$key" raw -o - "$APP_INFO_PLIST")"; then
         printf '%s' "$value"
         return 0
+    else
+        result=$?
+        echo "Failed to read $key from app Info.plist: $APP_INFO_PLIST" >&2
+        return "$result"
     fi
-    result=$?
-    echo "Failed to read $key from app Info.plist: $APP_INFO_PLIST" >&2
-    return "$result"
 }
 
 MARKETING_VERSION="$(plist_value CFBundleShortVersionString)"
@@ -191,10 +193,11 @@ generate_appcast() {
             -o "$APPCAST_PATH" \
             "$APPCAST_WORK_DIR"; then
             return 0
+        else
+            result=$?
+            echo "Sparkle generate_appcast failed" >&2
+            return "$result"
         fi
-        result=$?
-        echo "Sparkle generate_appcast failed" >&2
-        return "$result"
     fi
 
     if "$SPARKLE_APPCAST_BIN" \
@@ -203,10 +206,11 @@ generate_appcast() {
         -o "$APPCAST_PATH" \
         "$APPCAST_WORK_DIR"; then
         return 0
+    else
+        result=$?
+        echo "Sparkle generate_appcast failed" >&2
+        return "$result"
     fi
-    result=$?
-    echo "Sparkle generate_appcast failed" >&2
-    return "$result"
 }
 
 generate_appcast
@@ -223,10 +227,11 @@ xml_value() {
     if value="$("$XMLLINT_BIN" --xpath "$expression" "$APPCAST_PATH")"; then
         printf '%s' "$value"
         return 0
+    else
+        result=$?
+        echo "Unable to inspect generated appcast XML" >&2
+        return "$result"
     fi
-    result=$?
-    echo "Unable to inspect generated appcast XML" >&2
-    return "$result"
 }
 
 ENCLOSURE_COUNT="$(xml_value 'count(//*[local-name()="enclosure"])')"
@@ -246,11 +251,17 @@ if [[ -z "$ED_SIGNATURE" ]]; then
 fi
 
 APPCAST_BUILD_NUMBER="$(xml_value 'string((//*[local-name()="enclosure"]/@*[local-name()="version"])[1])')"
-if [[ -n "$APPCAST_BUILD_NUMBER" && "$APPCAST_BUILD_NUMBER" != "$BUILD_NUMBER" ]]; then
+if [[ -z "$APPCAST_BUILD_NUMBER" ]]; then
+    fail "Generated appcast is missing sparkle:version"
+fi
+if [[ "$APPCAST_BUILD_NUMBER" != "$BUILD_NUMBER" ]]; then
     fail "Generated appcast sparkle:version mismatch: expected $BUILD_NUMBER, got $APPCAST_BUILD_NUMBER"
 fi
 APPCAST_MARKETING_VERSION="$(xml_value 'string((//*[local-name()="enclosure"]/@*[local-name()="shortVersionString"])[1])')"
-if [[ -n "$APPCAST_MARKETING_VERSION" && "$APPCAST_MARKETING_VERSION" != "$MARKETING_VERSION" ]]; then
+if [[ -z "$APPCAST_MARKETING_VERSION" ]]; then
+    fail "Generated appcast is missing sparkle:shortVersionString"
+fi
+if [[ "$APPCAST_MARKETING_VERSION" != "$MARKETING_VERSION" ]]; then
     fail "Generated appcast sparkle:shortVersionString mismatch: expected $MARKETING_VERSION, got $APPCAST_MARKETING_VERSION"
 fi
 

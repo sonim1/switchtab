@@ -136,9 +136,15 @@ for ((index = 1; index <= $#; index++)); do
 done
 
 printf 'generate_appcast %s\n' "$*" >> "$TOOL_LOG"
+if [[ "${SPARKLE_PRIVATE_ED_KEY+x}" == x ]]; then
+    printf 'ENV_PRIVATE=set\n' >> "$TOOL_LOG"
+else
+    printf 'ENV_PRIVATE=unset\n' >> "$TOOL_LOG"
+fi
 if [[ -n "$ed_key_file" ]]; then
     IFS= read -r private_key || true
-    printf 'stdin=%s\n' "$private_key" >> "$TOOL_LOG"
+    [[ -n "$private_key" ]] || exit 92
+    printf 'stdin=present\n' >> "$TOOL_LOG"
 else
     printf 'account=%s\n' "$account" >> "$TOOL_LOG"
 fi
@@ -161,6 +167,7 @@ cat > "$output" <<EOF_XML
   </channel>
 </rss>
 EOF_XML
+EOF
 
 chmod +x "$BIN_DIR"/*
 
@@ -209,8 +216,9 @@ run_script
 assert_status 0
 [[ -f "$UPDATE_DIR/appcast.xml" ]] || fail "CI appcast was not generated"
 grep -Fq -- '--ed-key-file -' "$TOOL_LOG" || fail "CI mode did not pass --ed-key-file -"
-grep -Fq "stdin=$PRIVATE_KEY" "$TOOL_LOG" || fail "CI private key was not provided via stdin"
-if [[ "$output" == *"$PRIVATE_KEY"* ]] || grep -Fq "$PRIVATE_KEY" <(sed -n '1p' "$TOOL_LOG"); then
+grep -Fq 'stdin=present' "$TOOL_LOG" || fail "CI private key was not provided via stdin"
+grep -Fq 'ENV_PRIVATE=unset' "$TOOL_LOG" || fail "CI private key was inherited by the child environment"
+if [[ "$output" == *"$PRIVATE_KEY"* ]] || grep -Fq "$PRIVATE_KEY" "$TOOL_LOG"; then
     fail "private key was logged"
 fi
 unset SPARKLE_PRIVATE_ED_KEY
@@ -233,6 +241,22 @@ assert_status 66
 assert_output_contains 'edSignature'
 assert_no_outputs
 unset FAKE_ED_SIGNATURE
+
+rm -rf "$UPDATE_DIR"
+export FAKE_SPARKLE_VERSION=''
+run_script
+assert_status 66
+assert_output_contains 'missing sparkle:version'
+assert_no_outputs
+unset FAKE_SPARKLE_VERSION
+
+rm -rf "$UPDATE_DIR"
+export FAKE_SPARKLE_SHORT_VERSION=''
+run_script
+assert_status 66
+assert_output_contains 'missing sparkle:shortVersionString'
+assert_no_outputs
+unset FAKE_SPARKLE_SHORT_VERSION
 
 rm -rf "$UPDATE_DIR"
 export PLIST_PUBLIC_KEY="$MISMATCH_KEY"
