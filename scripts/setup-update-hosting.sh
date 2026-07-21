@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+
+if [[ $# -ne 0 ]]; then
+    echo "Usage: scripts/setup-update-hosting.sh" >&2
+    exit 64
+fi
+
+CONFIG_PATH="${RELEASE_CONFIG_PATH:-$PROJECT_ROOT/.env.release.local}"
+if [[ -f "$CONFIG_PATH" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$CONFIG_PATH"
+    set +a
+fi
+
+export R2_BUCKET_NAME="${R2_BUCKET_NAME:-switchtab-updates}"
+export UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.app}"
+export WRANGLER_BIN="${WRANGLER_BIN:-$PROJECT_ROOT/node_modules/.bin/wrangler}"
+
+if [[ -z "${CLOUDFLARE_ZONE_ID:-}" ]]; then
+    echo "CLOUDFLARE_ZONE_ID is required." >&2
+    exit 64
+fi
+
+if [[ "$WRANGLER_BIN" == */* ]]; then
+    if [[ ! -x "$WRANGLER_BIN" ]]; then
+        echo "Wrangler executable not found at $WRANGLER_BIN." >&2
+        echo "Run npm ci to install the pinned Wrangler executable." >&2
+        exit 66
+    fi
+else
+    WRANGLER_BIN="$(command -v "$WRANGLER_BIN" 2>/dev/null || true)"
+    if [[ -z "$WRANGLER_BIN" ]]; then
+        echo "Wrangler executable is not available." >&2
+        echo "Run npm ci to install the pinned Wrangler executable." >&2
+        exit 66
+    fi
+fi
+
+run_wrangler_quiet() {
+    local output status
+
+    if output="$("$WRANGLER_BIN" "$@" 2>&1)"; then
+        return 0
+    else
+        status=$?
+        printf '%s\n' "$output" >&2
+        return "$status"
+    fi
+}
+
+run_wrangler_quiet whoami
+
+is_not_found_error() {
+    local message
+
+    message="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+
+    [[ "$message" == *"404"* \
+        || "$message" == *"not found"* \
+        || "$message" == *"does not exist"* \
+        || "$message" == *"no such bucket"* \
+        || "$message" == *"no such domain"* ]]
+}
+
+bucket_info_output=''
+if bucket_info_output="$("$WRANGLER_BIN" r2 bucket info "$R2_BUCKET_NAME" --json 2>&1)"; then
+    :
+else
+    bucket_info_status=$?
+    if ! is_not_found_error "$bucket_info_output"; then
+        printf '%s\n' "$bucket_info_output" >&2
+        exit "$bucket_info_status"
+    fi
+
+    run_wrangler_quiet r2 bucket create "$R2_BUCKET_NAME"
+    run_wrangler_quiet r2 bucket info "$R2_BUCKET_NAME" --json
+fi
+
+domain_get_output=''
+if domain_get_output="$("$WRANGLER_BIN" r2 bucket domain get "$R2_BUCKET_NAME" --domain "$UPDATE_DOMAIN" 2>&1)"; then
+    :
+else
+    domain_get_status=$?
+    if ! is_not_found_error "$domain_get_output"; then
+        printf '%s\n' "$domain_get_output" >&2
+        exit "$domain_get_status"
+    fi
+
+    run_wrangler_quiet r2 bucket domain add "$R2_BUCKET_NAME" \
+        --domain "$UPDATE_DOMAIN" \
+        --zone-id "$CLOUDFLARE_ZONE_ID" \
+        --min-tls 1.2 \
+        --force
+    run_wrangler_quiet r2 bucket domain get "$R2_BUCKET_NAME" --domain "$UPDATE_DOMAIN"
+fi
+
+printf 'https://%s/appcast.xml\n' "$UPDATE_DOMAIN"
