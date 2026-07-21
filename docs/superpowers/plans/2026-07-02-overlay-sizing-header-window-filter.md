@@ -862,7 +862,7 @@ Run:
 
 ```bash
 rtk pkill -x SwitchTab
-rtk open /Users/kendrick/Library/Developer/Xcode/DerivedData/SwitchTab-frebkfflvyhvsigdhdrulkxzudqc/Build/Products/Debug/SwitchTab.app
+rtk open ~/Library/Developer/Xcode/DerivedData/SwitchTab-*/Build/Products/Debug/SwitchTab.app
 ```
 
 Expected: app starts from menu bar. If macOS asks for Accessibility or Screen Recording again, grant the exact DerivedData app.

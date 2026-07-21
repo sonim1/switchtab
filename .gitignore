@@ -10,6 +10,9 @@ xcuserdata/
 # Local assistant/tool state
 .claude/settings.local.json
 .gstack/
+.omo/
+.swiftpm/
+.debug-journal.md
 
 # Local secret material
 .env
