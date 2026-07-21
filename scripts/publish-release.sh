@@ -141,6 +141,14 @@ if ENCLOSURE_URL="$(xml_value 'string((//*[local-name()="enclosure"]/@url)[1])')
 else
     exit $?
 fi
+if SHORT_VERSION_COUNT="$(xml_value 'count(//*[local-name()="enclosure"]/@*[local-name()="shortVersionString"])')"; then
+    :
+else
+    exit $?
+fi
+if [[ "$SHORT_VERSION_COUNT" != 1 ]]; then
+    fail "Appcast must contain exactly one Sparkle short version"
+fi
 if SHORT_VERSION="$(xml_value 'string((//*[local-name()="enclosure"]/@*[local-name()="shortVersionString"])[1])')"; then
     :
 else

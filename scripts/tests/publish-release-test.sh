@@ -397,6 +397,18 @@ run_release v1.2
 assert_no_mutation
 
 reset_scenario
+cat > "$UPDATE_DIR/appcast.xml" <<'EOF'
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
+     xmlns:other="https://example.invalid/other"><channel><item>
+<enclosure url="https://updates.test.example/SwitchTab-1.2-7.dmg"
+           sparkle:shortVersionString="1.2" other:shortVersionString="9.9" />
+</item></channel></rss>
+EOF
+run_release v1.2
+[[ "$status" -ne 0 ]] || fail "multiple short version attributes were accepted"
+assert_no_mutation
+
+reset_scenario
 printf '%064d  Other.dmg\n' 0 > "$UPDATE_DIR/$CHECKSUM_NAME"
 run_release v1.2
 [[ "$status" -ne 0 ]] || fail "unrelated checksum was accepted"
