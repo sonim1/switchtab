@@ -75,6 +75,10 @@ is_bucket_absent_error() {
             return 0
         fi
 
+        if [[ "$line" == *"the specified bucket does not exist."* ]]; then
+            return 0
+        fi
+
         if [[ "$line" == *"bucket"* \
             && ( "$line" == *"not found"* || "$line" == *"does not exist"* ) \
             && ( "$line" == "bucket not found" \
@@ -103,6 +107,10 @@ is_domain_absent_error() {
 
         if [[ "$line" == "no such domain" \
             || ( "$line" == *"no such domain"* && "$line" == *"$domain_name"* ) ]]; then
+            return 0
+        fi
+
+        if [[ "$line" == *"the specified custom domain does not exist."* ]]; then
             return 0
         fi
 

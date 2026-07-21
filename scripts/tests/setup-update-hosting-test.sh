@@ -355,6 +355,15 @@ assert_status 0
 assert_output_contains "https://updates.switchtab.app/appcast.xml"
 [[ -f "$WRANGLER_STATE/bucket" ]] || fail "endpoint-style bucket absence was not created"
 
+# Wrangler's resource-specific missing-bucket transcript is a legitimate absence.
+reset_fixture
+FAKE_BUCKET_INFO_STATUS=49
+FAKE_BUCKET_INFO_ERROR=$'A request to the Cloudflare API (/accounts/test-account/r2/buckets/switchtab-updates) failed.\n  The specified bucket does not exist. [code: 10006]'
+invoke_script
+assert_status 0
+assert_output_contains "https://updates.switchtab.app/appcast.xml"
+[[ -f "$WRANGLER_STATE/bucket" ]] || fail "Wrangler missing-bucket transcript did not create"
+
 # An endpoint-style domain 404 is a legitimate domain absence.
 reset_fixture
 FAKE_DOMAIN_GET_STATUS=45
@@ -364,6 +373,16 @@ assert_status 0
 assert_output_contains "https://updates.switchtab.app/appcast.xml"
 [[ -f "$WRANGLER_STATE/domain" ]] || fail "endpoint-style domain absence was not added"
 [[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 1 ]] || fail "endpoint-style domain absence did not add exactly once"
+
+# Wrangler's resource-specific missing-domain transcript is a legitimate absence.
+reset_fixture
+FAKE_DOMAIN_GET_STATUS=50
+FAKE_DOMAIN_GET_ERROR=$'A request to the Cloudflare API (/accounts/test-account/r2/buckets/switchtab-updates/domains/custom/updates.switchtab.app) failed.\n  The specified custom domain does not exist. [code: 10006]'
+invoke_script
+assert_status 0
+assert_output_contains "https://updates.switchtab.app/appcast.xml"
+[[ -f "$WRANGLER_STATE/domain" ]] || fail "Wrangler missing-domain transcript did not add"
+[[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 1 ]] || fail "Wrangler missing-domain transcript did not add exactly once"
 
 # Endpoint context and a zone error on separate lines are not domain absence.
 reset_fixture
