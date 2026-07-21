@@ -26,6 +26,13 @@ the existing `scripts/build-direct-distribution.sh --release` pipeline.
 
 ## Files and Responsibilities
 
+### `.env.release.local.example`
+
+A tracked template containing the three required variable names with safe
+placeholder values. Because the repository ignores `.env.*` by default, the
+`.gitignore` will explicitly allow this one example file while continuing to
+ignore the real local configuration.
+
 ### `.env.release.local`
 
 An ignored, machine-local shell configuration file containing only:
@@ -55,6 +62,8 @@ The wrapper accepts no options. Advanced overrides remain available by running
 ## Error Handling
 
 - Missing `.env.release.local`: exit with a concise setup message.
+- The setup message points to `.env.release.local.example` as the template to
+  copy.
 - Missing required variable: identify the exact variable and exit before any
   build, signing, or notarization work begins.
 - Build, signing, or notarization failure: preserve the delegated script's exit
@@ -70,6 +79,8 @@ with a fake `build-direct-distribution.sh`. It will verify:
 - a complete configuration forwards all values, including the certificate name
   with spaces, and exactly one `--release` argument;
 - invocation works when the caller's current directory is outside the project;
+- the example file contains every required variable while the real local file
+  remains ignored;
 - both scripts pass `bash -n` syntax validation.
 
 The existing Swift test suite and direct-distribution `--prepare-only` check
