@@ -6,7 +6,7 @@
 
 **Status**: Current implementation scope as of 2026-07-12
 
-**Input**: User description: "macOS에서 키보드 단축키로 (설정가능) MacOS에 열린 앱과 창을 검색하고 빠르게 전환하는 window switcher 앱. 기본 예제로는 Cmd+Tab이면 앱단위로 전환, 앱 아이콘이 보임 CMD+`이면 현재 앱의 window들을 전환 (해당 앱만) 이때 보이는 건 실제 현재 스크린. 이런 심플한 기능해주는 앱"
+**Input**: User description: "A window-switcher app that uses a configurable keyboard shortcut to find and quickly switch between open macOS apps and windows. For example, Cmd+Tab switches between apps and displays app icons, while Cmd+` switches between windows in the current app only and shows previews of their current on-screen content. The app should provide this simple functionality."
 
 > Current repository note (2026-07-12): the checked-in app target implements
 > current-app window switching only (`SwitcherMode.currentAppWindowSwitching`).

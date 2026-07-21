@@ -86,7 +86,7 @@ enum ShortcutCaptureTests {
     }
 
     static func testShortcutCaptureUsesKeyCodeForCanonicalKeyEquivalent() throws {
-        let capture = ShortcutCapture(keyEquivalent: "ㅏ", modifiers: ["command"], keyCode: 40)
+        let capture = ShortcutCapture(keyEquivalent: "λ", modifiers: ["command"], keyCode: 40)
 
         try expectEqual(capture.keyEquivalent, "K")
         try expectEqual(capture.keyCode, 40)
@@ -176,7 +176,7 @@ enum ShortcutCaptureTests {
         let setting = ShortcutSetting(
             id: "custom",
             mode: .currentAppWindowSwitching,
-            keyEquivalent: "ㅏ",
+            keyEquivalent: "λ",
             keyCode: 40,
             modifiers: ["command"],
             isUsable: true
@@ -214,7 +214,7 @@ enum ShortcutCaptureTests {
         let viewModel = ShortcutSettingsViewModel(store: store)
 
         let saved = viewModel.record(
-            capture: ShortcutCapture(keyEquivalent: "ㅏ", modifiers: ["command"], keyCode: 40),
+            capture: ShortcutCapture(keyEquivalent: "λ", modifiers: ["command"], keyCode: 40),
             isUsable: true
         )
 
