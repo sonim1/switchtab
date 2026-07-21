@@ -55,16 +55,57 @@ run_wrangler_quiet() {
 
 run_wrangler_quiet whoami
 
-is_not_found_error() {
-    local message
+is_bucket_absent_error() {
+    local message bucket_name
 
     message="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+    bucket_name="$(printf '%s' "$R2_BUCKET_NAME" | tr '[:upper:]' '[:lower:]')"
 
-    [[ "$message" == *"404"* \
-        || "$message" == *"not found"* \
-        || "$message" == *"does not exist"* \
-        || "$message" == *"no such bucket"* \
-        || "$message" == *"no such domain"* ]]
+    if [[ "$message" == *"token"* || "$message" == *"zone"* ]]; then
+        return 1
+    fi
+
+    if [[ "$message" == *"404"* \
+        && "$message" == *"/r2/buckets/$bucket_name"* \
+        && "$message" != *"/domains/"* ]]; then
+        return 0
+    fi
+
+    if [[ "$message" == *"no such bucket"* ]]; then
+        return 0
+    fi
+
+    [[ "$message" == *"bucket"* \
+        && ( "$message" == *"not found"* || "$message" == *"does not exist"* ) \
+        && ( "$message" == *"bucket not found"* \
+            || "$message" == *"bucket does not exist"* \
+            || "$message" == *"$bucket_name"* ) ]]
+}
+
+is_domain_absent_error() {
+    local message domain_name
+
+    message="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+    domain_name="$(printf '%s' "$UPDATE_DOMAIN" | tr '[:upper:]' '[:lower:]')"
+
+    if [[ "$message" == *"token"* || "$message" == *"zone"* ]]; then
+        return 1
+    fi
+
+    if [[ "$message" == *"404"* \
+        && "$message" == *"/r2/buckets/$bucket_name/domains/custom/$domain_name"* ]]; then
+        return 0
+    fi
+
+    if [[ "$message" == *"no such domain"* ]]; then
+        return 0
+    fi
+
+    [[ "$message" == *"domain"* \
+        && ( "$message" == *"not found"* || "$message" == *"does not exist"* ) \
+        && ( "$message" == *"domain not found"* \
+            || "$message" == *"domain does not exist"* \
+            || "$message" == *"$domain_name"* ) ]]
 }
 
 bucket_info_output=''
@@ -72,7 +113,7 @@ if bucket_info_output="$("$WRANGLER_BIN" r2 bucket info "$R2_BUCKET_NAME" --json
     :
 else
     bucket_info_status=$?
-    if ! is_not_found_error "$bucket_info_output"; then
+    if ! is_bucket_absent_error "$bucket_info_output"; then
         printf '%s\n' "$bucket_info_output" >&2
         exit "$bucket_info_status"
     fi
@@ -86,7 +127,7 @@ if domain_get_output="$("$WRANGLER_BIN" r2 bucket domain get "$R2_BUCKET_NAME" -
     :
 else
     domain_get_status=$?
-    if ! is_not_found_error "$domain_get_output"; then
+    if ! is_domain_absent_error "$domain_get_output"; then
         printf '%s\n' "$domain_get_output" >&2
         exit "$domain_get_status"
     fi

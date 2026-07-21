@@ -26,6 +26,14 @@ assert_output_contains() {
     fi
 }
 
+assert_output_equals() {
+    local expected="$1"
+
+    if [[ "$output" != "$expected" ]]; then
+        fail "expected output '$expected', got: $output"
+    fi
+}
+
 assert_log_equals() {
     local expected="$1"
     local actual
@@ -72,10 +80,10 @@ case "$*" in
         if [[ -f "$WRANGLER_STATE/bucket" ]]; then
             printf '{"name":"switchtab-updates"}\n'
         else
-            if [[ -z "${FAKE_BUCKET_INFO_MISSING_SILENT:-}" ]]; then
-                printf 'bucket not found\n' >&2
+            if [[ -z "${FAKE_BUCKET_INFO_SILENT:-}" ]]; then
+                printf '%s\n' "${FAKE_BUCKET_INFO_ERROR:-bucket not found}" >&2
             fi
-            exit "${FAKE_BUCKET_INFO_MISSING_STATUS:-1}"
+            exit "${FAKE_BUCKET_INFO_STATUS:-1}"
         fi
         ;;
     "r2 bucket create "*)
@@ -102,8 +110,10 @@ case "$*" in
         if [[ -f "$WRANGLER_STATE/domain" ]]; then
             printf '{"domain":"updates.switchtab.app"}\n'
         else
-            printf 'domain not found\n' >&2
-            exit "${FAKE_DOMAIN_GET_MISSING_STATUS:-1}"
+            if [[ -z "${FAKE_DOMAIN_GET_SILENT:-}" ]]; then
+                printf '%s\n' "${FAKE_DOMAIN_GET_ERROR:-domain not found}" >&2
+            fi
+            exit "${FAKE_DOMAIN_GET_STATUS:-1}"
         fi
         ;;
     "r2 bucket domain add "*)
@@ -127,8 +137,8 @@ reset_fixture() {
     : > "$WRANGLER_LOG"
     unset FAKE_WHOAMI_STATUS FAKE_BUCKET_CREATE_STATUS FAKE_DOMAIN_ADD_STATUS \
         FAKE_FINAL_DOMAIN_GET_STATUS FAKE_FINAL_DOMAIN_GET_SILENT \
-        FAKE_BUCKET_INFO_MISSING_STATUS FAKE_BUCKET_INFO_MISSING_SILENT \
-        FAKE_DOMAIN_GET_MISSING_STATUS
+        FAKE_BUCKET_INFO_STATUS FAKE_BUCKET_INFO_ERROR FAKE_BUCKET_INFO_SILENT \
+        FAKE_DOMAIN_GET_STATUS FAKE_DOMAIN_GET_ERROR FAKE_DOMAIN_GET_SILENT
 }
 
 invoke_script() {
@@ -148,9 +158,12 @@ invoke_script() {
             ${FAKE_DOMAIN_ADD_STATUS:+FAKE_DOMAIN_ADD_STATUS="$FAKE_DOMAIN_ADD_STATUS"} \
             ${FAKE_FINAL_DOMAIN_GET_STATUS:+FAKE_FINAL_DOMAIN_GET_STATUS="$FAKE_FINAL_DOMAIN_GET_STATUS"} \
             ${FAKE_FINAL_DOMAIN_GET_SILENT:+FAKE_FINAL_DOMAIN_GET_SILENT="$FAKE_FINAL_DOMAIN_GET_SILENT"} \
-            ${FAKE_BUCKET_INFO_MISSING_STATUS:+FAKE_BUCKET_INFO_MISSING_STATUS="$FAKE_BUCKET_INFO_MISSING_STATUS"} \
-            ${FAKE_BUCKET_INFO_MISSING_SILENT:+FAKE_BUCKET_INFO_MISSING_SILENT="$FAKE_BUCKET_INFO_MISSING_SILENT"} \
-            ${FAKE_DOMAIN_GET_MISSING_STATUS:+FAKE_DOMAIN_GET_MISSING_STATUS="$FAKE_DOMAIN_GET_MISSING_STATUS"} \
+            FAKE_BUCKET_INFO_STATUS="${FAKE_BUCKET_INFO_STATUS:-}" \
+            FAKE_BUCKET_INFO_ERROR="${FAKE_BUCKET_INFO_ERROR:-}" \
+            FAKE_BUCKET_INFO_SILENT="${FAKE_BUCKET_INFO_SILENT:-}" \
+            FAKE_DOMAIN_GET_STATUS="${FAKE_DOMAIN_GET_STATUS:-}" \
+            FAKE_DOMAIN_GET_ERROR="${FAKE_DOMAIN_GET_ERROR:-}" \
+            FAKE_DOMAIN_GET_SILENT="${FAKE_DOMAIN_GET_SILENT:-}" \
             "$FIXTURE_SCRIPT" "$@" 2>&1
     )"
     status=$?
@@ -216,13 +229,51 @@ reset_fixture
 FAKE_WHOAMI_STATUS=17
 invoke_script
 assert_status 17
-assert_output_contains "whoami failed: not authenticated"
+assert_output_equals "whoami failed: not authenticated"
 [[ "$(wc -l < "$WRANGLER_LOG")" -eq 1 ]] || fail "commands ran after whoami failed"
+
+# Unrelated bucket errors are not treated as an absent bucket.
+reset_fixture
+FAKE_BUCKET_INFO_STATUS=41
+FAKE_BUCKET_INFO_ERROR='API token not found'
+invoke_script
+assert_status 41
+assert_output_equals "API token not found"
+[[ "$(grep -c '^r2 bucket create' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "bucket was created after an auth error"
+[[ "$(grep -c '^r2 bucket domain' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "domain action ran after a bucket auth error"
+
+# A bare unrelated 404 is not treated as an absent bucket.
+reset_fixture
+FAKE_BUCKET_INFO_STATUS=42
+FAKE_BUCKET_INFO_ERROR='HTTP 404 from zone endpoint'
+invoke_script
+assert_status 42
+assert_output_equals "HTTP 404 from zone endpoint"
+[[ "$(grep -c '^r2 bucket create' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "bucket was created after an unrelated 404"
+
+# A zone error is not treated as an absent domain.
+reset_fixture
+FAKE_DOMAIN_GET_STATUS=43
+FAKE_DOMAIN_GET_ERROR='zone not found'
+invoke_script
+assert_status 43
+assert_output_equals "zone not found"
+[[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "domain was added after a zone error"
+[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed after a domain zone error"
+
+# A silent initial domain failure is propagated without attempting an add.
+reset_fixture
+FAKE_DOMAIN_GET_STATUS=44
+FAKE_DOMAIN_GET_SILENT=1
+invoke_script
+assert_status 44
+[[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "domain was added after a silent initial failure"
+[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed after a silent initial failure"
 
 # An unknown silent bucket failure is not treated as an absent bucket.
 reset_fixture
-FAKE_BUCKET_INFO_MISSING_STATUS=37
-FAKE_BUCKET_INFO_MISSING_SILENT=1
+FAKE_BUCKET_INFO_STATUS=37
+FAKE_BUCKET_INFO_SILENT=1
 invoke_script
 assert_status 37
 [[ "$(<"$WRANGLER_LOG")" == $'whoami\nr2 bucket info switchtab-updates --json' ]] || fail "silent bucket failure triggered a create"
