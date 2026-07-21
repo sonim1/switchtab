@@ -327,6 +327,16 @@ assert_output_equals "API token not found"
 [[ "$(grep -c '^r2 bucket create' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "bucket was created after an auth error"
 [[ "$(grep -c '^r2 bucket domain' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "domain action ran after a bucket auth error"
 
+# An auth diagnostic mentioning the requested bucket is still not bucket absence.
+reset_fixture
+FAKE_BUCKET_INFO_STATUS=51
+FAKE_BUCKET_INFO_ERROR='API token not found for bucket switchtab-updates'
+invoke_script
+assert_status 51
+assert_output_equals "$FAKE_BUCKET_INFO_ERROR"
+[[ "$(grep -c '^r2 bucket create' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "bucket was created after a same-line auth diagnostic"
+[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed after a same-line bucket auth diagnostic"
+
 # A bare unrelated 404 is not treated as an absent bucket.
 reset_fixture
 FAKE_BUCKET_INFO_STATUS=42
@@ -403,6 +413,16 @@ assert_status 43
 assert_output_equals "zone not found"
 [[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "domain was added after a zone error"
 [[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed after a domain zone error"
+
+# A zone diagnostic mentioning the requested domain is still not domain absence.
+reset_fixture
+FAKE_DOMAIN_GET_STATUS=52
+FAKE_DOMAIN_GET_ERROR='zone not found for domain updates.switchtab.app'
+invoke_script
+assert_status 52
+assert_output_equals "$FAKE_DOMAIN_GET_ERROR"
+[[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "domain was added after a same-line zone diagnostic"
+[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed after a same-line domain zone diagnostic"
 
 # A silent initial domain failure is propagated without attempting an add.
 reset_fixture

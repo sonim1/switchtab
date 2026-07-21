@@ -56,34 +56,30 @@ run_wrangler_quiet() {
 
 run_wrangler_quiet whoami
 
+normalize_diagnostic_line() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+}
+
 is_bucket_absent_error() {
-    local diagnostic_line line bucket_name
+    local diagnostic_line line bucket_name bucket_endpoint bucket_error_re
 
     bucket_name="$(printf '%s' "$R2_BUCKET_NAME" | tr '[:upper:]' '[:lower:]')"
+    bucket_endpoint="/r2/buckets/$bucket_name"
+    bucket_error_re='^the specified bucket does not exist[.][[:space:]]+[[]code:[[:space:]][0-9]+[]]$'
 
     while IFS= read -r diagnostic_line || [[ -n "$diagnostic_line" ]]; do
-        line="$(printf '%s' "$diagnostic_line" | tr '[:upper:]' '[:lower:]')"
+        line="$(normalize_diagnostic_line "$diagnostic_line")"
 
-        if [[ "$line" == *"404"* \
-            && "$line" == *"/r2/buckets/$bucket_name"* \
-            && "$line" != *"/domains/"* ]]; then
-            return 0
-        fi
+        case "$line" in
+            "bucket not found"|"bucket does not exist"|"no such bucket")
+                return 0
+                ;;
+            "404 $bucket_endpoint"|"$bucket_endpoint 404")
+                return 0
+                ;;
+        esac
 
-        if [[ "$line" == "no such bucket" \
-            || ( "$line" == *"no such bucket"* && "$line" == *"$bucket_name"* ) ]]; then
-            return 0
-        fi
-
-        if [[ "$line" == *"the specified bucket does not exist."* ]]; then
-            return 0
-        fi
-
-        if [[ "$line" == *"bucket"* \
-            && ( "$line" == *"not found"* || "$line" == *"does not exist"* ) \
-            && ( "$line" == "bucket not found" \
-                || "$line" == "bucket does not exist" \
-                || "$line" == *"$bucket_name"* ) ]]; then
+        if [[ "$line" =~ $bucket_error_re ]]; then
             return 0
         fi
     done <<< "$1"
@@ -92,33 +88,26 @@ is_bucket_absent_error() {
 }
 
 is_domain_absent_error() {
-    local diagnostic_line line bucket_name domain_name
+    local diagnostic_line line bucket_name domain_name domain_endpoint domain_error_re
 
     bucket_name="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
     domain_name="$(printf '%s' "$UPDATE_DOMAIN" | tr '[:upper:]' '[:lower:]')"
+    domain_endpoint="/r2/buckets/$bucket_name/domains/custom/$domain_name"
+    domain_error_re='^the specified custom domain does not exist[.][[:space:]]+[[]code:[[:space:]][0-9]+[]]$'
 
     while IFS= read -r diagnostic_line || [[ -n "$diagnostic_line" ]]; do
-        line="$(printf '%s' "$diagnostic_line" | tr '[:upper:]' '[:lower:]')"
+        line="$(normalize_diagnostic_line "$diagnostic_line")"
 
-        if [[ "$line" == *"404"* \
-            && "$line" == *"/r2/buckets/$bucket_name/domains/custom/$domain_name"* ]]; then
-            return 0
-        fi
+        case "$line" in
+            "domain not found"|"domain does not exist"|"no such domain")
+                return 0
+                ;;
+            "404 $domain_endpoint"|"$domain_endpoint 404")
+                return 0
+                ;;
+        esac
 
-        if [[ "$line" == "no such domain" \
-            || ( "$line" == *"no such domain"* && "$line" == *"$domain_name"* ) ]]; then
-            return 0
-        fi
-
-        if [[ "$line" == *"the specified custom domain does not exist."* ]]; then
-            return 0
-        fi
-
-        if [[ "$line" == *"domain"* \
-            && ( "$line" == *"not found"* || "$line" == *"does not exist"* ) \
-            && ( "$line" == "domain not found" \
-                || "$line" == "domain does not exist" \
-                || "$line" == *"$domain_name"* ) ]]; then
+        if [[ "$line" =~ $domain_error_re ]]; then
             return 0
         fi
     done <<< "$1"
