@@ -30,6 +30,7 @@ jobs:
         with:
           ref: "${{ env.RELEASE_TAG }}"
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Validate release tag and provenance
         shell: bash
@@ -60,7 +61,9 @@ jobs:
             exit 64
           fi
 
-          git fetch origin main
+          if ! git rev-parse --verify origin/main >/dev/null 2>&1; then
+            git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+          fi
           git rev-parse --verify origin/main >/dev/null
           if ! git merge-base --is-ancestor HEAD origin/main; then
             echo "Release tag commit is not on origin/main" >&2
@@ -105,6 +108,17 @@ jobs:
               CODE_SIGNING_ALLOWED=NO \
               build
 
+      - name: Prepare signing workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          umask 077
+          signing_temp_dir="$(mktemp -d "$RUNNER_TEMP/switchtab-release.XXXXXX")"
+          keychain_path="$signing_temp_dir/switchtab-release.keychain-db"
+          printf 'SIGNING_TEMP_DIR=%s\n' "$signing_temp_dir" >> "$GITHUB_ENV"
+          printf 'NOTARYTOOL_KEYCHAIN_PATH=%s\n' "$keychain_path" >> "$GITHUB_ENV"
+
       - name: Install Apple credentials
         shell: bash
         env:
@@ -116,6 +130,27 @@ jobs:
         run: |
           set -euo pipefail
           set +x
+
+          SIGNING_TEMP_DIR="${SIGNING_TEMP_DIR:-}"
+          NOTARYTOOL_KEYCHAIN_PATH="${NOTARYTOOL_KEYCHAIN_PATH:-}"
+          runner_temp="${RUNNER_TEMP:-}"
+          if [[ -z "$runner_temp" || -z "$SIGNING_TEMP_DIR" || -z "$NOTARYTOOL_KEYCHAIN_PATH" ]]; then
+            echo "Prepared signing workspace is missing" >&2
+            exit 64
+          fi
+          signing_basename="${SIGNING_TEMP_DIR#"$runner_temp"/}"
+          if [[ ! "$signing_basename" =~ ^switchtab-release[.][A-Za-z0-9]{6}$ \
+            || "$SIGNING_TEMP_DIR" != "$runner_temp/$signing_basename" \
+            || ! -d "$SIGNING_TEMP_DIR" \
+            || -L "$SIGNING_TEMP_DIR" ]]; then
+            echo "Prepared signing workspace is unsafe" >&2
+            exit 64
+          fi
+          EXPECTED_KEYCHAIN_PATH="$SIGNING_TEMP_DIR/switchtab-release.keychain-db"
+          if [[ "$NOTARYTOOL_KEYCHAIN_PATH" != "$EXPECTED_KEYCHAIN_PATH" ]]; then
+            echo "Prepared signing Keychain path is unsafe" >&2
+            exit 64
+          fi
 
           required_names=(
             APPLE_CERTIFICATE_P12_BASE64
@@ -134,9 +169,9 @@ jobs:
           required_value=''
 
           umask 077
-          KEYCHAIN_PATH="$RUNNER_TEMP/switchtab-release.keychain-db"
-          CERTIFICATE_PATH="$RUNNER_TEMP/switchtab-release-certificate.p12"
-          NOTARY_KEY_PATH="$RUNNER_TEMP/switchtab-notary-auth-key.p8"
+          KEYCHAIN_PATH="$NOTARYTOOL_KEYCHAIN_PATH"
+          CERTIFICATE_PATH="$SIGNING_TEMP_DIR/switchtab-release-certificate.p12"
+          NOTARY_KEY_PATH="$SIGNING_TEMP_DIR/switchtab-notary-auth-key.p8"
           KEYCHAIN_PASSWORD="$(/usr/bin/openssl rand -base64 32)"
 
           printf '%s' "$APPLE_CERTIFICATE_P12_BASE64" | /usr/bin/base64 -D > "$CERTIFICATE_PATH"
@@ -173,8 +208,6 @@ jobs:
             --issuer "$APPLE_NOTARY_ISSUER_ID" \
             --keychain "$KEYCHAIN_PATH"
 
-          printf 'NOTARYTOOL_KEYCHAIN_PATH=%s\n' "$KEYCHAIN_PATH" >> "$GITHUB_ENV"
-
       - name: Build notarized DMG
         shell: bash
         env:
@@ -207,7 +240,28 @@ jobs:
         shell: bash
         run: |
           set +x
-          /usr/bin/security delete-keychain "$RUNNER_TEMP/switchtab-release.keychain-db" 2>/dev/null || true
-          rm -f -- \
-            "$RUNNER_TEMP/switchtab-release-certificate.p12" \
-            "$RUNNER_TEMP/switchtab-notary-auth-key.p8"
+          set -u
+          runner_temp="${RUNNER_TEMP:-}"
+          signing_temp_dir="${SIGNING_TEMP_DIR:-}"
+          keychain_path="${NOTARYTOOL_KEYCHAIN_PATH:-}"
+          if [[ -z "$runner_temp" || -z "$signing_temp_dir" ]]; then
+            exit 0
+          fi
+          signing_basename="${signing_temp_dir#"$runner_temp"/}"
+          case "$signing_temp_dir" in
+            "$runner_temp"/switchtab-release.*) ;;
+            *) exit 0 ;;
+          esac
+          if [[ ! "$signing_basename" =~ ^switchtab-release[.][A-Za-z0-9]{6}$ \
+            || "$signing_temp_dir" != "$runner_temp/$signing_basename" \
+            || ! -d "$signing_temp_dir" \
+            || -L "$signing_temp_dir" ]]; then
+            exit 0
+          fi
+          expected_keychain_path="$signing_temp_dir/switchtab-release.keychain-db"
+          if [[ "$keychain_path" == "$expected_keychain_path" && -e "$keychain_path" ]]; then
+            /usr/bin/security delete-keychain "$keychain_path" 2>/dev/null || true
+          fi
+          rm -f -- "$signing_temp_dir/switchtab-release-certificate.p12" || true
+          rm -f -- "$signing_temp_dir/switchtab-notary-auth-key.p8" || true
+          rmdir "$signing_temp_dir" || true
