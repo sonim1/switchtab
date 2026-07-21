@@ -39,7 +39,8 @@ CHECKSUM_PATH="${CHECKSUM_PATH:-$DMG_PATH.sha256}"
 APP_INFO_PLIST="${APP_INFO_PLIST:-$DIRECT_APP_PATH/Contents/Info.plist}"
 
 SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-}"
-SPARKLE_PRIVATE_ED_KEY="${SPARKLE_PRIVATE_ED_KEY:-}"
+PRIVATE_ED_KEY="${SPARKLE_PRIVATE_ED_KEY:-}"
+unset SPARKLE_PRIVATE_ED_KEY
 SPARKLE_KEY_ACCOUNT="${SPARKLE_KEY_ACCOUNT:-ed25519}"
 UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.app}"
 DOWNLOAD_URL_PREFIX="https://$UPDATE_DOMAIN/"
@@ -183,8 +184,8 @@ cp "$DMG_PATH" "$STAGED_DMG_PATH"
 generate_appcast() {
     local result
 
-    if [[ -n "$SPARKLE_PRIVATE_ED_KEY" ]]; then
-        if printf '%s\n' "$SPARKLE_PRIVATE_ED_KEY" | "$SPARKLE_APPCAST_BIN" \
+    if [[ -n "$PRIVATE_ED_KEY" ]]; then
+        if printf '%s\n' "$PRIVATE_ED_KEY" | "$SPARKLE_APPCAST_BIN" \
             --ed-key-file - \
             --download-url-prefix "$DOWNLOAD_URL_PREFIX" \
             -o "$APPCAST_PATH" \
