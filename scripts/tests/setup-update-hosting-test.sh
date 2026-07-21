@@ -58,9 +58,12 @@ FIXTURE_SCRIPT="$FIXTURE_ROOT/scripts/setup-update-hosting.sh"
 FAKE_BIN="$TEMP_ROOT/bin/wrangler"
 WRANGLER_STATE="$TEMP_ROOT/state"
 WRANGLER_LOG="$TEMP_ROOT/wrangler.log"
+TRACE_TOKEN='trace-cloudflare-token'
+TRACE_CONFIG="$TEMP_ROOT/trace.env"
 mkdir -p "$FIXTURE_ROOT/scripts" "$TEMP_ROOT/bin" "$WRANGLER_STATE"
 cp "$SCRIPT" "$FIXTURE_SCRIPT"
 chmod +x "$FIXTURE_SCRIPT"
+printf "CLOUDFLARE_API_TOKEN='%s'\n" "$TRACE_TOKEN" > "$TRACE_CONFIG"
 
 cat > "$FAKE_BIN" <<'EOF'
 #!/usr/bin/env bash
@@ -78,7 +81,7 @@ case "$*" in
         ;;
     "r2 bucket info "*)
         if [[ -f "$WRANGLER_STATE/bucket" ]]; then
-            printf '{"name":"switchtab-updates"}\n'
+            printf '{"name":"%s"}\n' "${R2_BUCKET_NAME:-switchtab-updates}"
         else
             if [[ -z "${FAKE_BUCKET_INFO_SILENT:-}" ]]; then
                 printf '%s\n' "${FAKE_BUCKET_INFO_ERROR:-bucket not found}" >&2
@@ -108,7 +111,10 @@ case "$*" in
             exit "$FAKE_FINAL_DOMAIN_GET_STATUS"
         fi
         if [[ -f "$WRANGLER_STATE/domain" ]]; then
-            printf '{"domain":"updates.switchtab.app"}\n'
+            printf 'domain: %s\nenabled: %s\nmin_tls_version: %s\n' \
+                "${FAKE_DOMAIN_OUTPUT_DOMAIN:-${UPDATE_DOMAIN:-updates.switchtab.app}}" \
+                "${FAKE_DOMAIN_ENABLED:-Yes}" \
+                "${FAKE_DOMAIN_MIN_TLS:-1.2}"
         else
             if [[ -z "${FAKE_DOMAIN_GET_SILENT:-}" ]]; then
                 printf '%s\n' "${FAKE_DOMAIN_GET_ERROR:-domain not found}" >&2
@@ -138,7 +144,8 @@ reset_fixture() {
     unset FAKE_WHOAMI_STATUS FAKE_BUCKET_CREATE_STATUS FAKE_DOMAIN_ADD_STATUS \
         FAKE_FINAL_DOMAIN_GET_STATUS FAKE_FINAL_DOMAIN_GET_SILENT \
         FAKE_BUCKET_INFO_STATUS FAKE_BUCKET_INFO_ERROR FAKE_BUCKET_INFO_SILENT \
-        FAKE_DOMAIN_GET_STATUS FAKE_DOMAIN_GET_ERROR FAKE_DOMAIN_GET_SILENT
+        FAKE_DOMAIN_GET_STATUS FAKE_DOMAIN_GET_ERROR FAKE_DOMAIN_GET_SILENT \
+        FAKE_DOMAIN_OUTPUT_DOMAIN FAKE_DOMAIN_ENABLED FAKE_DOMAIN_MIN_TLS
 }
 
 invoke_script() {
@@ -164,7 +171,29 @@ invoke_script() {
             FAKE_DOMAIN_GET_STATUS="${FAKE_DOMAIN_GET_STATUS:-}" \
             FAKE_DOMAIN_GET_ERROR="${FAKE_DOMAIN_GET_ERROR:-}" \
             FAKE_DOMAIN_GET_SILENT="${FAKE_DOMAIN_GET_SILENT:-}" \
+            FAKE_DOMAIN_OUTPUT_DOMAIN="${FAKE_DOMAIN_OUTPUT_DOMAIN:-}" \
+            FAKE_DOMAIN_ENABLED="${FAKE_DOMAIN_ENABLED:-}" \
+            FAKE_DOMAIN_MIN_TLS="${FAKE_DOMAIN_MIN_TLS:-}" \
             "$FIXTURE_SCRIPT" "$@" 2>&1
+    )"
+    status=$?
+    set -e
+}
+
+invoke_trace_script() {
+    set +e
+    output="$(
+        cd /
+        env \
+            CLOUDFLARE_API_TOKEN="$TRACE_TOKEN" \
+            CLOUDFLARE_ZONE_ID=zone-123 \
+            RELEASE_CONFIG_PATH="$TRACE_CONFIG" \
+            R2_BUCKET_NAME=switchtab-updates \
+            UPDATE_DOMAIN=updates.switchtab.app \
+            WRANGLER_BIN="$FAKE_BIN" \
+            WRANGLER_LOG="$WRANGLER_LOG" \
+            WRANGLER_STATE="$WRANGLER_STATE" \
+            bash -x "$FIXTURE_SCRIPT" "$@" 2>&1
     )"
     status=$?
     set -e
@@ -223,6 +252,62 @@ assert_output_contains "https://updates.switchtab.app/appcast.xml"
 assert_log_equals "whoami
 r2 bucket info switchtab-updates --json
 r2 bucket domain get switchtab-updates --domain updates.switchtab.app"
+
+# Existing domains must have the requested name, be enabled, and use TLS 1.2+.
+assert_invalid_domain_state() {
+    local expected_output_domain="$1"
+    local expected_enabled="$2"
+    local expected_min_tls="$3"
+
+    reset_fixture
+    touch "$WRANGLER_STATE/bucket" "$WRANGLER_STATE/domain"
+    FAKE_DOMAIN_OUTPUT_DOMAIN="$expected_output_domain"
+    FAKE_DOMAIN_ENABLED="$expected_enabled"
+    FAKE_DOMAIN_MIN_TLS="$expected_min_tls"
+    invoke_script
+    [[ "$status" -ne 0 ]] || fail "invalid domain state was accepted"
+    [[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "invalid domain state triggered an add"
+    [[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed for invalid domain state"
+}
+
+assert_invalid_domain_state wrong.example.com Yes 1.2
+assert_invalid_domain_state updates.switchtab.app No 1.2
+assert_invalid_domain_state updates.switchtab.app Yes 1.0
+
+# The post-add verification is subject to the same state checks.
+reset_fixture
+FAKE_DOMAIN_OUTPUT_DOMAIN=wrong.example.com
+invoke_script
+[[ "$status" -ne 0 ]] || fail "invalid post-add domain state was accepted"
+[[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 1 ]] || fail "post-add state test did not add the domain"
+[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed for invalid post-add domain state"
+
+# Valid resource names containing zone/token words still create and connect.
+reset_fixture
+R2_BUCKET_NAME=zone-assets UPDATE_DOMAIN=zone.example.com invoke_script
+assert_status 0
+assert_output_contains "https://zone.example.com/appcast.xml"
+assert_log_equals "whoami
+r2 bucket info zone-assets --json
+r2 bucket create zone-assets
+r2 bucket info zone-assets --json
+r2 bucket domain get zone-assets --domain zone.example.com
+r2 bucket domain add zone-assets --domain zone.example.com --zone-id zone-123 --min-tls 1.2 --force
+r2 bucket domain get zone-assets --domain zone.example.com"
+
+reset_fixture
+R2_BUCKET_NAME=token-assets UPDATE_DOMAIN=token.example.com invoke_script
+assert_status 0
+assert_output_contains "https://token.example.com/appcast.xml"
+[[ "$(grep -c '^r2 bucket create token-assets' "$WRANGLER_LOG" || true)" -eq 1 ]] || fail "token-named bucket was not created"
+[[ "$(grep -c '^r2 bucket domain add token-assets --domain token.example.com' "$WRANGLER_LOG" || true)" -eq 1 ]] || fail "token-named domain was not added"
+
+# bash -x must not expose credentials loaded from config or inherited environment.
+reset_fixture
+invoke_trace_script
+assert_status 0
+[[ "$output" != *"$TRACE_TOKEN"* ]] || fail "bash -x exposed the Cloudflare token"
+[[ "$(<"$WRANGLER_LOG")" != *"$TRACE_TOKEN"* ]] || fail "Cloudflare token reached Wrangler argv/log"
 
 # Authentication failures are returned byte-for-byte with their status.
 reset_fixture

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set +x
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
@@ -61,10 +62,6 @@ is_bucket_absent_error() {
     message="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
     bucket_name="$(printf '%s' "$R2_BUCKET_NAME" | tr '[:upper:]' '[:lower:]')"
 
-    if [[ "$message" == *"token"* || "$message" == *"zone"* ]]; then
-        return 1
-    fi
-
     if [[ "$message" == *"404"* \
         && "$message" == *"/r2/buckets/$bucket_name"* \
         && "$message" != *"/domains/"* ]]; then
@@ -89,10 +86,6 @@ is_domain_absent_error() {
     bucket_name="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
     domain_name="$(printf '%s' "$UPDATE_DOMAIN" | tr '[:upper:]' '[:lower:]')"
 
-    if [[ "$message" == *"token"* || "$message" == *"zone"* ]]; then
-        return 1
-    fi
-
     if [[ "$message" == *"404"* \
         && "$message" == *"/r2/buckets/$bucket_name/domains/custom/$domain_name"* ]]; then
         return 0
@@ -107,6 +100,38 @@ is_domain_absent_error() {
         && ( "$message" == *"domain not found"* \
             || "$message" == *"domain does not exist"* \
             || "$message" == *"$domain_name"* ) ]]
+}
+
+extract_domain_label() {
+    local output="$1"
+    local label="$2"
+
+    printf '%s\n' "$output" | awk -v label="$label" '
+        index($0, label ":") == 1 {
+            value = substr($0, length(label) + 2)
+            sub(/^[[:space:]]+/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            print value
+            exit
+        }
+    '
+}
+
+verify_domain_state() {
+    local output="$1"
+    local domain enabled min_tls
+
+    domain="$(extract_domain_label "$output" domain)"
+    enabled="$(extract_domain_label "$output" enabled)"
+    min_tls="$(extract_domain_label "$output" min_tls_version)"
+
+    if [[ "$domain" != "$UPDATE_DOMAIN" \
+        || "$enabled" != "Yes" \
+        || ( "$min_tls" != "1.2" && "$min_tls" != "1.3" ) ]]; then
+        printf 'R2 domain verification failed: domain=%s enabled=%s min_tls_version=%s\n' \
+            "$domain" "$enabled" "$min_tls" >&2
+        return 1
+    fi
 }
 
 bucket_info_output=''
@@ -125,7 +150,7 @@ fi
 
 domain_get_output=''
 if domain_get_output="$("$WRANGLER_BIN" r2 bucket domain get "$R2_BUCKET_NAME" --domain "$UPDATE_DOMAIN" 2>&1)"; then
-    :
+    verify_domain_state "$domain_get_output"
 else
     domain_get_status=$?
     if ! is_domain_absent_error "$domain_get_output" "$R2_BUCKET_NAME"; then
@@ -138,7 +163,13 @@ else
         --zone-id "$CLOUDFLARE_ZONE_ID" \
         --min-tls 1.2 \
         --force
-    run_wrangler_quiet r2 bucket domain get "$R2_BUCKET_NAME" --domain "$UPDATE_DOMAIN"
+    if domain_get_output="$("$WRANGLER_BIN" r2 bucket domain get "$R2_BUCKET_NAME" --domain "$UPDATE_DOMAIN" 2>&1)"; then
+        verify_domain_state "$domain_get_output"
+    else
+        domain_get_status=$?
+        printf '%s\n' "$domain_get_output" >&2
+        exit "$domain_get_status"
+    fi
 fi
 
 printf 'https://%s/appcast.xml\n' "$UPDATE_DOMAIN"
