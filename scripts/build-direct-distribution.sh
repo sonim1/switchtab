@@ -11,6 +11,7 @@ SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-}"
 SPARKLE_PACKAGE_REVISION="${SPARKLE_PACKAGE_REVISION:-b6496a74a087257ef5e6da1c5b29a447a60f5bd7}"
 DEVELOPER_ID_APPLICATION="${DEVELOPER_ID_APPLICATION:-}"
 NOTARYTOOL_KEYCHAIN_PROFILE="${NOTARYTOOL_KEYCHAIN_PROFILE:-}"
+NOTARYTOOL_KEYCHAIN_PATH="${NOTARYTOOL_KEYCHAIN_PATH:-}"
 DIRECT_RELEASE_OUTPUT_DIR="${DIRECT_RELEASE_OUTPUT_DIR:-$BUILD_ROOT/release}"
 PREPARE_ONLY=0
 RELEASE=0
@@ -28,6 +29,7 @@ Environment:
   DIRECT_RELEASE_OUTPUT_DIR      Optional release artifact directory. Defaults to .build/direct-distribution/release
   DEVELOPER_ID_APPLICATION       Required with --release. Example: Developer ID Application: Name (TEAMID)
   NOTARYTOOL_KEYCHAIN_PROFILE    Required with --release. Keychain profile created by xcrun notarytool store-credentials.
+  NOTARYTOOL_KEYCHAIN_PATH       Optional Keychain containing the notarytool profile.
 EOF
 }
 
@@ -264,9 +266,14 @@ sign_app_bundle "$APP_PATH"
 
 /usr/bin/codesign --verify --verbose=2 "$DMG_PATH"
 
+NOTARYTOOL_ARGS=(--keychain-profile "$NOTARYTOOL_KEYCHAIN_PROFILE")
+if [[ -n "$NOTARYTOOL_KEYCHAIN_PATH" ]]; then
+    NOTARYTOOL_ARGS+=(--keychain "$NOTARYTOOL_KEYCHAIN_PATH")
+fi
+
 xcrun notarytool submit \
     "$DMG_PATH" \
-    --keychain-profile "$NOTARYTOOL_KEYCHAIN_PROFILE" \
+    "${NOTARYTOOL_ARGS[@]}" \
     --wait
 
 xcrun stapler staple "$DMG_PATH"
