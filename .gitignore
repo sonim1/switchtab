@@ -17,6 +17,7 @@ xcuserdata/
 # Local secret material
 .env
 .env.*
+!.env.release.local.example
 *.p8
 *.p12
 *.pem
