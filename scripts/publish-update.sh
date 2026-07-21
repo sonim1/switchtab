@@ -38,6 +38,10 @@ CURL_BIN="${CURL_BIN:-/usr/bin/curl}"
 SHASUM_BIN="${SHASUM_BIN:-/usr/bin/shasum}"
 XMLLINT_BIN="${XMLLINT_BIN:-/usr/bin/xmllint}"
 CMP_BIN="${CMP_BIN:-/usr/bin/cmp}"
+CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID:-}"
+R2_ACCESS_KEY_VALUE="${R2_ACCESS_KEY_ID:-}"
+R2_SECRET_ACCESS_KEY_VALUE="${R2_SECRET_ACCESS_KEY:-}"
+unset R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY
 
 APPCAST_PATH="$UPDATE_ARTIFACT_DIR/appcast.xml"
 IMMUTABLE_CACHE='public, max-age=31536000, immutable'
@@ -114,6 +118,28 @@ fi
 if [[ ! "$UPDATE_DOMAIN" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ || "$UPDATE_DOMAIN" == *..* ]]; then
     fail "UPDATE_DOMAIN is not a safe domain name" 64
 fi
+if [[ -z "$CLOUDFLARE_ACCOUNT_ID" || ! "$CLOUDFLARE_ACCOUNT_ID" =~ ^[A-Za-z0-9]+$ ]]; then
+    fail "CLOUDFLARE_ACCOUNT_ID is required and must be alphanumeric" 64
+fi
+if [[ -z "$R2_ACCESS_KEY_VALUE" || ! "$R2_ACCESS_KEY_VALUE" =~ ^[A-Za-z0-9]+$ ]]; then
+    fail "R2_ACCESS_KEY_ID is required and must be alphanumeric" 64
+fi
+if [[ -z "$R2_SECRET_ACCESS_KEY_VALUE" || "$R2_SECRET_ACCESS_KEY_VALUE" =~ [[:cntrl:]] ]]; then
+    fail "R2_SECRET_ACCESS_KEY is required and must not contain control characters" 64
+fi
+
+curl_config_escape() {
+    local value="$1"
+
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    printf '%s' "$value"
+}
+
+R2_CURL_USER_CONFIG="user = \"$(curl_config_escape "$R2_ACCESS_KEY_VALUE"):$(curl_config_escape "$R2_SECRET_ACCESS_KEY_VALUE")\""
+R2_ACCESS_KEY_VALUE=''
+R2_SECRET_ACCESS_KEY_VALUE=''
+R2_ORIGIN_PREFIX="https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com/$R2_BUCKET_NAME/"
 
 validate_xml() {
     local path="$1"
@@ -267,6 +293,139 @@ fetch_http() {
     fi
 }
 
+signed_origin_http() {
+    local method="$1"
+    local url="$2"
+    local destination="$3"
+    local upload_path="${4:-}"
+    local content_type="${5:-}"
+    local cache_control="${6:-}"
+    local http_code result
+
+    if [[ "$url" != "$R2_ORIGIN_PREFIX"* ]]; then
+        echo "Refusing a signed R2 request outside the configured origin" >&2
+        return 64
+    fi
+
+    if [[ "$method" == PUT ]]; then
+        if http_code="$(
+            printf '%s\n' "$R2_CURL_USER_CONFIG" | "$CURL_BIN" \
+                --config - \
+                --silent \
+                --show-error \
+                --aws-sigv4 'aws:amz:auto:s3' \
+                --request PUT \
+                --header 'If-None-Match: *' \
+                --header "Content-Type: $content_type" \
+                --header "Cache-Control: $cache_control" \
+                --upload-file "$upload_path" \
+                --output "$destination" \
+                --write-out '%{http_code}' \
+                "$url"
+        )"; then
+            printf '%s' "$http_code"
+            return 0
+        else
+            result=$?
+            echo "Signed R2 conditional PUT failed" >&2
+            return "$result"
+        fi
+    fi
+
+    if [[ "$method" == GET ]]; then
+        if http_code="$(
+            printf '%s\n' "$R2_CURL_USER_CONFIG" | "$CURL_BIN" \
+                --config - \
+                --silent \
+                --show-error \
+                --aws-sigv4 'aws:amz:auto:s3' \
+                --request GET \
+                --output "$destination" \
+                --write-out '%{http_code}' \
+                "$url"
+        )"; then
+            printf '%s' "$http_code"
+            return 0
+        else
+            result=$?
+            echo "Signed R2 origin GET failed" >&2
+            return "$result"
+        fi
+    fi
+
+    echo "Unsupported signed R2 method" >&2
+    return 64
+}
+
+conditional_put_and_verify_origin() {
+    local key="$1"
+    local path="$2"
+    local content_type="$3"
+    local cache_control="$4"
+    local artifact_kind="$5"
+    local origin_url="$R2_ORIGIN_PREFIX$key"
+    local response_path="$TEMP_DIR/origin-put-response-$key"
+    local origin_copy="$TEMP_DIR/origin-copy-$key"
+    local http_code origin_status origin_hash compare_status result
+
+    if [[ ! "$key" =~ ^SwitchTab-[A-Za-z0-9][A-Za-z0-9._-]*[.]dmg([.]sha256)?$ ]]; then
+        echo "Refusing an unsafe immutable R2 object key" >&2
+        return 64
+    fi
+
+    if http_code="$(signed_origin_http PUT "$origin_url" "$response_path" "$path" "$content_type" "$cache_control")"; then
+        :
+    else
+        result=$?
+        return "$result"
+    fi
+    case "$http_code" in
+        200|201|204|412)
+            ;;
+        *)
+            echo "Conditional R2 PUT returned HTTP $http_code for $key" >&2
+            return 66
+            ;;
+    esac
+
+    if origin_status="$(signed_origin_http GET "$origin_url" "$origin_copy")"; then
+        :
+    else
+        result=$?
+        return "$result"
+    fi
+    if [[ "$origin_status" != 200 ]]; then
+        echo "Authoritative R2 origin GET returned HTTP $origin_status for $key" >&2
+        return 66
+    fi
+
+    if [[ "$artifact_kind" == dmg ]]; then
+        if origin_hash="$(sha256_file "$origin_copy")"; then
+            :
+        else
+            result=$?
+            return "$result"
+        fi
+        if [[ "$origin_hash" != "$LOCAL_DMG_HASH" ]]; then
+            echo "Authoritative R2 origin DMG differs from the local artifact" >&2
+            return 66
+        fi
+        return 0
+    fi
+
+    if "$CMP_BIN" -s "$path" "$origin_copy"; then
+        return 0
+    else
+        compare_status=$?
+        if [[ "$compare_status" -ne 1 ]]; then
+            echo "Authoritative R2 origin checksum comparison failed" >&2
+            return "$compare_status"
+        fi
+        echo "Authoritative R2 origin checksum differs from the local artifact" >&2
+        return 66
+    fi
+}
+
 upload_object() {
     local key="$1"
     local path="$2"
@@ -293,12 +452,14 @@ publish_immutable_dmg() {
             fi
             ;;
         404)
-            upload_object "$DMG_NAME" "$DMG_PATH" 'application/x-apple-diskimage' "$IMMUTABLE_CACHE"
             ;;
         *)
             fail "Unexpected HTTP status $http_code for $EXPECTED_DMG_URL"
             ;;
     esac
+
+    conditional_put_and_verify_origin "$DMG_NAME" "$DMG_PATH" \
+        'application/x-apple-diskimage' "$IMMUTABLE_CACHE" dmg
 }
 
 publish_immutable_checksum() {
@@ -320,12 +481,14 @@ publish_immutable_checksum() {
             fi
             ;;
         404)
-            upload_object "$CHECKSUM_NAME" "$CHECKSUM_PATH" 'text/plain' "$IMMUTABLE_CACHE"
             ;;
         *)
             fail "Unexpected HTTP status $http_code for $CHECKSUM_URL"
             ;;
     esac
+
+    conditional_put_and_verify_origin "$CHECKSUM_NAME" "$CHECKSUM_PATH" \
+        'text/plain' "$IMMUTABLE_CACHE" checksum
 }
 
 verify_public_immutable_artifacts() {

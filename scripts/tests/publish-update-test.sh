@@ -54,15 +54,20 @@ FIXTURE_ROOT="$TEMP_ROOT/project"
 FIXTURE_SCRIPT="$FIXTURE_ROOT/scripts/publish-update.sh"
 ARTIFACT_DIR="$FIXTURE_ROOT/.build/direct-distribution/updates"
 PUBLIC_DIR="$TEMP_ROOT/public"
+ORIGIN_DIR="$TEMP_ROOT/origin"
 BIN_DIR="$TEMP_ROOT/bin"
 WRANGLER_LOG="$TEMP_ROOT/wrangler.log"
 CURL_LOG="$TEMP_ROOT/curl.log"
+MUTATION_LOG="$TEMP_ROOT/mutation.log"
 DMG_NAME='SwitchTab-1.2-7.dmg'
 DMG_URL="https://updates.test.example/$DMG_NAME"
 TRACE_SECRET='trace-cloudflare-secret'
 TRACE_CONFIG="$TEMP_ROOT/release.env"
+ACCOUNT_ID='account123'
+ACCESS_KEY_ID='fixtureaccesskey'
+SECRET_ACCESS_KEY='fixture-secret-value'
 
-mkdir -p "$FIXTURE_ROOT/scripts" "$ARTIFACT_DIR" "$PUBLIC_DIR" "$BIN_DIR"
+mkdir -p "$FIXTURE_ROOT/scripts" "$ARTIFACT_DIR" "$PUBLIC_DIR" "$ORIGIN_DIR" "$BIN_DIR"
 cp "$SCRIPT_SOURCE" "$FIXTURE_SCRIPT"
 chmod +x "$FIXTURE_SCRIPT"
 printf "CLOUDFLARE_API_TOKEN='%s'\n" "$TRACE_SECRET" > "$TRACE_CONFIG"
@@ -71,7 +76,10 @@ cat > "$BIN_DIR/wrangler" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
+[[ "${R2_ACCESS_KEY_ID+x}" != x && "${R2_SECRET_ACCESS_KEY+x}" != x ]] || exit 95
+
 printf '%s\n' "$*" >> "$WRANGLER_LOG"
+printf 'wrangler %s\n' "$*" >> "$MUTATION_LOG"
 if [[ "${FAKE_WRANGLER_STATUS:-0}" -ne 0 ]]; then
     echo "fake Wrangler failure" >&2
     exit "$FAKE_WRANGLER_STATUS"
@@ -112,17 +120,56 @@ key="${bucket_key#*/}"
 [[ "$key" != "$bucket_key" && -n "$key" ]] || exit 94
 mkdir -p "$(dirname -- "$PUBLIC_DIR/$key")"
 cp "$file" "$PUBLIC_DIR/$key"
+mkdir -p "$(dirname -- "$ORIGIN_DIR/$key")"
+cp "$file" "$ORIGIN_DIR/$key"
 EOF
 
 cat > "$BIN_DIR/curl" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
+for curl_argument in "$@"; do
+    [[ "$curl_argument" != *"$EXPECTED_R2_ACCESS_KEY_ID"* ]] || exit 100
+    [[ "$curl_argument" != *"$EXPECTED_R2_SECRET_ACCESS_KEY"* ]] || exit 100
+done
+
 output_path=''
 write_out=''
 url=''
+method='GET'
+sigv4=''
+config_from_stdin=''
+upload_file=''
+if_none_match=''
+content_type=''
+cache_control=''
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --config)
+            [[ "$2" == - ]] || exit 96
+            config_from_stdin=1
+            shift 2
+            ;;
+        --aws-sigv4)
+            sigv4="$2"
+            shift 2
+            ;;
+        --request)
+            method="$2"
+            shift 2
+            ;;
+        --header)
+            case "$2" in
+                'If-None-Match: *') if_none_match=1 ;;
+                'Content-Type: '*) content_type="${2#Content-Type: }" ;;
+                'Cache-Control: '*) cache_control="${2#Cache-Control: }" ;;
+            esac
+            shift 2
+            ;;
+        --upload-file)
+            upload_file="$2"
+            shift 2
+            ;;
         --output)
             output_path="$2"
             shift 2
@@ -140,21 +187,65 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
-printf '%s\n' "$url" >> "$CURL_LOG"
+
+curl_config=''
+if [[ -n "$config_from_stdin" ]]; then
+    curl_config="$(</dev/stdin)"
+    [[ "$curl_config" == "user = \"$EXPECTED_R2_ACCESS_KEY_ID:$EXPECTED_R2_SECRET_ACCESS_KEY\"" ]] || exit 97
+fi
+printf 'method=%s url=%s sigv4=%s conditional=%s type=%s cache=%s config-stdin=%s\n' \
+    "$method" "$url" "$sigv4" "$if_none_match" "$content_type" "$cache_control" "$config_from_stdin" >> "$CURL_LOG"
+
+is_origin=''
+origin_prefix="https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com/$R2_BUCKET_NAME/"
+if [[ "$url" == "$origin_prefix"* ]]; then
+    is_origin=1
+    key="${url#"$origin_prefix"}"
+    [[ "$sigv4" == 'aws:amz:auto:s3' && -n "$config_from_stdin" ]] || exit 98
+else
+    key="${url#https://updates.test.example/}"
+    if [[ "$key" == "$url" ]]; then
+        echo "unexpected URL: $url" >&2
+        exit 95
+    fi
+fi
+
+if [[ "$method" == PUT ]]; then
+    printf 'conditional-put %s\n' "$key" >> "$MUTATION_LOG"
+    if [[ "${FAKE_PUT_TRANSPORT_STATUS:-0}" -ne 0 ]]; then
+        echo "fake conditional PUT transport failure" >&2
+        exit "$FAKE_PUT_TRANSPORT_STATUS"
+    fi
+    [[ -n "$is_origin" && -n "$if_none_match" && -f "$upload_file" ]] || exit 99
+    if [[ -n "${FAKE_PUT_HTTP_STATUS:-}" ]]; then
+        http_status="$FAKE_PUT_HTTP_STATUS"
+    elif [[ -f "$ORIGIN_DIR/$key" ]]; then
+        http_status=412
+    else
+        http_status=200
+        mkdir -p "$(dirname -- "$ORIGIN_DIR/$key")" "$(dirname -- "$PUBLIC_DIR/$key")"
+        cp "$upload_file" "$ORIGIN_DIR/$key"
+        cp "$upload_file" "$PUBLIC_DIR/$key"
+    fi
+    [[ -z "$output_path" ]] || : > "$output_path"
+    [[ -z "$write_out" ]] || printf '%s' "$http_status"
+    exit 0
+fi
 
 if [[ "${FAKE_CURL_TRANSPORT_STATUS:-0}" -ne 0 ]]; then
     echo "fake curl transport failure" >&2
     exit "$FAKE_CURL_TRANSPORT_STATUS"
 fi
 
-key="${url#https://updates.test.example/}"
-if [[ "$key" == "$url" ]]; then
-    echo "unexpected URL: $url" >&2
-    exit 95
-fi
-
 if [[ -n "${FAKE_HTTP_STATUS:-}" ]]; then
     http_status="$FAKE_HTTP_STATUS"
+elif [[ -n "$is_origin" && -f "$ORIGIN_DIR/$key" ]]; then
+    http_status=200
+elif [[ -n "$is_origin" ]]; then
+    http_status=404
+elif [[ "${FAKE_PUBLIC_STALE_ONCE_KEY:-}" == "$key" && ! -f "$PUBLIC_DIR/.stale-served-$key" ]]; then
+    http_status=404
+    touch "$PUBLIC_DIR/.stale-served-$key"
 elif [[ -f "$PUBLIC_DIR/$key" ]]; then
     http_status=200
 else
@@ -171,7 +262,11 @@ if [[ -n "$output_path" ]]; then
 <?xml version="1.0"?><rss><channel><item><enclosure url="https://evil.example/SwitchTab-1.2-7.dmg" /></item></channel></rss>
 EOF_XML
         else
-            cp "$PUBLIC_DIR/$key" "$output_path"
+            if [[ -n "$is_origin" ]]; then
+                cp "$ORIGIN_DIR/$key" "$output_path"
+            else
+                cp "$PUBLIC_DIR/$key" "$output_path"
+            fi
         fi
     fi
 fi
@@ -221,12 +316,14 @@ EOF_XML
 }
 
 reset_fixture() {
-    rm -rf "$ARTIFACT_DIR" "$PUBLIC_DIR"
-    mkdir -p "$ARTIFACT_DIR" "$PUBLIC_DIR"
+    rm -rf "$ARTIFACT_DIR" "$PUBLIC_DIR" "$ORIGIN_DIR"
+    mkdir -p "$ARTIFACT_DIR" "$PUBLIC_DIR" "$ORIGIN_DIR"
     : > "$WRANGLER_LOG"
     : > "$CURL_LOG"
+    : > "$MUTATION_LOG"
     unset FAKE_WRANGLER_STATUS FAKE_CURL_TRANSPORT_STATUS FAKE_HTTP_STATUS \
         FAKE_CORRUPT_KEY FAKE_BAD_APPCAST FAKE_HASH_STATUS FAKE_XML_STATUS \
+        FAKE_PUT_TRANSPORT_STATUS FAKE_PUT_HTTP_STATUS FAKE_PUBLIC_STALE_ONCE_KEY \
         RELEASE_CONFIG_PATH
     printf 'fixture dmg content\n' > "$ARTIFACT_DIR/$DMG_NAME"
     (
@@ -244,6 +341,11 @@ invoke_script() {
             RELEASE_CONFIG_PATH="${RELEASE_CONFIG_PATH:-$TEMP_ROOT/missing.env}" \
             R2_BUCKET_NAME='switchtab-updates' \
             UPDATE_DOMAIN='updates.test.example' \
+            CLOUDFLARE_ACCOUNT_ID="$ACCOUNT_ID" \
+            R2_ACCESS_KEY_ID="$ACCESS_KEY_ID" \
+            R2_SECRET_ACCESS_KEY="$SECRET_ACCESS_KEY" \
+            EXPECTED_R2_ACCESS_KEY_ID="$ACCESS_KEY_ID" \
+            EXPECTED_R2_SECRET_ACCESS_KEY="$SECRET_ACCESS_KEY" \
             UPDATE_ARTIFACT_DIR="$ARTIFACT_DIR" \
             WRANGLER_BIN="$BIN_DIR/wrangler" \
             CURL_BIN="$BIN_DIR/curl" \
@@ -251,7 +353,9 @@ invoke_script() {
             XMLLINT_BIN="$BIN_DIR/xmllint" \
             WRANGLER_LOG="$WRANGLER_LOG" \
             CURL_LOG="$CURL_LOG" \
+            MUTATION_LOG="$MUTATION_LOG" \
             PUBLIC_DIR="$PUBLIC_DIR" \
+            ORIGIN_DIR="$ORIGIN_DIR" \
             FAKE_WRANGLER_STATUS="${FAKE_WRANGLER_STATUS:-0}" \
             FAKE_CURL_TRANSPORT_STATUS="${FAKE_CURL_TRANSPORT_STATUS:-0}" \
             FAKE_HTTP_STATUS="${FAKE_HTTP_STATUS:-}" \
@@ -259,6 +363,9 @@ invoke_script() {
             FAKE_BAD_APPCAST="${FAKE_BAD_APPCAST:-0}" \
             FAKE_HASH_STATUS="${FAKE_HASH_STATUS:-0}" \
             FAKE_XML_STATUS="${FAKE_XML_STATUS:-0}" \
+            FAKE_PUT_TRANSPORT_STATUS="${FAKE_PUT_TRANSPORT_STATUS:-0}" \
+            FAKE_PUT_HTTP_STATUS="${FAKE_PUT_HTTP_STATUS:-}" \
+            FAKE_PUBLIC_STALE_ONCE_KEY="${FAKE_PUBLIC_STALE_ONCE_KEY:-}" \
             "$FIXTURE_SCRIPT" "$@" 2>&1
     )"
     status=$?
@@ -273,6 +380,11 @@ invoke_trace_script() {
             RELEASE_CONFIG_PATH="$TRACE_CONFIG" \
             R2_BUCKET_NAME='switchtab-updates' \
             UPDATE_DOMAIN='updates.test.example' \
+            CLOUDFLARE_ACCOUNT_ID="$ACCOUNT_ID" \
+            R2_ACCESS_KEY_ID="$ACCESS_KEY_ID" \
+            R2_SECRET_ACCESS_KEY="$SECRET_ACCESS_KEY" \
+            EXPECTED_R2_ACCESS_KEY_ID="$ACCESS_KEY_ID" \
+            EXPECTED_R2_SECRET_ACCESS_KEY="$SECRET_ACCESS_KEY" \
             UPDATE_ARTIFACT_DIR="$ARTIFACT_DIR" \
             WRANGLER_BIN="$BIN_DIR/wrangler" \
             CURL_BIN="$BIN_DIR/curl" \
@@ -280,8 +392,53 @@ invoke_trace_script() {
             XMLLINT_BIN="$BIN_DIR/xmllint" \
             WRANGLER_LOG="$WRANGLER_LOG" \
             CURL_LOG="$CURL_LOG" \
+            MUTATION_LOG="$MUTATION_LOG" \
             PUBLIC_DIR="$PUBLIC_DIR" \
+            ORIGIN_DIR="$ORIGIN_DIR" \
             bash -x "$FIXTURE_SCRIPT" 2>&1
+    )"
+    status=$?
+    set -e
+}
+
+invoke_with_missing_r2_credential() {
+    local missing="$1"
+    local credential_env=()
+
+    case "$missing" in
+        account)
+            credential_env=("R2_ACCESS_KEY_ID=$ACCESS_KEY_ID" "R2_SECRET_ACCESS_KEY=$SECRET_ACCESS_KEY")
+            ;;
+        access)
+            credential_env=("CLOUDFLARE_ACCOUNT_ID=$ACCOUNT_ID" "R2_SECRET_ACCESS_KEY=$SECRET_ACCESS_KEY")
+            ;;
+        secret)
+            credential_env=("CLOUDFLARE_ACCOUNT_ID=$ACCOUNT_ID" "R2_ACCESS_KEY_ID=$ACCESS_KEY_ID")
+            ;;
+        *)
+            fail "unknown missing credential fixture: $missing"
+            ;;
+    esac
+
+    set +e
+    output="$(
+        cd /
+        env -u CLOUDFLARE_ACCOUNT_ID -u R2_ACCESS_KEY_ID -u R2_SECRET_ACCESS_KEY \
+            "${credential_env[@]}" \
+            RELEASE_CONFIG_PATH="$TEMP_ROOT/missing.env" \
+            R2_BUCKET_NAME='switchtab-updates' \
+            UPDATE_DOMAIN='updates.test.example' \
+            UPDATE_ARTIFACT_DIR="$ARTIFACT_DIR" \
+            WRANGLER_BIN="$BIN_DIR/wrangler" \
+            CURL_BIN="$BIN_DIR/curl" \
+            SHASUM_BIN="$BIN_DIR/shasum" \
+            XMLLINT_BIN="$BIN_DIR/xmllint" \
+            WRANGLER_LOG="$WRANGLER_LOG" \
+            CURL_LOG="$CURL_LOG" \
+            MUTATION_LOG="$MUTATION_LOG" \
+            PUBLIC_DIR="$PUBLIC_DIR" \
+            ORIGIN_DIR="$ORIGIN_DIR" \
+            "$FIXTURE_SCRIPT" 2>&1
     )"
     status=$?
     set -e
@@ -292,19 +449,31 @@ reset_fixture
 invoke_script
 assert_status 0
 assert_output_contains 'https://updates.test.example/appcast.xml'
-expected_log="r2 object put switchtab-updates/$DMG_NAME --remote --file $ARTIFACT_DIR/$DMG_NAME --content-type application/x-apple-diskimage --cache-control public, max-age=31536000, immutable
-r2 object put switchtab-updates/$DMG_NAME.sha256 --remote --file $ARTIFACT_DIR/$DMG_NAME.sha256 --content-type text/plain --cache-control public, max-age=31536000, immutable
-r2 object put switchtab-updates/appcast.xml --remote --file $ARTIFACT_DIR/appcast.xml --content-type application/xml --cache-control public, max-age=60"
-[[ "$(<"$WRANGLER_LOG")" == "$expected_log" ]] || fail "unexpected upload order/metadata: $(<"$WRANGLER_LOG")"
+expected_log="r2 object put switchtab-updates/appcast.xml --remote --file $ARTIFACT_DIR/appcast.xml --content-type application/xml --cache-control public, max-age=60"
+[[ "$(<"$WRANGLER_LOG")" == "$expected_log" ]] || fail "appcast was not the sole/final Wrangler upload: $(<"$WRANGLER_LOG")"
+expected_mutation_log="conditional-put $DMG_NAME
+conditional-put $DMG_NAME.sha256
+wrangler $expected_log"
+[[ "$(<"$MUTATION_LOG")" == "$expected_mutation_log" ]] || fail "appcast was not the final mutation: $(<"$MUTATION_LOG")"
+expected_put_log="method=PUT url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab-updates/$DMG_NAME sigv4=aws:amz:auto:s3 conditional=1 type=application/x-apple-diskimage cache=public, max-age=31536000, immutable config-stdin=1
+method=PUT url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab-updates/$DMG_NAME.sha256 sigv4=aws:amz:auto:s3 conditional=1 type=text/plain cache=public, max-age=31536000, immutable config-stdin=1"
+actual_put_log="$(grep '^method=PUT ' "$CURL_LOG")"
+[[ "$actual_put_log" == "$expected_put_log" ]] || fail "unexpected conditional PUT endpoint/metadata: $actual_put_log"
+[[ -f "$ORIGIN_DIR/$DMG_NAME" && -f "$ORIGIN_DIR/$DMG_NAME.sha256" ]] || fail "immutable objects did not reach the origin"
+[[ "$(<"$CURL_LOG")" != *"$ACCESS_KEY_ID"* && "$(<"$CURL_LOG")" != *"$SECRET_ACCESS_KEY"* ]] || fail "R2 credentials appeared in the curl log"
+[[ "$output" != *"$ACCESS_KEY_ID"* && "$output" != *"$SECRET_ACCESS_KEY"* ]] || fail "R2 credentials appeared in output"
 
 # Identical immutable public objects are skipped, while appcast still publishes last.
 reset_fixture
 cp "$ARTIFACT_DIR/$DMG_NAME" "$PUBLIC_DIR/$DMG_NAME"
 cp "$ARTIFACT_DIR/$DMG_NAME.sha256" "$PUBLIC_DIR/$DMG_NAME.sha256"
+cp "$ARTIFACT_DIR/$DMG_NAME" "$ORIGIN_DIR/$DMG_NAME"
+cp "$ARTIFACT_DIR/$DMG_NAME.sha256" "$ORIGIN_DIR/$DMG_NAME.sha256"
 invoke_script
 assert_status 0
 [[ "$(wc -l < "$WRANGLER_LOG")" -eq 1 ]] || fail "identical immutable objects were uploaded"
 grep -Fq 'r2 object put switchtab-updates/appcast.xml ' "$WRANGLER_LOG" || fail "appcast was not published"
+[[ "$(grep -c '^method=PUT ' "$CURL_LOG")" -eq 2 ]] || fail "idempotent run did not use conditional writes"
 
 # An existing immutable DMG with different bytes is never overwritten.
 reset_fixture
@@ -314,9 +483,62 @@ assert_failed
 assert_output_contains 'differs'
 assert_no_uploads
 
+# A stale public 404 cannot hide a different object already present at the origin.
+reset_fixture
+printf 'different authoritative dmg\n' > "$ORIGIN_DIR/$DMG_NAME"
+origin_dmg_before="$(<"$ORIGIN_DIR/$DMG_NAME")"
+FAKE_PUBLIC_STALE_ONCE_KEY="$DMG_NAME"
+invoke_script
+assert_failed
+assert_output_contains 'origin'
+[[ "$(<"$ORIGIN_DIR/$DMG_NAME")" == "$origin_dmg_before" ]] || fail "conditional race overwrote the origin DMG"
+[[ "$(grep -c "method=PUT .*${DMG_NAME}.sha256" "$CURL_LOG" || true)" -eq 0 ]] || fail "checksum mutation ran after origin DMG mismatch"
+assert_no_appcast_upload
+
+# A stale public 404 with an identical origin object safely continues after 412.
+reset_fixture
+cp "$ARTIFACT_DIR/$DMG_NAME" "$ORIGIN_DIR/$DMG_NAME"
+cp "$ARTIFACT_DIR/$DMG_NAME" "$PUBLIC_DIR/$DMG_NAME"
+FAKE_PUBLIC_STALE_ONCE_KEY="$DMG_NAME"
+invoke_script
+assert_status 0
+cmp -s "$ARTIFACT_DIR/$DMG_NAME" "$ORIGIN_DIR/$DMG_NAME" || fail "identical origin DMG was overwritten"
+grep -Fq "method=GET url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab-updates/$DMG_NAME " "$CURL_LOG" || fail "412 did not trigger an authoritative origin GET"
+grep -Fq 'r2 object put switchtab-updates/appcast.xml ' "$WRANGLER_LOG" || fail "identical race did not continue to appcast"
+
+# A checksum created concurrently with different bytes blocks appcast publication.
+reset_fixture
+cp "$ARTIFACT_DIR/$DMG_NAME" "$ORIGIN_DIR/$DMG_NAME"
+cp "$ARTIFACT_DIR/$DMG_NAME" "$PUBLIC_DIR/$DMG_NAME"
+printf 'different authoritative checksum\n' > "$ORIGIN_DIR/$DMG_NAME.sha256"
+origin_checksum_before="$(<"$ORIGIN_DIR/$DMG_NAME.sha256")"
+FAKE_PUBLIC_STALE_ONCE_KEY="$DMG_NAME.sha256"
+invoke_script
+assert_failed
+assert_output_contains 'checksum'
+[[ "$(<"$ORIGIN_DIR/$DMG_NAME.sha256")" == "$origin_checksum_before" ]] || fail "conditional race overwrote the origin checksum"
+assert_no_appcast_upload
+
+# Conditional PUT transport and HTTP failures block all later release mutation.
+reset_fixture
+FAKE_PUT_TRANSPORT_STATUS=59
+invoke_script
+assert_status 59
+[[ ! -e "$ORIGIN_DIR/$DMG_NAME" ]] || fail "transport failure created an origin object"
+assert_no_appcast_upload
+
+reset_fixture
+FAKE_PUT_HTTP_STATUS=500
+invoke_script
+assert_failed
+assert_output_contains '500'
+[[ ! -e "$ORIGIN_DIR/$DMG_NAME" ]] || fail "failed conditional PUT created an origin object"
+assert_no_appcast_upload
+
 # An existing immutable checksum with different bytes is never overwritten.
 reset_fixture
 cp "$ARTIFACT_DIR/$DMG_NAME" "$PUBLIC_DIR/$DMG_NAME"
+cp "$ARTIFACT_DIR/$DMG_NAME" "$ORIGIN_DIR/$DMG_NAME"
 printf 'different remote checksum\n' > "$PUBLIC_DIR/$DMG_NAME.sha256"
 invoke_script
 assert_failed
@@ -386,7 +608,8 @@ reset_fixture
 FAKE_WRANGLER_STATUS=73
 invoke_script
 assert_status 73
-assert_no_appcast_upload
+[[ "$(wc -l < "$WRANGLER_LOG")" -eq 1 ]] || fail "Wrangler failure involved a non-appcast upload"
+grep -Fq 'r2 object put switchtab-updates/appcast.xml ' "$WRANGLER_LOG" || fail "distinctive Wrangler failure did not come from appcast publication"
 
 reset_fixture
 FAKE_HASH_STATUS=42
@@ -416,6 +639,14 @@ grep -Fq 'r2 object put switchtab-updates/appcast.xml ' "$WRANGLER_LOG" || fail 
 [[ "$(tail -n 1 "$WRANGLER_LOG")" == *'/appcast.xml '* ]] || fail "appcast was not the last upload"
 
 # Missing required inputs/tools and unexpected arguments fail before upload.
+for missing_credential in account access secret; do
+    reset_fixture
+    invoke_with_missing_r2_credential "$missing_credential"
+    assert_status 64
+    assert_no_uploads
+    [[ ! -s "$CURL_LOG" ]] || fail "missing $missing_credential credential reached curl"
+done
+
 reset_fixture
 rm "$ARTIFACT_DIR/appcast.xml"
 invoke_script
@@ -457,6 +688,7 @@ reset_fixture
 invoke_trace_script
 assert_status 0
 [[ "$output" != *"$TRACE_SECRET"* ]] || fail "xtrace exposed the release credential"
+[[ "$output" != *"$ACCESS_KEY_ID"* && "$output" != *"$SECRET_ACCESS_KEY"* ]] || fail "xtrace exposed R2 credentials"
 [[ "$(<"$WRANGLER_LOG")" != *"$TRACE_SECRET"* ]] || fail "release credential reached Wrangler argv"
 
 /bin/bash -n "$SCRIPT_SOURCE"
