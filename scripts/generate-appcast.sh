@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set +x
 
 export LC_ALL=C
 
@@ -28,6 +29,7 @@ if [[ -f "$RELEASE_CONFIG_PATH" ]]; then
     source "$RELEASE_CONFIG_PATH"
     set +a
 fi
+set +x
 
 BUILD_ROOT="${DIRECT_BUILD_ROOT:-$PROJECT_ROOT/.build/direct-distribution}"
 RELEASE_DIR="${DIRECT_RELEASE_OUTPUT_DIR:-$BUILD_ROOT/release}"
@@ -39,8 +41,9 @@ CHECKSUM_PATH="${CHECKSUM_PATH:-$DMG_PATH.sha256}"
 APP_INFO_PLIST="${APP_INFO_PLIST:-$DIRECT_APP_PATH/Contents/Info.plist}"
 
 SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-}"
-PRIVATE_ED_KEY="${SPARKLE_PRIVATE_ED_KEY:-}"
-unset SPARKLE_PRIVATE_ED_KEY
+APPCAST_PRIVATE_KEY="${SPARKLE_PRIVATE_ED_KEY:-}"
+unset SPARKLE_PRIVATE_ED_KEY PRIVATE_ED_KEY
+export -n APPCAST_PRIVATE_KEY 2>/dev/null || :
 SPARKLE_KEY_ACCOUNT="${SPARKLE_KEY_ACCOUNT:-ed25519}"
 UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.app}"
 DOWNLOAD_URL_PREFIX="https://$UPDATE_DOMAIN/"
@@ -106,8 +109,8 @@ run_external() {
 if [[ -z "$SPARKLE_PUBLIC_ED_KEY" ]]; then
     fail "SPARKLE_PUBLIC_ED_KEY is required" 64
 fi
-if [[ "${#SPARKLE_PUBLIC_ED_KEY}" -ne 64 ]]; then
-    fail "SPARKLE_PUBLIC_ED_KEY must be exactly 64 characters" 64
+if [[ ! "$SPARKLE_PUBLIC_ED_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]]; then
+    fail "SPARKLE_PUBLIC_ED_KEY must be a 44-character standard base64 Ed25519 public key" 64
 fi
 
 require_file "DMG" "$DMG_PATH"
@@ -122,13 +125,39 @@ require_command "shasum" "$SHASUM_BIN"
 require_command "xmllint" "$XMLLINT_BIN"
 require_command "Sparkle generate_appcast" "$SPARKLE_APPCAST_BIN"
 
-CHECKSUM_DIR="$(cd -- "$(dirname -- "$CHECKSUM_PATH")" && pwd)"
-CHECKSUM_FILE="$(basename -- "$CHECKSUM_PATH")"
-if (cd -- "$CHECKSUM_DIR" && run_external "DMG checksum verification" "$SHASUM_BIN" -a 256 -c "$CHECKSUM_FILE"); then
+CHECKSUM_LINE_COUNT=0
+CHECKSUM_LINE=''
+while IFS= read -r checksum_line || [[ -n "$checksum_line" ]]; do
+    CHECKSUM_LINE_COUNT=$((CHECKSUM_LINE_COUNT + 1))
+    if [[ "$CHECKSUM_LINE_COUNT" -gt 1 ]]; then
+        fail "DMG checksum manifest must contain exactly one entry"
+    fi
+    CHECKSUM_LINE="$checksum_line"
+done < "$CHECKSUM_PATH"
+
+if [[ "$CHECKSUM_LINE_COUNT" -ne 1 ]]; then
+    fail "DMG checksum manifest must contain exactly one entry"
+fi
+if [[ ! "$CHECKSUM_LINE" =~ ^([A-Fa-f0-9]{64})[[:space:]]+[^[:space:]].*$ ]]; then
+    fail "DMG checksum manifest is malformed"
+fi
+EXPECTED_CHECKSUM="${BASH_REMATCH[1]}"
+
+if ACTUAL_CHECKSUM_OUTPUT="$("$SHASUM_BIN" -a 256 "$DMG_PATH")"; then
     :
 else
     checksum_status=$?
+    echo "DMG checksum computation failed" >&2
     exit "$checksum_status"
+fi
+if [[ ! "$ACTUAL_CHECKSUM_OUTPUT" =~ ^([A-Fa-f0-9]{64})[[:space:]] ]]; then
+    fail "DMG checksum command returned a malformed digest"
+fi
+ACTUAL_CHECKSUM="${BASH_REMATCH[1]}"
+EXPECTED_CHECKSUM="$(printf '%s' "$EXPECTED_CHECKSUM" | tr '[:upper:]' '[:lower:]')"
+ACTUAL_CHECKSUM="$(printf '%s' "$ACTUAL_CHECKSUM" | tr '[:upper:]' '[:lower:]')"
+if [[ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]]; then
+    fail "DMG checksum mismatch: $DMG_PATH"
 fi
 
 run_external "DMG codesign verification" "$CODESIGN_BIN" --verify --deep --strict --verbose=2 "$DMG_PATH"
@@ -167,9 +196,13 @@ fi
 VERSIONED_DMG_NAME="SwitchTab-${MARKETING_VERSION}-${BUILD_NUMBER}.dmg"
 VERSIONED_CHECKSUM_NAME="$VERSIONED_DMG_NAME.sha256"
 APPCAST_WORK_DIR=""
+FINAL_TEMP_DIR=""
 cleanup() {
     if [[ -n "$APPCAST_WORK_DIR" && -d "$APPCAST_WORK_DIR" ]]; then
         rm -rf "$APPCAST_WORK_DIR"
+    fi
+    if [[ -n "$FINAL_TEMP_DIR" && -d "$FINAL_TEMP_DIR" ]]; then
+        rm -rf "$FINAL_TEMP_DIR"
     fi
 }
 trap cleanup EXIT
@@ -181,13 +214,13 @@ fi
 STAGED_DMG_PATH="$APPCAST_WORK_DIR/$VERSIONED_DMG_NAME"
 STAGED_CHECKSUM_PATH="$APPCAST_WORK_DIR/$VERSIONED_CHECKSUM_NAME"
 APPCAST_PATH="$APPCAST_WORK_DIR/appcast.xml"
-cp "$DMG_PATH" "$STAGED_DMG_PATH"
+run_external "Staging DMG" cp "$DMG_PATH" "$STAGED_DMG_PATH"
 
 generate_appcast() {
     local result
 
-    if [[ -n "$PRIVATE_ED_KEY" ]]; then
-        if printf '%s\n' "$PRIVATE_ED_KEY" | "$SPARKLE_APPCAST_BIN" \
+    if [[ -n "$APPCAST_PRIVATE_KEY" ]]; then
+        if printf '%s\n' "$APPCAST_PRIVATE_KEY" | "$SPARKLE_APPCAST_BIN" \
             --ed-key-file - \
             --download-url-prefix "$DOWNLOAD_URL_PREFIX" \
             -o "$APPCAST_PATH" \
@@ -272,9 +305,46 @@ else
     exit "$staged_checksum_status"
 fi
 
-mkdir -p "$UPDATE_OUTPUT_DIR"
-cp "$STAGED_DMG_PATH" "$UPDATE_OUTPUT_DIR/$VERSIONED_DMG_NAME"
-cp "$STAGED_CHECKSUM_PATH" "$UPDATE_OUTPUT_DIR/$VERSIONED_CHECKSUM_NAME"
-cp "$APPCAST_PATH" "$UPDATE_OUTPUT_DIR/appcast.xml"
+if [[ -L "$UPDATE_OUTPUT_DIR" || ( -e "$UPDATE_OUTPUT_DIR" && ! -d "$UPDATE_OUTPUT_DIR" ) ]]; then
+    fail "Update output root is not a directory: $UPDATE_OUTPUT_DIR"
+fi
+if [[ -d "$UPDATE_OUTPUT_DIR" ]]; then
+    :
+else
+    if mkdir -p "$UPDATE_OUTPUT_DIR"; then
+        :
+    else
+        output_root_status=$?
+        echo "Unable to create update output root: $UPDATE_OUTPUT_DIR" >&2
+        exit "$output_root_status"
+    fi
+fi
 
-echo "Generated Sparkle appcast: $UPDATE_OUTPUT_DIR/appcast.xml"
+FINAL_DMG_PATH="$UPDATE_OUTPUT_DIR/$VERSIONED_DMG_NAME"
+FINAL_CHECKSUM_PATH="$UPDATE_OUTPUT_DIR/$VERSIONED_CHECKSUM_NAME"
+FINAL_APPCAST_PATH="$UPDATE_OUTPUT_DIR/appcast.xml"
+for destination in "$FINAL_DMG_PATH" "$FINAL_CHECKSUM_PATH" "$FINAL_APPCAST_PATH"; do
+    if [[ -L "$destination" || -d "$destination" || ( -e "$destination" && ! -f "$destination" ) ]]; then
+        fail "Update output destination conflicts with a non-regular file: $destination"
+    fi
+done
+
+if FINAL_TEMP_DIR="$(mktemp -d "$UPDATE_OUTPUT_DIR/.generate-appcast.XXXXXX")"; then
+    :
+else
+    temp_dir_status=$?
+    echo "Unable to create temporary update output directory: $UPDATE_OUTPUT_DIR" >&2
+    exit "$temp_dir_status"
+fi
+FINAL_TEMP_DMG="$FINAL_TEMP_DIR/$VERSIONED_DMG_NAME"
+FINAL_TEMP_CHECKSUM="$FINAL_TEMP_DIR/$VERSIONED_CHECKSUM_NAME"
+FINAL_TEMP_APPCAST="$FINAL_TEMP_DIR/appcast.xml"
+run_external "Preparing versioned DMG" cp "$STAGED_DMG_PATH" "$FINAL_TEMP_DMG"
+run_external "Preparing versioned checksum" cp "$STAGED_CHECKSUM_PATH" "$FINAL_TEMP_CHECKSUM"
+run_external "Preparing appcast" cp "$APPCAST_PATH" "$FINAL_TEMP_APPCAST"
+
+run_external "Finalizing versioned DMG" mv "$FINAL_TEMP_DMG" "$FINAL_DMG_PATH"
+run_external "Finalizing versioned checksum" mv "$FINAL_TEMP_CHECKSUM" "$FINAL_CHECKSUM_PATH"
+run_external "Finalizing appcast" mv "$FINAL_TEMP_APPCAST" "$FINAL_APPCAST_PATH"
+
+echo "Generated Sparkle appcast: $FINAL_APPCAST_PATH"
