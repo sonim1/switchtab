@@ -1,0 +1,7 @@
+{
+  "name": "switchtab-release-tools",
+  "private": true,
+  "devDependencies": {
+    "wrangler": "4.112.0"
+  }
+}

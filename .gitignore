@@ -29,3 +29,6 @@ xcuserdata/
 *.dmg
 *.zip
 *.app
+
+# Node-based release tooling
+node_modules/
