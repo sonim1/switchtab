@@ -83,9 +83,10 @@ is_bucket_absent_error() {
 }
 
 is_domain_absent_error() {
-    local message domain_name
+    local message bucket_name domain_name
 
     message="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+    bucket_name="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
     domain_name="$(printf '%s' "$UPDATE_DOMAIN" | tr '[:upper:]' '[:lower:]')"
 
     if [[ "$message" == *"token"* || "$message" == *"zone"* ]]; then
@@ -127,7 +128,7 @@ if domain_get_output="$("$WRANGLER_BIN" r2 bucket domain get "$R2_BUCKET_NAME" -
     :
 else
     domain_get_status=$?
-    if ! is_domain_absent_error "$domain_get_output"; then
+    if ! is_domain_absent_error "$domain_get_output" "$R2_BUCKET_NAME"; then
         printf '%s\n' "$domain_get_output" >&2
         exit "$domain_get_status"
     fi

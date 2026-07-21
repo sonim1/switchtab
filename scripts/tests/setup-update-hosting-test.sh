@@ -251,6 +251,25 @@ assert_status 42
 assert_output_equals "HTTP 404 from zone endpoint"
 [[ "$(grep -c '^r2 bucket create' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "bucket was created after an unrelated 404"
 
+# An endpoint-style bucket 404 is a legitimate bucket absence.
+reset_fixture
+FAKE_BUCKET_INFO_STATUS=46
+FAKE_BUCKET_INFO_ERROR='404 /r2/buckets/switchtab-updates'
+invoke_script
+assert_status 0
+assert_output_contains "https://updates.switchtab.app/appcast.xml"
+[[ -f "$WRANGLER_STATE/bucket" ]] || fail "endpoint-style bucket absence was not created"
+
+# An endpoint-style domain 404 is a legitimate domain absence.
+reset_fixture
+FAKE_DOMAIN_GET_STATUS=45
+FAKE_DOMAIN_GET_ERROR='404 /r2/buckets/switchtab-updates/domains/custom/updates.switchtab.app'
+invoke_script
+assert_status 0
+assert_output_contains "https://updates.switchtab.app/appcast.xml"
+[[ -f "$WRANGLER_STATE/domain" ]] || fail "endpoint-style domain absence was not added"
+[[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 1 ]] || fail "endpoint-style domain absence did not add exactly once"
+
 # A zone error is not treated as an absent domain.
 reset_fixture
 FAKE_DOMAIN_GET_STATUS=43
