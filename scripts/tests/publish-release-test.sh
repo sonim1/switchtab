@@ -54,6 +54,7 @@ GH_LOG="$TEMP_ROOT/gh.log"
 GIT_LOG="$TEMP_ROOT/git.log"
 ORDER_LOG="$TEMP_ROOT/order.log"
 MUTATION_LOG="$TEMP_ROOT/mutations.log"
+CMP_LOG="$TEMP_ROOT/cmp.log"
 CONFIG_PATH="$TEMP_ROOT/release.env"
 DMG_NAME='SwitchTab-1.2-7.dmg'
 CHECKSUM_NAME="$DMG_NAME.sha256"
@@ -94,6 +95,9 @@ state='absent'
 [[ ! -f "$GH_STATE" ]] || state="$(<"$GH_STATE")"
 
 if [[ "$1" == api ]]; then
+    [[ $# -eq 4 ]] || exit 80
+    [[ "$2" == --include && "$3" == --silent ]] || exit 81
+    [[ "$4" == 'repos/{owner}/{repo}/releases/tags/v1.2' ]] || exit 82
     if [[ "${FAKE_GH_PROBE_STATUS:-0}" -ne 0 ]]; then
         printf '%s\n' "${FAKE_GH_PROBE_OUTPUT:-network authentication failure}" >&2
         exit "$FAKE_GH_PROBE_STATUS"
@@ -169,6 +173,17 @@ case "$2" in
 esac
 EOF
 
+cat > "$FAKE_BIN/cmp" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "$*" >> "$CMP_LOG"
+if [[ "${FAKE_CMP_STATUS:-0}" -ne 0 ]]; then
+    exit "$FAKE_CMP_STATUS"
+fi
+exec /usr/bin/cmp "$@"
+EOF
+
 cat > "$FIXTURE_ROOT/scripts/publish-update.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -177,7 +192,7 @@ printf 'publish-update\n' >> "$ORDER_LOG"
 exit "${PUBLISH_STATUS:-0}"
 EOF
 
-chmod +x "$FAKE_BIN/git" "$FAKE_BIN/gh" "$FIXTURE_ROOT/scripts/publish-update.sh"
+chmod +x "$FAKE_BIN/git" "$FAKE_BIN/gh" "$FAKE_BIN/cmp" "$FIXTURE_ROOT/scripts/publish-update.sh"
 
 write_appcast() {
     local url="${1:-https://updates.test.example/$DMG_NAME}"
@@ -205,6 +220,7 @@ reset_scenario() {
     : > "$GIT_LOG"
     : > "$ORDER_LOG"
     : > "$MUTATION_LOG"
+    : > "$CMP_LOG"
     FAKE_HEAD_COMMIT='head-commit'
     FAKE_TAG_COMMIT='head-commit'
     FAKE_GIT_HEAD_STATUS=0
@@ -218,6 +234,7 @@ reset_scenario() {
     FAKE_GH_DOWNLOAD_STATUS=0
     FAKE_GH_EDIT_STATUS=0
     FAKE_EXTRA_ASSET_NAMES=''
+    FAKE_CMP_STATUS=0
     PUBLISH_STATUS=0
     write_valid_artifacts
 }
@@ -229,6 +246,7 @@ run_release() {
         UPDATE_DOMAIN='updates.test.example' \
         GIT_BIN="$FAKE_BIN/git" \
         GH_BIN="$FAKE_BIN/gh" \
+        CMP_BIN="$FAKE_BIN/cmp" \
         PUBLISH_UPDATE_SCRIPT="$FIXTURE_ROOT/scripts/publish-update.sh" \
         GH_STATE="$GH_STATE" \
         GH_ASSETS="$GH_ASSETS" \
@@ -236,6 +254,7 @@ run_release() {
         GIT_LOG="$GIT_LOG" \
         ORDER_LOG="$ORDER_LOG" \
         MUTATION_LOG="$MUTATION_LOG" \
+        CMP_LOG="$CMP_LOG" \
         FAKE_HEAD_COMMIT="$FAKE_HEAD_COMMIT" \
         FAKE_TAG_COMMIT="$FAKE_TAG_COMMIT" \
         FAKE_GIT_HEAD_STATUS="$FAKE_GIT_HEAD_STATUS" \
@@ -249,6 +268,7 @@ run_release() {
         FAKE_GH_DOWNLOAD_STATUS="$FAKE_GH_DOWNLOAD_STATUS" \
         FAKE_GH_EDIT_STATUS="$FAKE_GH_EDIT_STATUS" \
         FAKE_EXTRA_ASSET_NAMES="$FAKE_EXTRA_ASSET_NAMES" \
+        FAKE_CMP_STATUS="$FAKE_CMP_STATUS" \
         PUBLISH_STATUS="$PUBLISH_STATUS" \
         "$FIXTURE_SCRIPT" "$@" 2>&1
     )"
@@ -284,6 +304,8 @@ run_release v1.2
 assert_status 0
 ! grep -Fq 'release upload ' "$ORDER_LOG" || fail "existing assets were reuploaded"
 assert_before 'publish-update' 'release edit v1.2 --draft=false'
+grep -Fq "$DMG_NAME.download/$DMG_NAME" "$CMP_LOG" || fail "existing DMG was not byte-compared"
+grep -Fq "$CHECKSUM_NAME.download/$CHECKSUM_NAME" "$CMP_LOG" || fail "existing checksum was not byte-compared"
 
 reset_scenario
 printf 'published' > "$GH_STATE"
@@ -292,6 +314,25 @@ cp "$UPDATE_DIR/$CHECKSUM_NAME" "$GH_ASSETS/$CHECKSUM_NAME"
 run_release v1.2
 assert_status 0
 [[ "$(<"$ORDER_LOG")" == 'publish-update' ]] || fail "published release was mutated: $(<"$ORDER_LOG")"
+
+# Published releases are GitHub-verification-only and cannot gain missing assets.
+reset_scenario
+printf 'published' > "$GH_STATE"
+cp "$UPDATE_DIR/$CHECKSUM_NAME" "$GH_ASSETS/$CHECKSUM_NAME"
+run_release v1.2
+[[ "$status" -ne 0 ]] || fail "published release missing DMG was mutated"
+assert_output_contains 'published release is missing'
+! grep -Fq 'release upload ' "$ORDER_LOG" || fail "DMG was uploaded to a published release"
+assert_no_publish_or_edit
+
+reset_scenario
+printf 'published' > "$GH_STATE"
+cp "$UPDATE_DIR/$DMG_NAME" "$GH_ASSETS/$DMG_NAME"
+run_release v1.2
+[[ "$status" -ne 0 ]] || fail "published release missing checksum was mutated"
+assert_output_contains 'published release is missing'
+! grep -Fq 'release upload ' "$ORDER_LOG" || fail "checksum was uploaded to a published release"
+assert_no_publish_or_edit
 
 # Existing assets are immutable, unambiguous, and successfully downloaded before comparison.
 for conflicting_name in "$DMG_NAME" "$CHECKSUM_NAME"; do
@@ -314,6 +355,16 @@ cp "$UPDATE_DIR/$CHECKSUM_NAME" "$GH_ASSETS/$CHECKSUM_NAME"
 FAKE_GH_DOWNLOAD_STATUS=46
 run_release v1.2
 assert_status 46
+assert_no_publish_or_edit
+
+reset_scenario
+printf 'draft' > "$GH_STATE"
+cp "$UPDATE_DIR/$DMG_NAME" "$GH_ASSETS/$DMG_NAME"
+cp "$UPDATE_DIR/$CHECKSUM_NAME" "$GH_ASSETS/$CHECKSUM_NAME"
+FAKE_CMP_STATUS=37
+run_release v1.2
+assert_status 37
+[[ -s "$CMP_LOG" ]] || fail "injected cmp command was not called"
 assert_no_publish_or_edit
 
 reset_scenario
@@ -364,6 +415,18 @@ cat > "$UPDATE_DIR/appcast.xml" <<'EOF'
 EOF
 run_release v1.2
 [[ "$status" -ne 0 ]] || fail "missing enclosure was accepted"
+assert_no_mutation
+
+reset_scenario
+cat > "$UPDATE_DIR/appcast.xml" <<'EOF'
+<rss xmlns:other="https://example.invalid/other"><channel><item>
+<enclosure url="https://updates.test.example/SwitchTab-1.2-7.dmg"
+           other:shortVersionString="1.2" />
+</item></channel></rss>
+EOF
+run_release v1.2
+[[ "$status" -ne 0 ]] || fail "non-Sparkle short version attribute was accepted"
+[[ ! -s "$GIT_LOG" ]] || fail "git ran for a non-Sparkle release version"
 assert_no_mutation
 
 reset_scenario

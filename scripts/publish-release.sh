@@ -39,6 +39,7 @@ GIT_BIN="${GIT_BIN:-git}"
 GH_BIN="${GH_BIN:-gh}"
 SHASUM_BIN="${SHASUM_BIN:-/usr/bin/shasum}"
 XMLLINT_BIN="${XMLLINT_BIN:-/usr/bin/xmllint}"
+CMP_BIN="${CMP_BIN:-/usr/bin/cmp}"
 PUBLISH_UPDATE_SCRIPT="${PUBLISH_UPDATE_SCRIPT:-$PROJECT_ROOT/scripts/publish-update.sh}"
 APPCAST_PATH="$UPDATE_OUTPUT_DIR/appcast.xml"
 TEMP_DIR=''
@@ -100,6 +101,7 @@ require_command "git" "$GIT_BIN"
 require_command "GitHub CLI" "$GH_BIN"
 require_command "shasum" "$SHASUM_BIN"
 require_command "xmllint" "$XMLLINT_BIN"
+require_command "cmp" "$CMP_BIN"
 if [[ ! -x "$PUBLISH_UPDATE_SCRIPT" ]]; then
     fail "Publish-update script is unavailable: $PUBLISH_UPDATE_SCRIPT" 66
 fi
@@ -149,7 +151,15 @@ fi
 if [[ "$SHORT_VERSION_COUNT" != 1 ]]; then
     fail "Appcast must contain exactly one Sparkle short version"
 fi
-if SHORT_VERSION="$(xml_value 'string((//*[local-name()="enclosure"]/@*[local-name()="shortVersionString"])[1])')"; then
+if SPARKLE_SHORT_VERSION_COUNT="$(xml_value 'count(//*[local-name()="enclosure"]/@*[local-name()="shortVersionString" and namespace-uri()="http://www.andymatuschak.org/xml-namespaces/sparkle"])')"; then
+    :
+else
+    exit $?
+fi
+if [[ "$SPARKLE_SHORT_VERSION_COUNT" != 1 ]]; then
+    fail "Appcast must contain exactly one correctly namespaced Sparkle short version"
+fi
+if SHORT_VERSION="$(xml_value 'string((//*[local-name()="enclosure"]/@*[local-name()="shortVersionString" and namespace-uri()="http://www.andymatuschak.org/xml-namespaces/sparkle"])[1])')"; then
     :
 else
     exit $?
@@ -331,7 +341,7 @@ asset_name_count() {
 prepare_asset() {
     local asset_path="$1"
     local asset_name="$2"
-    local count asset_dir downloaded_path local_hash remote_hash result
+    local count asset_dir downloaded_path compare_status result
 
     count="$(asset_name_count "$asset_name")"
     if [[ "$count" -gt 1 ]]; then
@@ -344,7 +354,13 @@ prepare_asset() {
     fi
 
     asset_dir="$TEMP_DIR/$asset_name.download"
-    mkdir "$asset_dir"
+    if mkdir "$asset_dir"; then
+        :
+    else
+        result=$?
+        echo "Unable to create GitHub asset download directory: $asset_name" >&2
+        return "$result"
+    fi
     if run_external "GitHub asset download for $asset_name" "$GH_BIN" release download "$TAG" \
         --pattern "$asset_name" --dir "$asset_dir"; then
         :
@@ -357,23 +373,29 @@ prepare_asset() {
         echo "GitHub asset download is missing: $asset_name" >&2
         return 66
     fi
-    if local_hash="$(sha256_file "$asset_path")"; then
-        :
+    if "$CMP_BIN" -s "$asset_path" "$downloaded_path"; then
+        return 0
     else
-        result=$?
-        return "$result"
+        compare_status=$?
     fi
-    if remote_hash="$(sha256_file "$downloaded_path")"; then
-        :
-    else
-        result=$?
-        return "$result"
-    fi
-    if [[ "$local_hash" != "$remote_hash" ]]; then
+    if [[ "$compare_status" -eq 1 ]]; then
         echo "GitHub asset checksum conflict: $asset_name" >&2
         return 66
     fi
+    echo "GitHub asset byte comparison failed: $asset_name" >&2
+    return "$compare_status"
 }
+
+DMG_ASSET_COUNT="$(asset_name_count "$DMG_NAME")"
+CHECKSUM_ASSET_COUNT="$(asset_name_count "$CHECKSUM_NAME")"
+if [[ "$release_is_draft" == false ]]; then
+    if [[ "$DMG_ASSET_COUNT" -ne 1 ]]; then
+        fail "GitHub published release is missing one exact required asset: $DMG_NAME"
+    fi
+    if [[ "$CHECKSUM_ASSET_COUNT" -ne 1 ]]; then
+        fail "GitHub published release is missing one exact required asset: $CHECKSUM_NAME"
+    fi
+fi
 
 if prepare_asset "$DMG_PATH" "$DMG_NAME"; then
     :
