@@ -32,6 +32,8 @@ scan.
 - `package-lock.json` locks the repository release tooling to Wrangler 4.112.0
   and overrides its transitive `sharp` dependency to patched 0.35.3; install it
   with `npm ci --ignore-scripts`.
+- `.github/workflows/release.yml` installs Node 24.18.0 with a full-SHA-pinned
+  `actions/setup-node` action before installing the release tooling.
 - `scripts/generate-appcast.sh`, `scripts/setup-update-hosting.sh`,
   `scripts/publish-update.sh`, and `scripts/publish-release.sh` implement signed
   appcast generation, fail-closed R2 setup, atomic update publication, and

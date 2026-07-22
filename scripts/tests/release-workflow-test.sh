@@ -59,6 +59,7 @@ names = steps.map { |step| step["name"] }
 required_order = [
   "Checkout release tag",
   "Validate release tag and provenance",
+  "Setup Node.js",
   "Install release tooling",
   "Run release contract tests",
   "Run Swift tests",
@@ -75,12 +76,15 @@ assert(positions.none?(&:nil?), "required release steps are missing")
 assert(positions == positions.sort, "release steps are out of order")
 
 uses_steps = steps.select { |step| step.key?("uses") }
-assert(uses_steps.length == 1, "only the pinned checkout action is allowed")
+assert(uses_steps.length == 2, "only the pinned checkout and setup-node actions are allowed")
 checkout = steps.fetch(names.index("Checkout release tag"))
 assert(checkout["uses"] == "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "checkout must use the approved full SHA")
 assert(checkout.dig("with", "ref") == "refs/tags/${{ env.RELEASE_TAG }}", "checkout must use the fully qualified release tag ref")
 assert(checkout.dig("with", "fetch-depth") == 0, "checkout must fetch complete history")
 assert(checkout.dig("with", "persist-credentials") == false, "checkout credentials must not persist into validation or tests")
+setup_node = steps.fetch(names.index("Setup Node.js"))
+assert(setup_node["uses"] == "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020", "setup-node must use the approved full SHA")
+assert(setup_node.dig("with", "node-version") == "24.18.0", "setup-node must pin the current Node 24 LTS patch")
 uses_steps.each do |step|
   assert(step["uses"].match?(%r{\A[^@]+@[0-9a-f]{40}\z}), "all actions must be SHA-pinned")
 end

@@ -225,12 +225,12 @@ git push origin v1.2.3
 ```
 
 The workflow accepts only exact `refs/tags/v<version>` references, checks that
-the tag commit is on `origin/main`, runs the contract and Swift tests, creates a
-temporary Keychain, signs and notarizes the DMG, generates the signed appcast,
-creates or reuses the GitHub draft, and stages its exact assets. It then
-publishes R2 objects and the appcast before making the draft public last. Manual
-workflow dispatch is recovery-only and must name an existing version tag; it
-does not create or move tags.
+the tag commit is on `origin/main`, installs the pinned Node 24.18.0 runtime,
+runs the contract and Swift tests, creates a temporary Keychain, signs and
+notarizes the DMG, generates the signed appcast, creates or reuses the GitHub
+draft, and stages its exact assets. It then publishes R2 objects and the appcast
+before making the draft public last. Manual workflow dispatch is recovery-only
+and must name an existing version tag; it does not create or move tags.
 
 ### Recovery and immutability
 
