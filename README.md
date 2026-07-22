@@ -313,13 +313,11 @@ no production secrets.
 Protect creation and updates of `v*` tags with a GitHub ruleset restricted to
 maintainers. Before every release, update the Xcode `MARKETING_VERSION` and
 strictly increase `CURRENT_PROJECT_VERSION`; the build version must contain one
-to three numeric components and must never decrease or be reused. Create an
-annotated tag whose version exactly matches `MARKETING_VERSION`, then push it:
-
-```bash
-git tag -a v1.2.3 -m "SwitchTab 1.2.3"
-git push origin v1.2.3
-```
+to three numeric components and must never decrease or be reused. Use the single
+guarded normal CI block under **Local signing and publishing** to fetch the
+authoritative refs, prove a clean exact `origin/main` checkout, create the
+annotated tag matching `MARKETING_VERSION`, and push its fully qualified ref.
+Do not create or push a release tag through a shorter command path.
 
 The workflow accepts only exact `refs/tags/v<version>` references, checks that
 the tag commit is on `origin/main`, and follows this exact flow:
@@ -381,12 +379,24 @@ replace public assets. As a manual fallback, provide a short-lived token with
 the token in shell history:
 
 ```bash
+(
+set -euo pipefail
+release_tag=v1.2.3
+trap 'unset TAP_GH_TOKEN' EXIT HUP INT TERM
 read -r -s -p "Temporary tap dispatch token: " TAP_GH_TOKEN
 printf '\n'
 export TAP_GH_TOKEN
-scripts/dispatch-homebrew-update.sh v1.2.3
+set +e
+scripts/dispatch-homebrew-update.sh "$release_tag"
+dispatch_status=$?
+set -e
 unset TAP_GH_TOKEN
+trap - EXIT HUP INT TERM
+exit "$dispatch_status"
+)
 ```
 
-The fallback sends the same `homebrew_release` event and does not alter the
-already-public release.
+The subshell prevents the token from persisting in the caller. The cleanup trap
+covers normal exit, command failure, interruption, and termination, while the
+explicit status capture preserves the dispatch result. The fallback sends the
+same `homebrew_release` event and does not alter the already-public release.

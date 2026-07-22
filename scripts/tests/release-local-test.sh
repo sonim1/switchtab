@@ -167,7 +167,6 @@ for text in \
     "APPLE_NOTARY_KEY_P8_BASE64" \
     "APPLE_NOTARY_KEY_ID" \
     "APPLE_NOTARY_ISSUER_ID" \
-    "git push origin v" \
     "updates.switchtab.app/appcast.xml" \
     "refs/tags/" \
     "https://developers.cloudflare.com/r2/api/tokens/" \
@@ -300,6 +299,48 @@ def local_release_steps(section)
   end
 end
 
+def recovery_dispatch_steps(section)
+  block = fenced_blocks(section).find { |candidate| candidate.include?("dispatch-homebrew-update.sh") }
+  assert_documented(block, "recovery dispatch command block is missing")
+
+  steps = block.lines.each_with_object([]) do |raw_line, result|
+    line = raw_line.strip
+    step = case line
+    when "("
+      :subshell_open
+    when "set -euo pipefail"
+      :strict_shell
+    when /\Arelease_tag=v[0-9]+(?:[.][0-9]+)*\z/
+      :release_tag
+    when /\Atrap 'unset TAP_GH_TOKEN' EXIT HUP INT TERM\z/
+      :cleanup_trap
+    when /\Aread -r -s -p .* TAP_GH_TOKEN\z/
+      :secure_read
+    when "export TAP_GH_TOKEN"
+      :export_token
+    when "set +e"
+      :capture_mode
+    when /\Ascripts\/dispatch-homebrew-update[.]sh "\$release_tag"\z/
+      :dispatch
+    when 'dispatch_status=$?'
+      :capture_status
+    when "set -e"
+      :restore_strict_mode
+    when "unset TAP_GH_TOKEN"
+      :explicit_cleanup
+    when "trap - EXIT HUP INT TERM"
+      :clear_trap
+    when 'exit "$dispatch_status"'
+      :propagate_status
+    when ")"
+      :subshell_close
+    end
+    result << step if step
+  end
+  assert_documented(!block.match?(/(?:echo|printf).*TAP_GH_TOKEN/), "recovery must never print the tap token")
+  steps
+end
+
 def validate_release_operations!(readme)
   readme = visible_markdown(readme)
   local = markdown_section(readme, "Local signing and publishing")
@@ -387,12 +428,38 @@ def validate_release_operations!(readme)
     "release flow order is incorrect"
   )
   execution_text = normalized(execution)
+  outside_authoritative_release_block = readme.sub(local, "")
+  unsafe_tag_commands = outside_authoritative_release_block.lines.map(&:strip).select do |line|
+    line.match?(/\A(?:git tag -a|git push origin)(?:[[:space:]]|\z)/)
+  end
+  assert_documented(unsafe_tag_commands.empty?, "release instructions outside the guarded block must not offer tag shortcuts: #{unsafe_tag_commands.inspect}")
+  assert_documented(execution_text.match?(/guarded normal CI block.*Local signing and publishing.*fully qualified ref/i), "Tags section must point operators to the guarded fully qualified tag flow")
   assert_documented(execution_text.match?(/`homebrew_release`.*dispatch payload.*only.*`repository`.*`tag`/i), "dispatch payload must contain only repository and tag")
   assert_documented(execution_text.match?(/downloads.*`release-manifest[.]json`.*public GitHub Release/i), "tap manifest download transport must be documented")
   assert_documented(execution_text.match?(/shared by.*Sparkle appcast.*GitHub Release.*Homebrew Cask/i), "canonical DMG reuse must be documented")
 
   recovery = markdown_section(readme, "Recovery and immutability")
   recovery_text = normalized(recovery)
+  recovery_steps = recovery_dispatch_steps(recovery)
+  assert_documented(
+    recovery_steps == [
+      :subshell_open,
+      :strict_shell,
+      :release_tag,
+      :cleanup_trap,
+      :secure_read,
+      :export_token,
+      :capture_mode,
+      :dispatch,
+      :capture_status,
+      :restore_strict_mode,
+      :explicit_cleanup,
+      :clear_trap,
+      :propagate_status,
+      :subshell_close
+    ],
+    "recovery dispatch token lifecycle is unsafe or out of order: #{recovery_steps.inspect}"
+  )
   assert_documented(recovery_text.match?(/rerun only.*failed `notify` job/i), "notify-only rerun must be documented")
   assert_documented(recovery_text.match?(/does not rebuild.*sign.*notarize.*replace public assets/i), "notify rerun non-publication boundary must be documented")
   assert_documented(recovery_text.match?(/do not delete or recreate.*tag/i), "tag recovery rule must be documented")
@@ -461,6 +528,31 @@ assert_mutation_rejected(
   "ambiguous bare local release tag",
   readme,
   readme[0...fallback_start] + ambiguous_fallback + readme[fallback_finish..-1]
+)
+unsafe_tag_shortcut = <<'MARKDOWN'
+
+```bash
+git tag -a v1.2.3 -m "SwitchTab 1.2.3"
+git push origin v1.2.3
+```
+MARKDOWN
+assert_mutation_rejected(
+  "unsafe duplicate tag shortcut",
+  readme,
+  readme.sub(
+    "### Tags and release execution\n",
+    "### Tags and release execution\n#{unsafe_tag_shortcut}"
+  )
+)
+recovery_start = readme.index("### Recovery and immutability")
+raise "FAIL: recovery mutation section is missing" unless recovery_start
+recovery_prefix = readme[0...recovery_start]
+recovery_section = readme[recovery_start..-1]
+recovery_without_trap = recovery_section.sub(/^trap 'unset TAP_GH_TOKEN' EXIT HUP INT TERM\n/, "")
+assert_mutation_rejected(
+  "recovery token cleanup trap removed",
+  readme,
+  recovery_prefix + recovery_without_trap
 )
 assert_mutation_rejected(
   "missing Administration read permission",
