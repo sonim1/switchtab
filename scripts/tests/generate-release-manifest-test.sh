@@ -22,6 +22,8 @@ EXPECTED_SHA=''
 GENERATOR_TAG='v1.2.0'
 FAKE_COMMIT="$VALID_COMMIT"
 FAKE_SHASUM_DIGEST=''
+FAKE_RENAME_EXIT=''
+FAKE_SWAP_MANIFEST_DESTINATION=''
 
 mkdir -p "$FIXTURE_ROOT/scripts" "$BIN_DIR"
 
@@ -49,6 +51,32 @@ cat > "$BIN_DIR/xmllint" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 /usr/bin/xmllint "$@"
+EOF
+
+cat > "$BIN_DIR/ruby" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+/usr/bin/ruby "$@"
+case "${FAKE_SWAP_MANIFEST_DESTINATION:-}" in
+    directory)
+        mkdir "$FAKE_MANIFEST_DESTINATION"
+        printf 'preserve me\n' > "$FAKE_MANIFEST_DESTINATION/sentinel"
+        ;;
+    symlink)
+        mkdir "$FAKE_MANIFEST_SYMLINK_TARGET"
+        printf 'preserve me\n' > "$FAKE_MANIFEST_SYMLINK_TARGET/sentinel"
+        ln -s "$FAKE_MANIFEST_SYMLINK_TARGET" "$FAKE_MANIFEST_DESTINATION"
+        ;;
+esac
+EOF
+
+cat > "$BIN_DIR/rename" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ -n "${FAKE_RENAME_EXIT:-}" ]]; then
+    exit "$FAKE_RENAME_EXIT"
+fi
+exec /usr/bin/ruby "$@"
 EOF
 
 chmod +x "$BIN_DIR"/*
@@ -91,6 +119,8 @@ prepare_fixture() {
     GENERATOR_TAG='v1.2.0'
     FAKE_COMMIT="$VALID_COMMIT"
     FAKE_SHASUM_DIGEST=''
+    FAKE_RENAME_EXIT=''
+    FAKE_SWAP_MANIFEST_DESTINATION=''
 
     case "$scenario" in
         success) ;;
@@ -142,8 +172,14 @@ run_generator() {
         GIT_BIN="$BIN_DIR/git" \
         SHASUM_BIN="$BIN_DIR/shasum" \
         XMLLINT_BIN="$BIN_DIR/xmllint" \
+        RENAME_BIN="$BIN_DIR/rename" \
+        PATH="$BIN_DIR:/usr/bin:/bin" \
         FAKE_COMMIT="$FAKE_COMMIT" \
         FAKE_SHASUM_DIGEST="$FAKE_SHASUM_DIGEST" \
+        FAKE_RENAME_EXIT="$FAKE_RENAME_EXIT" \
+        FAKE_SWAP_MANIFEST_DESTINATION="$FAKE_SWAP_MANIFEST_DESTINATION" \
+        FAKE_MANIFEST_DESTINATION="$UPDATE_DIR/release-manifest.json" \
+        FAKE_MANIFEST_SYMLINK_TARGET="$TEMP_ROOT/finalization-symlink-target" \
         "$SCRIPT_SOURCE" "$GENERATOR_TAG" 2>&1
     )"
     status=$?
@@ -164,6 +200,14 @@ assert_only_sentinel() {
     fi
     [[ "$(<"$directory/sentinel")" == 'preserve me' ]] \
         || fail "generator changed the destination sentinel in $directory"
+}
+
+assert_no_success_path() {
+    local success_path="$1"
+
+    if printf '%s\n' "$output" | grep -Fxq "$success_path"; then
+        fail "generator printed its success path after finalization failed"
+    fi
 }
 
 failure_cases=(
@@ -218,10 +262,46 @@ assert_only_sentinel "$SYMLINK_TARGET"
 assert_no_manifest_temps
 
 prepare_fixture success
+FAKE_SWAP_MANIFEST_DESTINATION='directory'
+run_generator
+[[ "$status" -ne 0 ]] \
+    || fail "destination substitution during finalization returned success; output: $output"
+[[ -d "$MANIFEST" && ! -L "$MANIFEST" ]] \
+    || fail "substituted manifest directory was changed"
+assert_only_sentinel "$MANIFEST"
+assert_no_manifest_temps
+assert_no_success_path "$MANIFEST"
+
+prepare_fixture success
+FINALIZATION_SYMLINK_TARGET="$TEMP_ROOT/finalization-symlink-target"
+rm -rf "$FINALIZATION_SYMLINK_TARGET"
+FAKE_SWAP_MANIFEST_DESTINATION='symlink'
+run_generator
+[[ "$status" -ne 0 ]] \
+    || fail "symlink substitution during finalization returned success; output: $output"
+[[ -L "$MANIFEST" && "$(readlink "$MANIFEST")" == "$FINALIZATION_SYMLINK_TARGET" ]] \
+    || fail "substituted manifest symlink was changed"
+assert_only_sentinel "$FINALIZATION_SYMLINK_TARGET"
+assert_no_manifest_temps
+assert_no_success_path "$MANIFEST"
+
+prepare_fixture success
+printf 'old manifest\n' > "$MANIFEST"
+FAKE_RENAME_EXIT='37'
+run_generator
+[[ "$status" -eq 37 ]] \
+    || fail "rename failure returned $status, expected 37; output: $output"
+[[ -f "$MANIFEST" && "$(<"$MANIFEST")" == 'old manifest' ]] \
+    || fail "rename failure changed the existing manifest"
+assert_no_manifest_temps
+assert_no_success_path "$MANIFEST"
+
+prepare_fixture success
+printf 'old manifest\n' > "$MANIFEST"
 run_generator
 [[ "$status" -eq 0 ]] || fail "success returned $status; output: $output"
-MANIFEST="$UPDATE_DIR/release-manifest.json"
 [[ -f "$MANIFEST" ]] || fail "success did not write release-manifest.json"
+assert_no_manifest_temps
 
 EXPECTED_SHA="$EXPECTED_SHA" VALID_COMMIT="$VALID_COMMIT" ruby -rjson -e '
   actual = JSON.parse(File.read(ARGV.fetch(0)))

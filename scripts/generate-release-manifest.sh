@@ -6,6 +6,7 @@ UPDATE_DIR="${UPDATE_OUTPUT_DIR:-$PROJECT_ROOT/.build/direct-distribution/update
 GIT_BIN="${GIT_BIN:-git}"
 SHASUM_BIN="${SHASUM_BIN:-/usr/bin/shasum}"
 XMLLINT_BIN="${XMLLINT_BIN:-/usr/bin/xmllint}"
+RENAME_BIN="${RENAME_BIN:-ruby}"
 
 fail() {
     local message="$1"
@@ -166,7 +167,20 @@ ruby -rjson -e '
   File.write(ARGV.fetch(0), JSON.pretty_generate(document) + "\n")
 ' "$temp_manifest" "$tag" "$version" "$commit" "$asset" "$computed"
 
-mv "$temp_manifest" "$manifest"
+if "$RENAME_BIN" -e '
+  destination = ARGV.fetch(1)
+  begin
+    abort "Release manifest destination is not a regular file" unless File.lstat(destination).file?
+  rescue Errno::ENOENT
+  end
+  File.rename(ARGV.fetch(0), destination)
+' "$temp_manifest" "$manifest"; then
+    :
+else
+    rename_status=$?
+    echo "Unable to finalize release manifest" >&2
+    exit "$rename_status"
+fi
 temp_manifest=''
 
 echo "$manifest"
