@@ -103,6 +103,10 @@ if [[ "${GH_REPO:-}" != 'sonim1/switchtab' ]]; then
     printf 'unexpected GitHub repository binding: %s\n' "${GH_REPO:-<unset>}" >&2
     exit 78
 fi
+if [[ "${GH_HOST:-}" != 'github.com' ]]; then
+    printf 'unexpected GitHub host binding: %s\n' "${GH_HOST:-<unset>}" >&2
+    exit 78
+fi
 printf '%s\n' "$*" >> "$GH_LOG"
 state='absent'
 [[ ! -f "$GH_STATE" ]] || state="$(<"$GH_STATE")"
@@ -334,6 +338,7 @@ reset_scenario() {
     FAKE_CMP_STATUS=0
     FAKE_RUBY_STATUS=0
     AMBIENT_GH_REPO='attacker/ambient-repository'
+    AMBIENT_GH_HOST='example.invalid'
     PUBLISH_STATUS=0
     write_valid_artifacts
 }
@@ -348,6 +353,7 @@ run_release() {
         CMP_BIN="$FAKE_BIN/cmp" \
         RUBY_BIN="$FAKE_BIN/ruby" \
         GH_REPO="$AMBIENT_GH_REPO" \
+        GH_HOST="$AMBIENT_GH_HOST" \
         PUBLISH_UPDATE_SCRIPT="$FIXTURE_ROOT/scripts/publish-update.sh" \
         GH_STATE="$GH_STATE" \
         GH_ASSETS="$GH_ASSETS" \
@@ -386,9 +392,9 @@ run_release() {
 cp "$SCRIPT_SOURCE" "$FIXTURE_SCRIPT"
 chmod +x "$FIXTURE_SCRIPT"
 
-# New draft: override an attacker-controlled ambient GH_REPO, stage all exact assets,
+# New draft: override attacker-controlled ambient GH_REPO and GH_HOST, stage all exact assets,
 # publish R2, and expose the release last. The fake gh rejects every call not bound
-# to sonim1/switchtab.
+# to sonim1/switchtab on github.com.
 reset_scenario
 run_release v1.2
 assert_status 0
@@ -404,6 +410,16 @@ grep -Fxq 'release create v1.2 --draft --verify-tag --generate-notes --title Swi
     fail "exact assets were not uploaded"
 ! grep -Fq -- '--clobber' "$GH_LOG" || fail "asset upload used --clobber"
 [[ "$(<"$GH_STATE")" == published ]] || fail "draft was not published"
+
+# Release config cannot redirect GitHub operations after it is sourced.
+reset_scenario
+cat > "$CONFIG_PATH" <<'EOF'
+GH_REPO='attacker/config-repository'
+GH_HOST='config.example.invalid'
+EOF
+run_release v1.2
+assert_status 0
+[[ "$(<"$GH_STATE")" == published ]] || fail "config-hostile draft was not published"
 
 # Existing draft and published release are idempotent when both assets match.
 reset_scenario

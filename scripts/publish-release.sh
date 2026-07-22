@@ -34,7 +34,8 @@ set +x
 
 RELEASE_REPOSITORY='sonim1/switchtab'
 GH_REPO="$RELEASE_REPOSITORY"
-export GH_REPO
+GH_HOST='github.com'
+export GH_REPO GH_HOST
 DIRECT_BUILD_ROOT="${DIRECT_BUILD_ROOT:-$PROJECT_ROOT/.build/direct-distribution}"
 UPDATE_OUTPUT_DIR="${UPDATE_OUTPUT_DIR:-$DIRECT_BUILD_ROOT/updates}"
 UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.app}"
