@@ -8,7 +8,7 @@ This is an operating manual. Follow it literally; when instinct and manual confl
 
 - **Package.swift:** library `SwitchTab` (path `SwitchTab/`, excludes Resources) + XCTest target `SwitchTabTests` (path `SwitchTabTests/`). **`swift test` is the supported SwiftPM test gate and currently runs 18 tests.**
 - **App source (`SwitchTab/`):** `AppDelegate.swift` (~15K — core wiring), `SwitchTabApp.swift`, `Models/`, `Services/` (window/shortcut logic), `UI/`, `Resources/` (Info.plist, entitlements, MenuBarIcon, Assets).
-- **Tests (`SwitchTabTests/`):** XCTest suites under `Models/`, `Services/`, and `Support/`.
+- **Tests (`SwitchTabTests/`):** one XCTest target with two test styles. Most model/service/support suites are legacy enums or structs exposing static `run()` methods; root `SwitchTabTests/TestRunner.swift` invokes them from one `XCTestCase`. `PermissionRecoveryActivationWaiterTests` and `PermissionRecoveryAsyncTests` are native `XCTestCase` classes and are discovered directly by XCTest.
 - **App builds via Xcode:** `SwitchTab.xcodeproj`, scheme `SwitchTab` (app), `SwitchTabTests` scheme for Xcode-side tests. Full verification = `swift test` + unsigned arm64 Xcode Debug app build when Xcode is available.
 - **Direct distribution:** `scripts/build-direct-distribution.sh` generates a Sparkle-enabled variant into `.build/direct-distribution/` from env (`SPARKLE_PUBLIC_ED_KEY`, `SWITCHTAB_UPDATE_FEED_URL` — https only; `--prepare-only`; `--release` needs `DEVELOPER_ID_APPLICATION` + `NOTARYTOOL_KEYCHAIN_PROFILE`). **The checked-in xcodeproj stays Sparkle-free** (App Store-oriented) — the script patches a generated copy.
 - **Release tooling:** `package-lock.json` pins Wrangler 4.112.0. `scripts/setup-update-hosting.sh`, `scripts/generate-appcast.sh`, `scripts/publish-update.sh`, and `scripts/publish-release.sh` implement R2 setup, signed appcast generation, atomic R2 publication, and GitHub release publication. `.github/workflows/release.yml` runs the pipeline for exact version tags.
@@ -33,7 +33,7 @@ Kendrick's (observed — keep):
 - Spec-driven via `specs/001-macos-switchtab/`.
 
 Added (follow these too):
-- New logic lands in the SwiftPM-visible library (`SwitchTab/Models|Services`) with XCTest coverage in the `SwitchTabTests` test target.
+- New logic lands in the SwiftPM-visible library (`SwitchTab/Models|Services`) with coverage in the `SwitchTabTests` XCTest target. Adding or changing a legacy static `run()` suite requires wiring it into `SwitchTabTests/TestRunner.swift`; native `XCTestCase` methods are auto-discovered.
 - Window enumeration/focus code touches macOS Accessibility APIs — behavior is permission-dependent; runtime claims require actually running the app with Accessibility permission granted.
 - Swift 6 concurrency: the toolchain enforces strict concurrency — match existing isolation annotations rather than sprinkling `@unchecked Sendable`.
 
@@ -56,7 +56,7 @@ Any change:
 - [ ] `git diff --stat` only task files; no new SwiftPM dependencies without approval
 
 Logic change: additionally
-- [ ] New/changed behavior covered by an XCTest in `SwitchTabTests` (name it)
+- [ ] New/changed behavior covered in `SwitchTabTests` (name it); legacy static `run()` suites are registered in `TestRunner.swift`, while native `XCTestCase` methods are auto-discovered
 
 Shortcut/window behavior change: additionally
 - [ ] Runtime-verified with the app running + Accessibility permission (describe the switch you performed), or explicitly reported as not runtime-verified

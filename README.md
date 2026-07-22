@@ -122,8 +122,8 @@ to publish R2 objects; do not normally call that child script directly.
 Choose one publisher for a tag. When the GitHub release workflow is enabled,
 pushing the tag starts CI and that run owns publication. Run the local publisher
 only after confirming the tag-triggered run is disabled or cancelled, or during
-documented recovery when no active CI run owns the tag. Never race local and CI
-publication.
+documented recovery when no active CI run owns the tag.
+Never race local and CI publication.
 
 ### Cloudflare publishing credentials
 
@@ -224,11 +224,12 @@ create or move tags.
 
 Versioned DMG and checksum objects are immutable. Re-running a release with the
 same bytes is safe; different bytes under an existing versioned name stop the
-release. `appcast.xml` is mutable and is uploaded only after the immutable
-objects have been written and publicly verified.
+release. The mutable appcast is uploaded last. `appcast.xml` is uploaded only
+after the immutable objects have been written and publicly verified.
 
 If R2 publishing succeeds but the final GitHub publication fails, verify the
 public DMG against its public checksum, inspect the existing matching GitHub
-draft, and publish that draft after resolving the failure. Do not rebuild or
-re-tag the same release. Do not automatically delete objects or run a
-destructive rollback; investigate and recover from the existing artifacts.
+draft, and publish that draft after resolving the failure.
+Do not rebuild or re-tag the same release. Do not automatically delete objects
+or run a destructive rollback; investigate and recover from the existing
+artifacts.

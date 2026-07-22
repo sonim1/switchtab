@@ -6,6 +6,14 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 WRAPPER="$PROJECT_ROOT/scripts/release-local.sh"
 EXAMPLE="$PROJECT_ROOT/.env.release.local.example"
 README="$PROJECT_ROOT/README.md"
+DOCUMENTATION_FILES=(
+    "$README"
+    "$EXAMPLE"
+    "$PROJECT_ROOT/BLOCKERS.md"
+    "$PROJECT_ROOT/docs/repository-maintenance.md"
+    "$PROJECT_ROOT/review-result.md"
+    "$PROJECT_ROOT/CLAUDE.md"
+)
 
 fail() {
     echo "FAIL: $1" >&2
@@ -143,16 +151,49 @@ for text in \
     "R2_SECRET_ACCESS_KEY" \
     "SPARKLE_PRIVATE_ED_KEY" \
     "APPLE_CERTIFICATE_P12_BASE64" \
+    "APPLE_CERTIFICATE_PASSWORD" \
+    "APPLE_NOTARY_KEY_P8_BASE64" \
+    "APPLE_NOTARY_KEY_ID" \
+    "APPLE_NOTARY_ISSUER_ID" \
     "git push origin v" \
     "updates.switchtab.app/appcast.xml" \
     "refs/tags/" \
     "https://developers.cloudflare.com/r2/api/tokens/" \
     "https://developers.cloudflare.com/r2/api/s3/api/#conditional-operations" \
     "--account ed25519" \
+    "If-None-Match: *" \
+    "The mutable appcast is uploaded last." \
+    'calls `publish-update.sh` internally' \
+    "Choose one publisher for a tag" \
+    "Never race local and CI publication" \
+    "Do not rebuild or re-tag" \
+    "Do not automatically delete objects" \
     "Base64" \
     "Recovery"; do
     grep -Fq -- "$text" "$README" || fail "$README is missing '$text'"
 done
+
+assert_exact_example_placeholder() {
+    local name="$1"
+    local expected_line="$2"
+    local name_count exact_count
+
+    name_count="$(grep -c "^${name}=" "$EXAMPLE" || true)"
+    exact_count="$(grep -Fxc -- "$expected_line" "$EXAMPLE" || true)"
+    [[ "$name_count" -eq 1 ]] || fail "$EXAMPLE must contain exactly one $name assignment"
+    [[ "$exact_count" -eq 1 ]] || fail "$EXAMPLE must use the placeholder-only value for $name"
+}
+
+assert_exact_example_placeholder CLOUDFLARE_ACCOUNT_ID \
+    "CLOUDFLARE_ACCOUNT_ID='your-cloudflare-account-id'"
+assert_exact_example_placeholder CLOUDFLARE_ZONE_ID \
+    "CLOUDFLARE_ZONE_ID='your-cloudflare-zone-id'"
+assert_exact_example_placeholder CLOUDFLARE_API_TOKEN \
+    "CLOUDFLARE_API_TOKEN='your-scoped-cloudflare-api-token'"
+assert_exact_example_placeholder R2_ACCESS_KEY_ID \
+    "R2_ACCESS_KEY_ID='your-r2-access-key-id'"
+assert_exact_example_placeholder R2_SECRET_ACCESS_KEY \
+    "R2_SECRET_ACCESS_KEY='your-r2-secret-access-key'"
 
 stale_cloudflare_auth_url='https://developers.cloudflare.com/r2/api/s3/'"tokens/"
 if grep -Fq "$stale_cloudflare_auth_url" "$README"; then
@@ -163,16 +204,25 @@ grep -Eq 'v\*.*(ruleset|protection)|(ruleset|protection).*v\*' "$README" || \
     fail "$README is missing v* tag protection guidance"
 
 user_specific_path='/Users/'"kendrick"
-if grep -Fq "$user_specific_path" "$README" "$EXAMPLE"; then
+if grep -Fq "$user_specific_path" "${DOCUMENTATION_FILES[@]}"; then
     fail "documentation contains a user-specific local path"
 fi
 
-if grep -Eq -- '-----BEGIN (OPENSSH |RSA |EC |ED25519 )?PRIVATE KEY-----' "$README" "$EXAMPLE"; then
+if grep -Eq -- '-----BEGIN (OPENSSH |RSA |EC |ED25519 )?PRIVATE KEY-----' "${DOCUMENTATION_FILES[@]}"; then
     fail "documentation contains a private-key block"
 fi
 
-if grep -Eq -- '(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,})' "$README" "$EXAMPLE"; then
+if grep -Eq -- '(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,})' "${DOCUMENTATION_FILES[@]}"; then
     fail "documentation contains an obvious secret literal"
+fi
+
+if grep -Eq '[가-힣]' "${DOCUMENTATION_FILES[@]}"; then
+    fail "documentation contains Korean text"
+fi
+
+if grep -Fq 'The current release script automates only DMG and checksum generation' "${DOCUMENTATION_FILES[@]}" \
+    || grep -Fq 'Public Sparkle auto-updates still require signed appcast generation' "${DOCUMENTATION_FILES[@]}"; then
+    fail "documentation contains a stale release-automation claim"
 fi
 
 bash -n "$WRAPPER"
