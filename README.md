@@ -166,7 +166,6 @@ The release workflow expects these GitHub repository variables:
 - `DEVELOPER_ID_APPLICATION`
 - `SPARKLE_PUBLIC_ED_KEY`
 - `CLOUDFLARE_ACCOUNT_ID`
-- `TAP_GITHUB_APP_ID`
 
 It expects these GitHub Actions secrets:
 
@@ -187,14 +186,12 @@ file rather than placing secret text in shell history:
 gh variable set DEVELOPER_ID_APPLICATION --body "Developer ID Application: Your Name (TEAMID)"
 gh variable set SPARKLE_PUBLIC_ED_KEY --body "your-public-ed25519-key"
 gh variable set CLOUDFLARE_ACCOUNT_ID --body "your-account-id"
-gh variable set TAP_GITHUB_APP_ID --body "your-github-app-id"
 
 gh secret set --env release APPLE_CERTIFICATE_PASSWORD
 gh secret set --env release APPLE_NOTARY_KEY_ID
 gh secret set --env release APPLE_NOTARY_ISSUER_ID
 gh secret set --env release R2_ACCESS_KEY_ID
 gh secret set --env release R2_SECRET_ACCESS_KEY
-gh secret set --env release TAP_GITHUB_APP_PRIVATE_KEY
 ```
 
 Export transport values only into a permission-restricted temporary directory.
@@ -221,28 +218,51 @@ the secrets are registered.
 
 Create a GitHub `release` Environment under repository settings and enable
 required reviewer protection. Store the Apple, Sparkle, and R2 production
-secrets there, along with the protected `TAP_GITHUB_APP_PRIVATE_KEY` secret.
-`TAP_GITHUB_APP_ID` may be a repository variable, as shown above, or an
-environment variable on `release`; the workflow reads it through the `vars`
-context in either case. Both the `release` and `notify` jobs request approval
-because both use this Environment sequentially. A notify-only rerun can request
-approval again.
+secrets there, along with the protected `TAP_GITHUB_APP_PRIVATE_KEY` secret and
+the `TAP_GITHUB_APP_ID` variable. Both the `release` and `notify` jobs request
+approval because both use this Environment sequentially. A notify-only rerun
+can request approval again.
+
+Both jobs use the same Environment, so Environment secrets are available to
+both jobs after approval. The workflow YAML references and injects Apple,
+Sparkle, and R2 secrets only into `release` steps, and references and injects
+the tap App private key only into `notify`. That is a property of the reviewed
+workflow, not an Environment-level availability boundary; true secret-availability
+isolation requires separate Environments.
 
 The GitHub App must be installed only on `sonim1/homebrew-tap`. Grant the
-installation the minimum permission needed for repository dispatches:
-`Contents: Read & write`. It does not need installation on `sonim1/switchtab`;
-the source workflow holds the App ID and protected private key and creates a
-short-lived installation token scoped to the tap repository.
+installation the minimum union of permissions required by the unified release
+system:
+
+- `Administration: Read` for the tap receiver's branch-protection preflight.
+- `Contents: Read & write` for repository dispatch and the tap update branch.
+- `Pull requests: Read & write` for pull-request creation and auto-merge.
+
+It does not need installation on `sonim1/switchtab`. The SwitchTab `notify`
+token uses only the dispatch/contents capability, while the tap receiver token
+requests all three permissions for its guarded update job.
+
+Register the same App ID and private key in both configuration locations. The
+source repository uses its protected `release` Environment for `notify`; the
+tap repository uses an Actions variable and secret for its receiver workflow.
+Pass the private-key file through standard input so its contents do not enter
+shell history:
+
+```bash
+gh variable set --env release TAP_GITHUB_APP_ID --body "your-github-app-id"
+gh secret set --env release TAP_GITHUB_APP_PRIVATE_KEY < /path/to/github-app-private-key.pem
+
+gh variable set --repo sonim1/homebrew-tap TAP_GITHUB_APP_ID --body "your-github-app-id"
+gh secret set --repo sonim1/homebrew-tap TAP_GITHUB_APP_PRIVATE_KEY < /path/to/github-app-private-key.pem
+```
 
 Before enabling releases, configure `sonim1/homebrew-tap` to accept the
 `homebrew_release` repository-dispatch event, enable pull-request auto-merge,
 and protect its default branch in strict mode with the exact required checks
 `contracts` and `homebrew`. These settings and the source `release` Environment
 are administrative prerequisites; the release scripts do not mutate them.
-
-Production credentials stay separated by job: Apple, Sparkle, and R2 secrets
-are available only to `release`; the tap App private key is available only to
-`notify`; `verify` receives no production secrets.
+The secret-free `verify` job does not use the protected Environment and receives
+no production secrets.
 
 ### Tags and release execution
 
@@ -270,8 +290,10 @@ creates a temporary Keychain, signs and notarizes the DMG, generates the signed
 appcast and `release-manifest.json`, creates or reuses the GitHub draft, and
 stages its exact assets. It then publishes R2 objects and the appcast before
 making the draft public last. The manifest is both a GitHub Release asset and
-the package-update contract sent to `sonim1/homebrew-tap` by the
-`homebrew_release` event.
+the tap package-update contract. The `homebrew_release` dispatch payload
+consists only of `repository` and `tag`. After receiving those identifiers,
+`sonim1/homebrew-tap` downloads `release-manifest.json` from the public GitHub
+Release, validates it, renders the Cask change, and opens the tap pull request.
 
 The canonical `SwitchTab-<version>-<build>.dmg` is shared by the Sparkle
 appcast, GitHub Release, and Homebrew Cask; it is not rebuilt separately for

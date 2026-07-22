@@ -199,33 +199,172 @@ for repository_variable in \
         fail "$README is missing repository variable $repository_variable"
 done
 
-README_NORMALIZED="$(/usr/bin/tr '\n' ' ' < "$README" | /usr/bin/tr -s '[:space:]' ' ')"
-for release_operations_text in \
-    'GitHub `release` Environment' \
-    'required reviewer protection' \
-    'Both the `release` and `notify` jobs request approval' \
-    'A notify-only rerun can request approval again' \
-    '`TAP_GITHUB_APP_ID`' \
-    '`TAP_GITHUB_APP_PRIVATE_KEY`' \
-    'gh secret set --env release TAP_GITHUB_APP_PRIVATE_KEY' \
-    '`sonim1/homebrew-tap`' \
-    '`Contents: Read & write`' \
-    'does not need installation on `sonim1/switchtab`' \
-    '`release-manifest.json`' \
-    'scripts/generate-release-manifest.sh v1.2.3' \
-    '`homebrew_release`' \
-    'tag push -> secret-free `verify` -> protected signed `release` -> public GitHub/Sparkle publication -> protected `notify` -> tap PR/CI/auto-merge' \
-    'shared by the Sparkle appcast, GitHub Release, and Homebrew Cask' \
-    'rerun only the failed `notify` job' \
-    'does not rebuild, sign, notarize, or replace public assets' \
-    'Do not delete or recreate the tag' \
-    'read -r -s -p "Temporary tap dispatch token: " TAP_GH_TOKEN' \
-    'Apple, Sparkle, and R2 secrets are available only to `release`' \
-    'tap App private key is available only to `notify`' \
-    '`verify` receives no production secrets'; do
-    [[ "$README_NORMALIZED" == *"$release_operations_text"* ]] || \
-        fail "$README is missing release operations text '$release_operations_text'"
-done
+/usr/bin/ruby - "$README" <<'RUBY'
+class DocumentationContractError < StandardError; end
+
+def assert_documented(condition, message)
+  raise DocumentationContractError, message unless condition
+end
+
+def markdown_section(markdown, title)
+  lines = markdown.lines
+  start_index = nil
+  heading_level = nil
+
+  lines.each_with_index do |line, index|
+    match = line.match(/\A(#+)[[:space:]]+#{Regexp.escape(title)}[[:space:]]*\z/)
+    next unless match
+
+    start_index = index
+    heading_level = match[1].length
+    break
+  end
+  assert_documented(start_index, "missing README section: #{title}")
+
+  finish_index = lines.length
+  inside_fence = false
+  lines.each_with_index do |line, index|
+    next if index <= start_index
+
+    if line.match?(/\A```/)
+      inside_fence = !inside_fence
+      next
+    end
+    next if inside_fence
+
+    match = line.match(/\A(#+)[[:space:]]+/)
+    if match && match[1].length <= heading_level
+      finish_index = index
+      break
+    end
+  end
+  lines[(start_index + 1)...finish_index].join
+end
+
+def fenced_blocks(section)
+  section.scan(/```(?:bash|sh|text)?[[:space:]]*\n(.*?)```/m).flatten
+end
+
+def normalized(markdown)
+  markdown.gsub(/[[:space:]]+/, " ").strip
+end
+
+def validate_release_operations!(readme)
+  local = markdown_section(readme, "Local signing and publishing")
+  local_release_commands = fenced_blocks(local).flat_map(&:lines).map(&:strip).select do |line|
+    line.match?(%r{\Ascripts/(?:generate-appcast|generate-release-manifest|publish-release)[.]sh(?:[[:space:]]|\z)})
+  end
+  assert_documented(
+    local_release_commands == [
+      "scripts/generate-appcast.sh",
+      "scripts/generate-release-manifest.sh v1.2.3",
+      "scripts/publish-release.sh v1.2.3"
+    ],
+    "local release commands must order appcast, manifest, then publication exactly once: #{local_release_commands.inspect}"
+  )
+
+  app_setup = markdown_section(readme, "Protected release environment and tap integration")
+  app_setup_text = normalized(app_setup)
+  assert_documented(app_setup_text.include?("required reviewer protection"), "release Environment must require a reviewer")
+  assert_documented(app_setup_text.include?("Both the `release` and `notify` jobs request approval"), "both protected jobs must document approval")
+  assert_documented(app_setup_text.include?("A notify-only rerun can request approval again"), "notify rerun approval must be explicit")
+  assert_documented(app_setup_text.include?("installed only on `sonim1/homebrew-tap`"), "GitHub App installation scope must be tap-only")
+  ["`Administration: Read`", "`Contents: Read & write`", "`Pull requests: Read & write`"].each do |permission|
+    assert_documented(app_setup.include?(permission), "missing unified GitHub App permission: #{permission}")
+  end
+  assert_documented(app_setup_text.include?("SwitchTab `notify` token uses only the dispatch/contents capability"), "source notify token scope must be explained")
+  assert_documented(app_setup_text.include?("tap receiver token requests all three permissions"), "tap receiver token scope must be explained")
+  assert_documented(app_setup_text.include?("Environment secrets are available to both jobs after approval"), "shared Environment secret availability must be truthful")
+  assert_documented(app_setup_text.include?("workflow YAML references and injects Apple, Sparkle, and R2 secrets only into `release` steps"), "release secret references must be documented")
+  assert_documented(app_setup_text.include?("references and injects the tap App private key only into `notify`"), "notify secret references must be documented")
+  assert_documented(app_setup_text.include?("true secret-availability isolation requires separate Environments"), "separate Environment isolation boundary must be documented")
+
+  app_commands = fenced_blocks(app_setup).join("\n")
+  required_app_commands = [
+    'gh variable set --env release TAP_GITHUB_APP_ID --body "your-github-app-id"',
+    'gh secret set --env release TAP_GITHUB_APP_PRIVATE_KEY < /path/to/github-app-private-key.pem',
+    'gh variable set --repo sonim1/homebrew-tap TAP_GITHUB_APP_ID --body "your-github-app-id"',
+    'gh secret set --repo sonim1/homebrew-tap TAP_GITHUB_APP_PRIVATE_KEY < /path/to/github-app-private-key.pem'
+  ]
+  required_app_commands.each do |command|
+    assert_documented(app_commands.lines.map(&:strip).include?(command), "missing scoped GitHub App setup command: #{command}")
+  end
+
+  execution = markdown_section(readme, "Tags and release execution")
+  flow_line = execution.lines.map(&:strip).find { |line| line.start_with?("tag push ->") }
+  assert_documented(flow_line, "release flow line is missing")
+  flow = flow_line.split("->").map { |step| step.strip.delete("`") }
+  assert_documented(
+    flow == [
+      "tag push",
+      "secret-free verify",
+      "protected signed release",
+      "public GitHub/Sparkle publication",
+      "protected notify",
+      "tap PR/CI/auto-merge"
+    ],
+    "release flow order is incorrect"
+  )
+  execution_text = normalized(execution)
+  transport_contract = "`homebrew_release` dispatch payload consists only of `repository` and `tag`."
+  assert_documented(execution_text.include?(transport_contract), "dispatch payload must contain only repository and tag")
+  assert_documented(execution_text.include?("downloads `release-manifest.json` from the public GitHub Release"), "tap manifest download transport must be documented")
+  assert_documented(execution_text.include?("shared by the Sparkle appcast, GitHub Release, and Homebrew Cask"), "canonical DMG reuse must be documented")
+
+  recovery = markdown_section(readme, "Recovery and immutability")
+  recovery_text = normalized(recovery)
+  assert_documented(recovery_text.include?("rerun only the failed `notify` job"), "notify-only rerun must be documented")
+  assert_documented(recovery_text.include?("does not rebuild, sign, notarize, or replace public assets"), "notify rerun non-publication boundary must be documented")
+  assert_documented(recovery_text.include?("Do not delete or recreate the tag"), "tag recovery rule must be documented")
+  assert_documented(recovery_text.include?('read -r -s -p "Temporary tap dispatch token: " TAP_GH_TOKEN'), "manual narrow dispatch fallback must avoid shell history")
+
+  whole_text = normalized(readme)
+  assert_documented(!whole_text.match?(/secrets are available only to/i), "README falsely claims shared Environment secrets are job-isolated")
+  assert_documented(!whole_text.match?(/(?:manifest|release-manifest[.]json).{0,120}\b(?:sent|carried|included)\b.{0,80}\b(?:event|dispatch|payload)\b/i), "README falsely claims the manifest is sent in dispatch")
+  assert_documented(!whole_text.match?(/\b(?:event|dispatch|payload)\b.{0,80}\b(?:sends|carries|includes|contains)\b.{0,120}(?:manifest|release-manifest[.]json)/i), "README falsely claims dispatch contains the manifest")
+  assert_documented(!recovery_text.match?(/`?notify`? fails.{0,160}(?:rerun|re-run) (?:the )?full (?:release|workflow)/i), "README tells operators to rerun the full release after notify failure")
+end
+
+readme_path = ARGV.fetch(0)
+readme = File.read(readme_path)
+validate_release_operations!(readme)
+
+def assert_mutation_rejected(label, original, mutated)
+  raise "FAIL: mutation did not change README: #{label}" if mutated == original
+
+  begin
+    validate_release_operations!(mutated)
+  rescue DocumentationContractError
+    return
+  end
+  raise "FAIL: documentation validator accepted mutation: #{label}"
+end
+
+ordered_commands = "scripts/generate-appcast.sh\nscripts/generate-release-manifest.sh v1.2.3"
+assert_mutation_rejected(
+  "reversed appcast and manifest commands",
+  readme,
+  readme.sub(ordered_commands, "scripts/generate-release-manifest.sh v1.2.3\nscripts/generate-appcast.sh")
+)
+assert_mutation_rejected(
+  "missing Administration read permission",
+  readme,
+  readme.sub(/^.*`Administration: Read`.*\n/, "")
+)
+assert_mutation_rejected(
+  "false Environment secret isolation",
+  readme,
+  readme.sub("### Protected release environment and tap integration\n", "### Protected release environment and tap integration\n\nApple secrets are available only to `release`.\n")
+)
+assert_mutation_rejected(
+  "manifest included in dispatch payload",
+  readme,
+  readme.sub(
+    /The `homebrew_release` dispatch payload[[:space:]]+consists only of `repository` and `tag`[.]/,
+    "The `homebrew_release` dispatch payload includes `repository`, `tag`, and `release-manifest.json`."
+  )
+)
+RUBY
 
 assert_exact_example_placeholder() {
     local name="$1"
