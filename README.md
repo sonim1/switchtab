@@ -75,15 +75,15 @@ cp .env.release.local.example .env.release.local
 ```
 
 `.env.release.local` is ignored by Git. Fill in its public settings without
-committing the file. Leave the three publishing-secret lines commented during
-the one-time OAuth hosting setup so placeholder values cannot override Wrangler
-authentication. Authenticate with `node_modules/.bin/wrangler login`, then set
+committing the file. Leave the optional setup-token line and both publishing-
+secret lines commented during the one-time OAuth hosting setup so placeholder
+values cannot override Wrangler authentication. Authenticate with
+`node_modules/.bin/wrangler login`, then set
 `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_ZONE_ID`.
 
 If OAuth is not used, supply a separate setup management token through an
-approved secret mechanism. Do not put it in the example file or confuse it with
-the narrower CI bucket-item token used only for publishing to the existing
-bucket. Run:
+approved secret mechanism. Keep it separate from the narrower R2 S3
+credentials used only for publishing objects to the existing bucket. Run:
 
 ```bash
 scripts/setup-update-hosting.sh
@@ -96,10 +96,12 @@ resources. Wait for the custom domain to become available, then verify
 `https://updates.switchtab.app/appcast.xml` over HTTPS. A 404 is expected before
 the first release.
 
-After setup, for an intentional local publish, uncomment and fill them in only
-inside the ignored `.env.release.local`, or supply the three scoped environment
-values through a safe secret mechanism. CI receives them from GitHub Secrets;
-tracked files must keep the examples commented.
+After setup, for an intentional local publish, uncomment and fill in only the
+two `R2_` publishing secrets inside the ignored `.env.release.local`, or supply
+them through a safe secret mechanism. The optional regular Cloudflare token is
+only for non-OAuth hosting setup and is not used by publication. CI receives
+the R2 credentials from GitHub Secrets; tracked files keep all examples
+commented.
 
 ### Local signing and publishing
 
@@ -138,21 +140,17 @@ Never race local and CI publication.
 
 ### Cloudflare publishing credentials
 
-Release publishing deliberately uses two narrowly scoped credential surfaces:
+Release publishing uses one narrowly scoped credential surface:
 
-- `CLOUDFLARE_API_TOKEN` is a regular Cloudflare API token scoped to
-  **Workers R2 Storage Bucket Item Write** for the existing
-  `switchtab-updates` bucket. Wrangler uses it for the mutable `appcast.xml`.
-  It needs no DNS or custom-domain permissions in CI.
 - `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` are R2 S3-compatible Object
   Read & Write credentials scoped to `switchtab-updates`. The release script
-  uses them for atomic `If-None-Match: *` writes of the immutable DMG and
-  checksum.
+  uses them for atomic `If-None-Match: *` writes of immutable artifacts and
+  ETag-guarded `If-Match` updates of `appcast.xml`.
 
-An R2 Object Read & Write S3 credential is not a replacement for the regular
-Cloudflare API token used by Wrangler. Conversely, do not give CI the broader
-zone, DNS, custom-domain, or account-administration credential used for initial
-hosting setup. See Cloudflare's official [R2 authentication
+The optional regular `CLOUDFLARE_API_TOKEN` in the local example is only a
+non-OAuth alternative for the one-time Wrangler hosting setup. Do not give CI
+that broader setup token or any zone, DNS, custom-domain, or account-
+administration credential. See Cloudflare's official [R2 authentication
 documentation](https://developers.cloudflare.com/r2/api/tokens/) and
 [conditional S3 API
 documentation](https://developers.cloudflare.com/r2/api/s3/api/#conditional-operations).
@@ -173,7 +171,6 @@ It expects these GitHub Actions secrets:
 - `APPLE_NOTARY_KEY_ID`
 - `APPLE_NOTARY_ISSUER_ID`
 - `SPARKLE_PRIVATE_ED_KEY`
-- `CLOUDFLARE_API_TOKEN`
 - `R2_ACCESS_KEY_ID`
 - `R2_SECRET_ACCESS_KEY`
 
@@ -188,7 +185,6 @@ gh variable set CLOUDFLARE_ACCOUNT_ID --body "your-account-id"
 gh secret set APPLE_CERTIFICATE_PASSWORD
 gh secret set APPLE_NOTARY_KEY_ID
 gh secret set APPLE_NOTARY_ISSUER_ID
-gh secret set CLOUDFLARE_API_TOKEN
 gh secret set R2_ACCESS_KEY_ID
 gh secret set R2_SECRET_ACCESS_KEY
 ```
@@ -216,8 +212,10 @@ the secrets are registered.
 ### Tags and release execution
 
 Protect creation and updates of `v*` tags with a GitHub ruleset restricted to
-maintainers. Create an annotated tag whose version exactly matches the Xcode
-`MARKETING_VERSION`, then push it:
+maintainers. Before every release, update the Xcode `MARKETING_VERSION` and
+strictly increase `CURRENT_PROJECT_VERSION`; the build version must contain one
+to three numeric components and must never decrease or be reused. Create an
+annotated tag whose version exactly matches `MARKETING_VERSION`, then push it:
 
 ```bash
 git tag -a v1.2.3 -m "SwitchTab 1.2.3"
@@ -229,15 +227,20 @@ the tag commit is on `origin/main`, installs the pinned Node 24.18.0 runtime,
 runs the contract and Swift tests, creates a temporary Keychain, signs and
 notarizes the DMG, generates the signed appcast, creates or reuses the GitHub
 draft, and stages its exact assets. It then publishes R2 objects and the appcast
-before making the draft public last. Manual workflow dispatch is recovery-only
-and must name an existing version tag; it does not create or move tags.
+before making the draft public last. All tags share one release concurrency
+group, and the appcast update itself uses an R2 ETag precondition so an older
+run cannot roll the feed back. Manual workflow dispatch is recovery-only and
+must name an existing version tag; it does not create or move tags.
 
 ### Recovery and immutability
 
 Versioned DMG and checksum objects are immutable. Re-running a release with the
 same bytes is safe; different bytes under an existing versioned name stop the
-release. The mutable appcast is uploaded last. `appcast.xml` is uploaded only
-after the immutable objects have been written and publicly verified.
+release. The mutable appcast is uploaded last and only when its numeric Sparkle
+build version is newer than the authoritative R2 feed. A byte-identical rerun
+is verification-only; a lower version or different bytes for the same version
+stop the release. `appcast.xml` is uploaded only after the immutable objects
+have been written and publicly verified.
 
 If R2 publishing succeeds but the final GitHub publication fails, verify the
 public DMG against its public checksum, inspect the existing matching GitHub

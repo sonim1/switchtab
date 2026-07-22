@@ -55,6 +55,10 @@ scan.
   fallback checks.
 - Release credentials are read from environment variables. They are not stored
   in the repository.
+- The release workflow uses bucket-scoped R2 S3 credentials for conditional
+  object writes and does not receive the broader Cloudflare hosting-setup
+  token. Mutable appcast updates require a newer numeric build version and an
+  authoritative R2 ETag precondition.
 - Local `.env`, private key, and certificate-like files are ignored by
   `.gitignore`.
 - Permission recovery opens System Settings and requires the user to grant

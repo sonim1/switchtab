@@ -55,6 +55,7 @@ set -euo pipefail
     printf 'SPARKLE_PUBLIC_ED_KEY=%s\n' "$SPARKLE_PUBLIC_ED_KEY"
     printf 'DEVELOPER_ID_APPLICATION=%s\n' "$DEVELOPER_ID_APPLICATION"
     printf 'NOTARYTOOL_KEYCHAIN_PROFILE=%s\n' "$NOTARYTOOL_KEYCHAIN_PROFILE"
+    printf 'R2_SECRET_EXPORTED=%s\n' "${R2_SECRET_ACCESS_KEY+x}"
     printf 'ARG=%s\n' "$@"
 } > "$RECORD_PATH"
 
@@ -109,6 +110,20 @@ grep -Fxq "NOTARYTOOL_KEYCHAIN_PROFILE=test-notary" "$RECORD_PATH" || fail "nota
 grep -Fxq "ARG=--release" "$RECORD_PATH" || fail "--release was not forwarded"
 [[ "$(grep -c '^ARG=' "$RECORD_PATH")" -eq 1 ]] || fail "wrapper forwarded unexpected arguments"
 
+trace_secret='trace-r2-secret-value'
+printf "R2_SECRET_ACCESS_KEY='%s'\n" "$trace_secret" >> "$FIXTURE_ROOT/.env.release.local"
+set +e
+output="$(
+    cd /
+    RECORD_PATH="$RECORD_PATH" FAKE_EXIT_STATUS=0 \
+        bash -x "$FIXTURE_WRAPPER" 2>&1
+)"
+status=$?
+set -e
+assert_status 0
+[[ "$output" != *"$trace_secret"* ]] || fail "inherited xtrace exposed release credentials"
+grep -Fxq 'R2_SECRET_EXPORTED=' "$RECORD_PATH" || fail "release credentials leaked into the build subprocess"
+
 rm -f "$RECORD_PATH"
 invoke_wrapper 37
 assert_status 37
@@ -159,16 +174,17 @@ for text in \
     "https://developers.cloudflare.com/r2/api/s3/api/#conditional-operations" \
     "--account ed25519" \
     "If-None-Match: *" \
-    "The mutable appcast is uploaded last." \
+    'ETag-guarded `If-Match`' \
+    'strictly increase `CURRENT_PROJECT_VERSION`' \
     'calls `publish-update.sh` internally' \
     "Choose one publisher for a tag" \
     "Never race local and CI publication" \
     "Do not rebuild or re-tag" \
     "Do not automatically delete objects" \
-    "Leave the three publishing-secret lines commented" \
-    "uncomment and fill them in" \
+    "both publishing-" \
+    "uncomment and fill in only" \
     "setup management token" \
-    "CI bucket-item token" \
+    "not used by publication" \
     "The draft is created or reused first, exact assets are staged" \
     "Base64" \
     "Recovery"; do

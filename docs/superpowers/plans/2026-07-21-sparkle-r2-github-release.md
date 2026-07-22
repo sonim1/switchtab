@@ -1,5 +1,12 @@
 # Sparkle R2 GitHub Release Automation Implementation Plan
 
+> **Historical plan — superseded by the implemented release pipeline.** Do not
+> copy credential lists or workflow snippets from this file. Use `README.md`,
+> `.github/workflows/release.yml`, and the executable contract tests as the
+> current operator and implementation sources of truth. Current publication
+> uses bucket-scoped R2 S3 credentials and conditional ETag writes; CI does not
+> receive `CLOUDFLARE_API_TOKEN`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make a pushed `v<MARKETING_VERSION>` tag produce a tested, Developer ID-signed, notarized SwitchTab DMG, a signed Sparkle appcast on Cloudflare R2, and a matching GitHub Release.

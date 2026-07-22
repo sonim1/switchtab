@@ -33,13 +33,11 @@ assert_output_contains() {
 }
 
 assert_no_uploads() {
-    if [[ -s "$WRANGLER_LOG" ]]; then
-        fail "unexpected upload(s): $(<"$WRANGLER_LOG")"
-    fi
+    assert_no_appcast_upload
 }
 
 assert_no_appcast_upload() {
-    if grep -Fq '/appcast.xml ' "$WRANGLER_LOG" 2>/dev/null; then
+    if grep -Fq 'conditional-put appcast.xml' "$MUTATION_LOG" 2>/dev/null; then
         fail "appcast was uploaded unexpectedly"
     fi
 }
@@ -141,8 +139,10 @@ sigv4=''
 config_from_stdin=''
 upload_file=''
 if_none_match=''
+if_match=''
 content_type=''
 cache_control=''
+header_path=''
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --config)
@@ -161,9 +161,14 @@ while [[ $# -gt 0 ]]; do
         --header)
             case "$2" in
                 'If-None-Match: *') if_none_match=1 ;;
+                'If-Match: '*) if_match="${2#If-Match: }" ;;
                 'Content-Type: '*) content_type="${2#Content-Type: }" ;;
                 'Cache-Control: '*) cache_control="${2#Cache-Control: }" ;;
             esac
+            shift 2
+            ;;
+        --dump-header)
+            header_path="$2"
             shift 2
             ;;
         --upload-file)
@@ -193,8 +198,14 @@ if [[ -n "$config_from_stdin" ]]; then
     curl_config="$(</dev/stdin)"
     [[ "$curl_config" == "user = \"$EXPECTED_R2_ACCESS_KEY_ID:$EXPECTED_R2_SECRET_ACCESS_KEY\"" ]] || exit 97
 fi
+conditional=''
+if [[ -n "$if_none_match" ]]; then
+    conditional='none:*'
+elif [[ -n "$if_match" ]]; then
+    conditional="match:$if_match"
+fi
 printf 'method=%s url=%s sigv4=%s conditional=%s type=%s cache=%s config-stdin=%s\n' \
-    "$method" "$url" "$sigv4" "$if_none_match" "$content_type" "$cache_control" "$config_from_stdin" >> "$CURL_LOG"
+    "$method" "$url" "$sigv4" "$conditional" "$content_type" "$cache_control" "$config_from_stdin" >> "$CURL_LOG"
 
 is_origin=''
 origin_prefix="https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com/$R2_BUCKET_NAME/"
@@ -216,13 +227,38 @@ if [[ "$method" == PUT ]]; then
         echo "fake conditional PUT transport failure" >&2
         exit "$FAKE_PUT_TRANSPORT_STATUS"
     fi
-    [[ -n "$is_origin" && -n "$if_none_match" && -f "$upload_file" ]] || exit 99
+    [[ -n "$is_origin" && -f "$upload_file" ]] || exit 99
+    if [[ -n "${FAKE_APPCAST_RACE_FILE:-}" && "$key" == appcast.xml \
+        && ! -e "$ORIGIN_DIR/.appcast-race-served" ]]; then
+        cp "$FAKE_APPCAST_RACE_FILE" "$ORIGIN_DIR/appcast.xml"
+        cp "$FAKE_APPCAST_RACE_FILE" "$PUBLIC_DIR/appcast.xml"
+        touch "$ORIGIN_DIR/.appcast-race-served"
+    fi
     if [[ -n "${FAKE_PUT_HTTP_STATUS:-}" ]]; then
         http_status="$FAKE_PUT_HTTP_STATUS"
-    elif [[ -f "$ORIGIN_DIR/$key" ]]; then
-        http_status=412
+    elif [[ -n "$if_none_match" ]]; then
+        if [[ -f "$ORIGIN_DIR/$key" ]]; then
+            http_status=412
+        else
+            http_status=200
+        fi
+    elif [[ -n "$if_match" ]]; then
+        if [[ -f "$ORIGIN_DIR/$key" ]]; then
+            current_hash="$(/usr/bin/shasum -a 256 "$ORIGIN_DIR/$key")"
+            current_hash="${current_hash%% *}"
+            current_etag="\"$current_hash\""
+            if [[ "$if_match" == "$current_etag" ]]; then
+                http_status=200
+            else
+                http_status=412
+            fi
+        else
+            http_status=412
+        fi
     else
-        http_status=200
+        exit 99
+    fi
+    if [[ "$http_status" == 200 ]]; then
         mkdir -p "$(dirname -- "$ORIGIN_DIR/$key")" "$(dirname -- "$PUBLIC_DIR/$key")"
         cp "$upload_file" "$ORIGIN_DIR/$key"
         cp "$upload_file" "$PUBLIC_DIR/$key"
@@ -271,6 +307,21 @@ EOF_XML
     fi
 fi
 
+if [[ -n "$header_path" ]]; then
+    : > "$header_path"
+    if [[ "$http_status" == 200 ]]; then
+        if [[ -n "$is_origin" ]]; then
+            header_hash="$(/usr/bin/shasum -a 256 "$ORIGIN_DIR/$key")"
+        else
+            header_hash="$(/usr/bin/shasum -a 256 "$PUBLIC_DIR/$key")"
+        fi
+        header_hash="${header_hash%% *}"
+        printf 'HTTP/1.1 200 OK\r\nETag: "%s"\r\n\r\n' "$header_hash" > "$header_path"
+    else
+        printf 'HTTP/1.1 %s Fixture\r\n\r\n' "$http_status" > "$header_path"
+    fi
+fi
+
 if [[ -n "$write_out" ]]; then
     printf '%s' "$http_status"
 fi
@@ -301,16 +352,18 @@ chmod +x "$BIN_DIR"/*
 write_appcast() {
     local enclosure_url="$1"
     local count="${2:-1}"
+    local build_version="${3-7}"
+    local destination="${4:-$ARTIFACT_DIR/appcast.xml}"
 
     if [[ "$count" == 0 ]]; then
-        printf '%s\n' '<?xml version="1.0"?><rss><channel><item /></channel></rss>' > "$ARTIFACT_DIR/appcast.xml"
+        printf '%s\n' '<?xml version="1.0"?><rss><channel><item /></channel></rss>' > "$destination"
     elif [[ "$count" == 2 ]]; then
-        cat > "$ARTIFACT_DIR/appcast.xml" <<EOF_XML
-<?xml version="1.0"?><rss><channel><item><enclosure url="$enclosure_url" /><enclosure url="$enclosure_url" /></item></channel></rss>
+        cat > "$destination" <<EOF_XML
+<?xml version="1.0"?><rss xmlns:sparkle="https://sparkle-project.org/xml-namespaces/sparkle"><channel><item><enclosure url="$enclosure_url" sparkle:version="$build_version" /><enclosure url="$enclosure_url" sparkle:version="$build_version" /></item></channel></rss>
 EOF_XML
     else
-        cat > "$ARTIFACT_DIR/appcast.xml" <<EOF_XML
-<?xml version="1.0"?><rss><channel><item><enclosure url="$enclosure_url" /></item></channel></rss>
+        cat > "$destination" <<EOF_XML
+<?xml version="1.0"?><rss xmlns:sparkle="https://sparkle-project.org/xml-namespaces/sparkle"><channel><item><enclosure url="$enclosure_url" sparkle:version="$build_version" /></item></channel></rss>
 EOF_XML
     fi
 }
@@ -324,6 +377,7 @@ reset_fixture() {
     unset FAKE_WRANGLER_STATUS FAKE_CURL_TRANSPORT_STATUS FAKE_HTTP_STATUS \
         FAKE_CORRUPT_KEY FAKE_BAD_APPCAST FAKE_HASH_STATUS FAKE_XML_STATUS \
         FAKE_PUT_TRANSPORT_STATUS FAKE_PUT_HTTP_STATUS FAKE_PUBLIC_STALE_ONCE_KEY \
+        FAKE_APPCAST_RACE_FILE \
         RELEASE_CONFIG_PATH
     printf 'fixture dmg content\n' > "$ARTIFACT_DIR/$DMG_NAME"
     (
@@ -366,6 +420,7 @@ invoke_script() {
             FAKE_PUT_TRANSPORT_STATUS="${FAKE_PUT_TRANSPORT_STATUS:-0}" \
             FAKE_PUT_HTTP_STATUS="${FAKE_PUT_HTTP_STATUS:-}" \
             FAKE_PUBLIC_STALE_ONCE_KEY="${FAKE_PUBLIC_STALE_ONCE_KEY:-}" \
+            FAKE_APPCAST_RACE_FILE="${FAKE_APPCAST_RACE_FILE:-}" \
             "$FIXTURE_SCRIPT" "$@" 2>&1
     )"
     status=$?
@@ -449,19 +504,93 @@ reset_fixture
 invoke_script
 assert_status 0
 assert_output_contains 'https://updates.test.example/appcast.xml'
-expected_log="r2 object put switchtab-updates/appcast.xml --remote --file $ARTIFACT_DIR/appcast.xml --content-type application/xml --cache-control public, max-age=60"
-[[ "$(<"$WRANGLER_LOG")" == "$expected_log" ]] || fail "appcast was not the sole/final Wrangler upload: $(<"$WRANGLER_LOG")"
 expected_mutation_log="conditional-put $DMG_NAME
 conditional-put $DMG_NAME.sha256
-wrangler $expected_log"
+conditional-put appcast.xml"
 [[ "$(<"$MUTATION_LOG")" == "$expected_mutation_log" ]] || fail "appcast was not the final mutation: $(<"$MUTATION_LOG")"
-expected_put_log="method=PUT url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab-updates/$DMG_NAME sigv4=aws:amz:auto:s3 conditional=1 type=application/x-apple-diskimage cache=public, max-age=31536000, immutable config-stdin=1
-method=PUT url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab-updates/$DMG_NAME.sha256 sigv4=aws:amz:auto:s3 conditional=1 type=text/plain cache=public, max-age=31536000, immutable config-stdin=1"
+[[ ! -s "$WRANGLER_LOG" ]] || fail "publication unexpectedly invoked Wrangler: $(<"$WRANGLER_LOG")"
+expected_put_log="method=PUT url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab-updates/$DMG_NAME sigv4=aws:amz:auto:s3 conditional=none:* type=application/x-apple-diskimage cache=public, max-age=31536000, immutable config-stdin=1
+method=PUT url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab-updates/$DMG_NAME.sha256 sigv4=aws:amz:auto:s3 conditional=none:* type=text/plain cache=public, max-age=31536000, immutable config-stdin=1
+method=PUT url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab-updates/appcast.xml sigv4=aws:amz:auto:s3 conditional=none:* type=application/xml cache=public, max-age=60 config-stdin=1"
 actual_put_log="$(grep '^method=PUT ' "$CURL_LOG")"
 [[ "$actual_put_log" == "$expected_put_log" ]] || fail "unexpected conditional PUT endpoint/metadata: $actual_put_log"
 [[ -f "$ORIGIN_DIR/$DMG_NAME" && -f "$ORIGIN_DIR/$DMG_NAME.sha256" ]] || fail "immutable objects did not reach the origin"
 [[ "$(<"$CURL_LOG")" != *"$ACCESS_KEY_ID"* && "$(<"$CURL_LOG")" != *"$SECRET_ACCESS_KEY"* ]] || fail "R2 credentials appeared in the curl log"
 [[ "$output" != *"$ACCESS_KEY_ID"* && "$output" != *"$SECRET_ACCESS_KEY"* ]] || fail "R2 credentials appeared in output"
+
+# A newer release that finishes first cannot be rolled back by an older tag.
+reset_fixture
+write_appcast "$DMG_URL" 1 8
+invoke_script
+assert_status 0
+newer_appcast="$TEMP_ROOT/newer-appcast.xml"
+cp "$ORIGIN_DIR/appcast.xml" "$newer_appcast"
+write_appcast "$DMG_URL" 1 7
+: > "$MUTATION_LOG"
+invoke_script
+assert_failed
+assert_output_contains 'newer appcast'
+cmp -s "$newer_appcast" "$ORIGIN_DIR/appcast.xml" || fail "older tag rolled back the appcast"
+assert_no_appcast_upload
+
+# An appcast changed between the authoritative read and conditional write is retried safely.
+reset_fixture
+older_appcast="$TEMP_ROOT/older-appcast.xml"
+newer_race_appcast="$TEMP_ROOT/newer-race-appcast.xml"
+write_appcast "$DMG_URL" 1 6 "$older_appcast"
+write_appcast "$DMG_URL" 1 8 "$newer_race_appcast"
+cp "$older_appcast" "$ORIGIN_DIR/appcast.xml"
+cp "$older_appcast" "$PUBLIC_DIR/appcast.xml"
+FAKE_APPCAST_RACE_FILE="$newer_race_appcast"
+invoke_script
+assert_failed
+assert_output_contains 'newer appcast'
+cmp -s "$newer_race_appcast" "$ORIGIN_DIR/appcast.xml" || fail "conditional appcast race overwrote the newer feed"
+[[ "$(grep -c 'conditional-put appcast.xml' "$MUTATION_LOG")" -eq 1 ]] || fail "appcast race was not attempted exactly once"
+
+# An older remote appcast advances through If-Match, while same-version drift fails closed.
+reset_fixture
+write_appcast "$DMG_URL" 1 6 "$older_appcast"
+cp "$older_appcast" "$ORIGIN_DIR/appcast.xml"
+cp "$older_appcast" "$PUBLIC_DIR/appcast.xml"
+invoke_script
+assert_status 0
+cmp -s "$ARTIFACT_DIR/appcast.xml" "$ORIGIN_DIR/appcast.xml" || fail "older appcast did not advance"
+grep -Eq 'method=PUT .*appcast[.]xml .*conditional=match:"[a-f0-9]{64}"' "$CURL_LOG" || fail "appcast replacement did not use If-Match"
+
+reset_fixture
+same_version_drift="$TEMP_ROOT/same-version-drift.xml"
+write_appcast 'https://updates.test.example/SwitchTab-other.dmg' 1 7 "$same_version_drift"
+cp "$same_version_drift" "$ORIGIN_DIR/appcast.xml"
+cp "$same_version_drift" "$PUBLIC_DIR/appcast.xml"
+invoke_script
+assert_failed
+assert_output_contains 'same version'
+cmp -s "$same_version_drift" "$ORIGIN_DIR/appcast.xml" || fail "same-version appcast drift was overwritten"
+assert_no_appcast_upload
+
+# A byte-identical appcast rerun is verification-only and performs no mutable write.
+reset_fixture
+cp "$ARTIFACT_DIR/appcast.xml" "$ORIGIN_DIR/appcast.xml"
+cp "$ARTIFACT_DIR/appcast.xml" "$PUBLIC_DIR/appcast.xml"
+invoke_script
+assert_status 0
+assert_no_appcast_upload
+
+# Unsafe Sparkle build versions fail before any network mutation.
+for unsafe_build_version in missing alpha too_many_parts; do
+    reset_fixture
+    case "$unsafe_build_version" in
+        missing) write_appcast "$DMG_URL" 1 '' ;;
+        alpha) write_appcast "$DMG_URL" 1 'release-7' ;;
+        too_many_parts) write_appcast "$DMG_URL" 1 '1.2.3.4' ;;
+    esac
+    invoke_script
+    assert_failed
+    assert_output_contains 'sparkle:version'
+    assert_no_uploads
+    [[ ! -s "$CURL_LOG" ]] || fail "$unsafe_build_version build version reached the network"
+done
 
 # Identical immutable public objects are skipped, while appcast still publishes last.
 reset_fixture
@@ -471,9 +600,8 @@ cp "$ARTIFACT_DIR/$DMG_NAME" "$ORIGIN_DIR/$DMG_NAME"
 cp "$ARTIFACT_DIR/$DMG_NAME.sha256" "$ORIGIN_DIR/$DMG_NAME.sha256"
 invoke_script
 assert_status 0
-[[ "$(wc -l < "$WRANGLER_LOG")" -eq 1 ]] || fail "identical immutable objects were uploaded"
-grep -Fq 'r2 object put switchtab-updates/appcast.xml ' "$WRANGLER_LOG" || fail "appcast was not published"
-[[ "$(grep -c '^method=PUT ' "$CURL_LOG")" -eq 2 ]] || fail "idempotent run did not use conditional writes"
+[[ "$(grep -c '^method=PUT ' "$CURL_LOG")" -eq 3 ]] || fail "idempotent run did not use conditional writes"
+[[ "$(tail -n 1 "$MUTATION_LOG")" == 'conditional-put appcast.xml' ]] || fail "appcast was not published last"
 
 # An existing immutable DMG with different bytes is never overwritten.
 reset_fixture
@@ -504,7 +632,7 @@ invoke_script
 assert_status 0
 cmp -s "$ARTIFACT_DIR/$DMG_NAME" "$ORIGIN_DIR/$DMG_NAME" || fail "identical origin DMG was overwritten"
 grep -Fq "method=GET url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab-updates/$DMG_NAME " "$CURL_LOG" || fail "412 did not trigger an authoritative origin GET"
-grep -Fq 'r2 object put switchtab-updates/appcast.xml ' "$WRANGLER_LOG" || fail "identical race did not continue to appcast"
+grep -Fq 'conditional-put appcast.xml' "$MUTATION_LOG" || fail "identical race did not continue to appcast"
 
 # A checksum created concurrently with different bytes blocks appcast publication.
 reset_fixture
@@ -603,14 +731,7 @@ assert_failed
 assert_no_uploads
 [[ ! -s "$CURL_LOG" ]] || fail "malformed XML reached public probes"
 
-# Distinctive Wrangler/hash/XML failures are propagated.
-reset_fixture
-FAKE_WRANGLER_STATUS=73
-invoke_script
-assert_status 73
-[[ "$(wc -l < "$WRANGLER_LOG")" -eq 1 ]] || fail "Wrangler failure involved a non-appcast upload"
-grep -Fq 'r2 object put switchtab-updates/appcast.xml ' "$WRANGLER_LOG" || fail "distinctive Wrangler failure did not come from appcast publication"
-
+# Distinctive hash/XML failures are propagated.
 reset_fixture
 FAKE_HASH_STATUS=42
 invoke_script
@@ -635,8 +756,8 @@ reset_fixture
 FAKE_BAD_APPCAST=1
 invoke_script
 assert_failed
-grep -Fq 'r2 object put switchtab-updates/appcast.xml ' "$WRANGLER_LOG" || fail "appcast validation ran before upload"
-[[ "$(tail -n 1 "$WRANGLER_LOG")" == *'/appcast.xml '* ]] || fail "appcast was not the last upload"
+grep -Fq 'conditional-put appcast.xml' "$MUTATION_LOG" || fail "appcast validation ran before upload"
+[[ "$(tail -n 1 "$MUTATION_LOG")" == 'conditional-put appcast.xml' ]] || fail "appcast was not the last upload"
 
 # Missing required inputs/tools and unexpected arguments fail before upload.
 for missing_credential in account access secret; do
@@ -670,7 +791,7 @@ set +e
 output="$(
     cd /
     env RELEASE_CONFIG_PATH="$TEMP_ROOT/missing.env" UPDATE_ARTIFACT_DIR="$ARTIFACT_DIR" \
-        WRANGLER_BIN="$TEMP_ROOT/missing-wrangler" CURL_BIN="$BIN_DIR/curl" \
+        WRANGLER_BIN="$BIN_DIR/wrangler" CURL_BIN="$TEMP_ROOT/missing-curl" \
         SHASUM_BIN="$BIN_DIR/shasum" XMLLINT_BIN="$BIN_DIR/xmllint" \
         "$FIXTURE_SCRIPT" 2>&1
 )"
@@ -689,7 +810,7 @@ invoke_trace_script
 assert_status 0
 [[ "$output" != *"$TRACE_SECRET"* ]] || fail "xtrace exposed the release credential"
 [[ "$output" != *"$ACCESS_KEY_ID"* && "$output" != *"$SECRET_ACCESS_KEY"* ]] || fail "xtrace exposed R2 credentials"
-[[ "$(<"$WRANGLER_LOG")" != *"$TRACE_SECRET"* ]] || fail "release credential reached Wrangler argv"
+[[ "$(<"$MUTATION_LOG")" != *"$TRACE_SECRET"* ]] || fail "release credential reached mutation logs"
 
 /bin/bash -n "$SCRIPT_SOURCE"
 /bin/bash -n "$SCRIPT_DIR/publish-update-test.sh"

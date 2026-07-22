@@ -51,8 +51,7 @@ assert(job.dig("env", "NOTARYTOOL_KEYCHAIN_PROFILE") == "switchtab-ci-notary", "
 concurrency = job["concurrency"]
 assert(concurrency.is_a?(Hash), "release concurrency must be job-scoped")
 assert(concurrency["cancel-in-progress"] == false, "release concurrency must not cancel in-progress releases")
-assert(concurrency["group"].to_s.start_with?("release-"), "release concurrency must be tag-scoped")
-assert(concurrency["group"].to_s.include?("inputs.tag") && concurrency["group"].to_s.include?("github.ref_name"), "concurrency must use the effective release tag")
+assert(concurrency["group"] == "switchtab-release", "all release tags must share one concurrency group")
 
 steps = job.fetch("steps")
 names = steps.map { |step| step["name"] }
@@ -102,6 +101,9 @@ tag_resolve_position = validation.index('git rev-parse "$tag_ref^{commit}"')
 assert(tag_ref_position < tag_verify_position && tag_verify_position < tag_resolve_position, "exact tag construction, verification, and resolution are out of order")
 assert(validation.include?("git rev-parse HEAD"), "HEAD lookup is missing")
 assert(validation.include?("MARKETING_VERSION"), "project marketing version validation is missing")
+assert(validation.include?("CURRENT_PROJECT_VERSION"), "project build version validation is missing")
+assert(validation.include?('build_version = $3; found = 1'), "project build version extraction is missing")
+assert(validation.include?('^([0-9]+)([.][0-9]+){0,2}$'), "project build version must use one to three numeric components")
 assert(!validation.include?("print $3; exit"), "MARKETING_VERSION extraction must consume xcodebuild output under pipefail")
 assert(validation.include?("if ! git rev-parse --verify origin/main"), "origin/main must be checked before any fallback fetch")
 assert(validation.include?("git fetch --no-tags origin"), "unauthenticated origin/main fallback fetch is missing")
@@ -210,7 +212,6 @@ assert(publish.fetch("run").include?("scripts/publish-release.sh \"$RELEASE_TAG\
 publish_env = publish.fetch("env")
 expected_publish_env = {
   "GH_TOKEN" => "${{ github.token }}",
-  "CLOUDFLARE_API_TOKEN" => "${{ secrets.CLOUDFLARE_API_TOKEN }}",
   "CLOUDFLARE_ACCOUNT_ID" => "${{ vars.CLOUDFLARE_ACCOUNT_ID }}",
   "R2_ACCESS_KEY_ID" => "${{ secrets.R2_ACCESS_KEY_ID }}",
   "R2_SECRET_ACCESS_KEY" => "${{ secrets.R2_SECRET_ACCESS_KEY }}",
@@ -222,7 +223,6 @@ assert(!workflow_source.include?("CLOUDFLARE_ZONE_ID"), "release workflow must n
 
 all_secret_references = workflow_source.scan(/secrets\.([A-Z0-9_]+)/).flatten.uniq.sort
 expected_secret_references = (apple_secrets + %w[
-  CLOUDFLARE_API_TOKEN
   R2_ACCESS_KEY_ID
   R2_SECRET_ACCESS_KEY
   SPARKLE_PRIVATE_ED_KEY

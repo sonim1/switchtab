@@ -33,7 +33,6 @@ set +x
 R2_BUCKET_NAME="${R2_BUCKET_NAME:-switchtab-updates}"
 UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.app}"
 UPDATE_ARTIFACT_DIR="${UPDATE_ARTIFACT_DIR:-$PROJECT_ROOT/.build/direct-distribution/updates}"
-WRANGLER_BIN="${WRANGLER_BIN:-$PROJECT_ROOT/node_modules/.bin/wrangler}"
 CURL_BIN="${CURL_BIN:-/usr/bin/curl}"
 SHASUM_BIN="${SHASUM_BIN:-/usr/bin/shasum}"
 XMLLINT_BIN="${XMLLINT_BIN:-/usr/bin/xmllint}"
@@ -105,7 +104,6 @@ run_external() {
     fi
 }
 
-require_command "Wrangler" "$WRANGLER_BIN"
 require_command "curl" "$CURL_BIN"
 require_command "shasum" "$SHASUM_BIN"
 require_command "xmllint" "$XMLLINT_BIN"
@@ -192,11 +190,84 @@ appcast_enclosure_url() {
     printf '%s' "$url"
 }
 
+appcast_build_version() {
+    local path="$1"
+    local count version result
+
+    if validate_xml "$path"; then
+        :
+    else
+        result=$?
+        return "$result"
+    fi
+    if count="$(xml_value "$path" 'count(//*[local-name()="enclosure"]/@*[local-name()="version"])')"; then
+        :
+    else
+        result=$?
+        return "$result"
+    fi
+    if [[ "$count" != 1 ]]; then
+        fail "Appcast must contain exactly one sparkle:version"
+    fi
+    if version="$(xml_value "$path" 'string((//*[local-name()="enclosure"]/@*[local-name()="version"])[1])')"; then
+        :
+    else
+        result=$?
+        return "$result"
+    fi
+    if [[ ! "$version" =~ ^[0-9]+([.][0-9]+){0,2}$ ]]; then
+        fail "Appcast sparkle:version must contain one to three numeric components"
+    fi
+    printf '%s' "$version"
+}
+
+compare_appcast_versions() {
+    local left="$1"
+    local right="$2"
+    local left_parts right_parts left_part right_part index
+
+    IFS=. read -r -a left_parts <<< "$left"
+    IFS=. read -r -a right_parts <<< "$right"
+    for index in 0 1 2; do
+        left_part="${left_parts[$index]:-0}"
+        right_part="${right_parts[$index]:-0}"
+        while [[ "${#left_part}" -gt 1 && "$left_part" == 0* ]]; do
+            left_part="${left_part#0}"
+        done
+        while [[ "${#right_part}" -gt 1 && "$right_part" == 0* ]]; do
+            right_part="${right_part#0}"
+        done
+        if [[ "${#left_part}" -lt "${#right_part}" ]]; then
+            printf '%s' -1
+            return 0
+        fi
+        if [[ "${#left_part}" -gt "${#right_part}" ]]; then
+            printf '%s' 1
+            return 0
+        fi
+        if [[ "$left_part" < "$right_part" ]]; then
+            printf '%s' -1
+            return 0
+        fi
+        if [[ "$left_part" > "$right_part" ]]; then
+            printf '%s' 1
+            return 0
+        fi
+    done
+    printf '%s' 0
+}
+
 if ENCLOSURE_URL="$(appcast_enclosure_url "$APPCAST_PATH")"; then
     :
 else
     enclosure_status=$?
     exit "$enclosure_status"
+fi
+if LOCAL_APPCAST_VERSION="$(appcast_build_version "$APPCAST_PATH")"; then
+    :
+else
+    appcast_version_status=$?
+    exit "$appcast_version_status"
 fi
 
 DOWNLOAD_PREFIX="https://$UPDATE_DOMAIN/"
@@ -300,6 +371,9 @@ signed_origin_http() {
     local upload_path="${4:-}"
     local content_type="${5:-}"
     local cache_control="${6:-}"
+    local condition_header="${7:-}"
+    local response_headers="${8:-}"
+    local curl_arguments
     local http_code result
 
     if [[ "$url" != "$R2_ORIGIN_PREFIX"* ]]; then
@@ -308,6 +382,11 @@ signed_origin_http() {
     fi
 
     if [[ "$method" == PUT ]]; then
+        if [[ "$condition_header" != 'If-None-Match: *' \
+            && ! "$condition_header" =~ ^If-Match:[[:space:]]\"[A-Za-z0-9._:-]+\"$ ]]; then
+            echo "Refusing an unsafe R2 conditional header" >&2
+            return 64
+        fi
         if http_code="$(
             printf '%s\n' "$R2_CURL_USER_CONFIG" | "$CURL_BIN" \
                 --config - \
@@ -315,7 +394,7 @@ signed_origin_http() {
                 --show-error \
                 --aws-sigv4 'aws:amz:auto:s3' \
                 --request PUT \
-                --header 'If-None-Match: *' \
+                --header "$condition_header" \
                 --header "Content-Type: $content_type" \
                 --header "Cache-Control: $cache_control" \
                 --upload-file "$upload_path" \
@@ -333,17 +412,19 @@ signed_origin_http() {
     fi
 
     if [[ "$method" == GET ]]; then
-        if http_code="$(
-            printf '%s\n' "$R2_CURL_USER_CONFIG" | "$CURL_BIN" \
-                --config - \
-                --silent \
-                --show-error \
-                --aws-sigv4 'aws:amz:auto:s3' \
-                --request GET \
-                --output "$destination" \
-                --write-out '%{http_code}' \
-                "$url"
-        )"; then
+        curl_arguments=(
+            --config -
+            --silent
+            --show-error
+            --aws-sigv4 'aws:amz:auto:s3'
+            --request GET
+            --output "$destination"
+            --write-out '%{http_code}'
+        )
+        if [[ -n "$response_headers" ]]; then
+            curl_arguments+=(--dump-header "$response_headers")
+        fi
+        if http_code="$(printf '%s\n' "$R2_CURL_USER_CONFIG" | "$CURL_BIN" "${curl_arguments[@]}" "$url")"; then
             printf '%s' "$http_code"
             return 0
         else
@@ -373,7 +454,7 @@ conditional_put_and_verify_origin() {
         return 64
     fi
 
-    if http_code="$(signed_origin_http PUT "$origin_url" "$response_path" "$path" "$content_type" "$cache_control")"; then
+    if http_code="$(signed_origin_http PUT "$origin_url" "$response_path" "$path" "$content_type" "$cache_control" 'If-None-Match: *')"; then
         :
     else
         result=$?
@@ -426,17 +507,125 @@ conditional_put_and_verify_origin() {
     fi
 }
 
-upload_object() {
-    local key="$1"
-    local path="$2"
-    local content_type="$3"
-    local cache_control="$4"
+origin_etag() {
+    local headers_path="$1"
+    local header_line etag='' etag_count=0
 
-    run_external "R2 upload for $key" "$WRANGLER_BIN" r2 object put "$R2_BUCKET_NAME/$key" \
-        --remote \
-        --file "$path" \
-        --content-type "$content_type" \
-        --cache-control "$cache_control"
+    while IFS= read -r header_line || [[ -n "$header_line" ]]; do
+        header_line="${header_line%$'\r'}"
+        case "$header_line" in
+            [Ee][Tt][Aa][Gg]:*)
+                etag="${header_line#*:}"
+                while [[ "$etag" == ' '* || "$etag" == $'\t'* ]]; do
+                    etag="${etag#?}"
+                done
+                etag_count=$((etag_count + 1))
+                ;;
+        esac
+    done < "$headers_path"
+    if [[ "$etag_count" -ne 1 || ! "$etag" =~ ^\"[A-Za-z0-9._:-]+\"$ ]]; then
+        echo "Authoritative R2 appcast response has an invalid ETag" >&2
+        return 66
+    fi
+    printf '%s' "$etag"
+}
+
+publish_appcast() {
+    local origin_url="${R2_ORIGIN_PREFIX}appcast.xml"
+    local attempt=1
+    local remote_path headers_path put_response verify_path
+    local origin_status remote_version comparison etag condition_header put_status verify_status result compare_status
+
+    while [[ "$attempt" -le 4 ]]; do
+        remote_path="$TEMP_DIR/origin-appcast-$attempt.xml"
+        headers_path="$TEMP_DIR/origin-appcast-$attempt.headers"
+        put_response="$TEMP_DIR/origin-appcast-$attempt.put"
+        if origin_status="$(signed_origin_http GET "$origin_url" "$remote_path" '' '' '' '' "$headers_path")"; then
+            :
+        else
+            result=$?
+            return "$result"
+        fi
+
+        case "$origin_status" in
+            404)
+                condition_header='If-None-Match: *'
+                ;;
+            200)
+                if remote_version="$(appcast_build_version "$remote_path")"; then
+                    :
+                else
+                    result=$?
+                    return "$result"
+                fi
+                comparison="$(compare_appcast_versions "$remote_version" "$LOCAL_APPCAST_VERSION")"
+                if [[ "$comparison" -gt 0 ]]; then
+                    fail "Authoritative R2 origin already contains a newer appcast ($remote_version > $LOCAL_APPCAST_VERSION)"
+                fi
+                if [[ "$comparison" -eq 0 ]]; then
+                    if "$CMP_BIN" -s "$APPCAST_PATH" "$remote_path"; then
+                        return 0
+                    else
+                        compare_status=$?
+                        if [[ "$compare_status" -ne 1 ]]; then
+                            echo "Authoritative R2 appcast comparison failed" >&2
+                            return "$compare_status"
+                        fi
+                        fail "Authoritative R2 origin contains different appcast bytes for the same version"
+                    fi
+                fi
+                if etag="$(origin_etag "$headers_path")"; then
+                    :
+                else
+                    result=$?
+                    return "$result"
+                fi
+                condition_header="If-Match: $etag"
+                ;;
+            *)
+                fail "Authoritative R2 appcast GET returned HTTP $origin_status"
+                ;;
+        esac
+
+        if put_status="$(signed_origin_http PUT "$origin_url" "$put_response" "$APPCAST_PATH" \
+            'application/xml' "$APPCAST_CACHE" "$condition_header")"; then
+            :
+        else
+            result=$?
+            return "$result"
+        fi
+        case "$put_status" in
+            200|201|204)
+                verify_path="$TEMP_DIR/origin-appcast-verified.xml"
+                if verify_status="$(signed_origin_http GET "$origin_url" "$verify_path")"; then
+                    :
+                else
+                    result=$?
+                    return "$result"
+                fi
+                if [[ "$verify_status" != 200 ]]; then
+                    fail "Authoritative R2 appcast verification returned HTTP $verify_status"
+                fi
+                if "$CMP_BIN" -s "$APPCAST_PATH" "$verify_path"; then
+                    return 0
+                else
+                    compare_status=$?
+                    if [[ "$compare_status" -ne 1 ]]; then
+                        echo "Authoritative R2 appcast verification comparison failed" >&2
+                        return "$compare_status"
+                    fi
+                    fail "Authoritative R2 appcast verification content mismatch"
+                fi
+                ;;
+            412)
+                attempt=$((attempt + 1))
+                ;;
+            *)
+                fail "Conditional R2 appcast PUT returned HTTP $put_status"
+                ;;
+        esac
+    done
+    fail "Appcast changed repeatedly during conditional publication"
 }
 
 publish_immutable_dmg() {
@@ -525,8 +714,8 @@ publish_immutable_dmg
 publish_immutable_checksum
 verify_public_immutable_artifacts
 
-# The mutable appcast is deliberately the final upload.
-upload_object 'appcast.xml' "$APPCAST_PATH" 'application/xml' "$APPCAST_CACHE"
+# The mutable appcast is deliberately the final upload and uses an ETag guard.
+publish_appcast
 
 PUBLIC_APPCAST_PATH="$TEMP_DIR/public-appcast.xml"
 PUBLIC_APPCAST_STATUS="$(fetch_http "$APPCAST_URL" "$PUBLIC_APPCAST_PATH")"

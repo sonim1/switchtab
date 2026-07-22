@@ -110,8 +110,9 @@ login`; CI does not run this setup script.
 ### `scripts/publish-update.sh`
 
 This script publishes already generated artifacts to the existing R2 bucket.
-It requires Wrangler authentication through the current local profile or the CI
-environment variables `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+It requires bucket-scoped R2 S3 Object Read & Write credentials through
+`R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`, plus
+`CLOUDFLARE_ACCOUNT_ID` for the R2 endpoint.
 
 Publishing order protects existing clients:
 
@@ -120,12 +121,18 @@ Publishing order protects existing clients:
 2. Upload its SHA-256 checksum as text.
 3. Verify both public objects through `https://updates.switchtab.app/` and
    compare the downloaded DMG checksum.
-4. Upload `appcast.xml` last with an XML content type.
+4. Upload `appcast.xml` last with an XML content type and an R2 ETag
+   precondition.
 5. Fetch and validate the public appcast and its enclosure URL.
 
 Versioned DMGs are immutable. If the public object already exists with the same
 checksum, the upload is skipped; if its bytes differ, the script fails. The
-mutable `appcast.xml` is the only object intentionally replaced.
+mutable `appcast.xml` is the only object intentionally replaced. Its
+`sparkle:version` must contain one to three numeric components and must be
+strictly newer than the authoritative R2 feed. A byte-identical same-version
+rerun is verification-only; a lower version or different same-version bytes
+fail closed. `If-None-Match` and ETag-based `If-Match` writes close the race
+between reading and replacing the feed.
 
 ### `scripts/publish-release.sh`
 
@@ -165,8 +172,9 @@ The single release job runs on a pinned macOS runner image and has only
 1. Check out the complete tag history with the official checkout action pinned
    to a full commit SHA.
 2. Install the exact locked Wrangler dependency with `npm ci`.
-3. Verify that the tag version equals `MARKETING_VERSION` and that the commit is
-   reachable from `main`.
+3. Verify that the tag version equals `MARKETING_VERSION`, validate the numeric
+   `CURRENT_PROJECT_VERSION`, and confirm that the commit is reachable from
+   `main`.
 4. Run Swift tests and the existing unsigned Debug build checks.
 5. Generate a random, per-run temporary Keychain password and import the
    Developer ID Application
@@ -176,14 +184,16 @@ The single release job runs on a pinned macOS runner image and has only
 7. Call `scripts/build-direct-distribution.sh --release`.
 8. Call `scripts/generate-appcast.sh` using the Sparkle private key through
    standard input.
-9. Call `scripts/publish-release.sh` using `GITHUB_TOKEN` and the Cloudflare R2
-   token.
+9. Call `scripts/publish-release.sh` using `GITHUB_TOKEN` and bucket-scoped R2
+   S3 credentials.
 10. Delete temporary key and certificate files and the temporary Keychain in an
    `always()` cleanup step.
 
-Release jobs use a tag-scoped concurrency group so a tag cannot publish twice
-at the same time. Pull-request workflows never receive release secrets. Tag
-rules should restrict creation of `v*` tags to maintainers.
+Release jobs share a repository-wide concurrency group. Because queue order is
+not an integrity guarantee, the R2 appcast update also enforces monotonic
+versions with an ETag precondition. Pull-request workflows never receive
+release secrets. Tag rules should restrict creation of `v*` tags to
+maintainers.
 
 ## Configuration and Secrets
 
@@ -205,17 +215,18 @@ GitHub repository secrets:
 - `APPLE_NOTARY_KEY_ID`
 - `APPLE_NOTARY_ISSUER_ID`
 - `SPARKLE_PRIVATE_ED_KEY`
-- `CLOUDFLARE_API_TOKEN`
+- `R2_ACCESS_KEY_ID`
+- `R2_SECRET_ACCESS_KEY`
 
 The non-secret local hosting configuration includes
 `CLOUDFLARE_ZONE_ID`, `R2_BUCKET_NAME=switchtab-updates`, and
 `UPDATE_DOMAIN=updates.switchtab.app`. The implementation will not treat the
 Cloudflare account or zone identifiers as secrets.
 
-The Cloudflare CI token is limited to writing and reading objects in the
-existing R2 account. It does not need DNS or custom-domain permissions because
-hosting setup remains a separate local operation. `GITHUB_TOKEN` is generated
-per job and receives only `contents: write`.
+The R2 S3 credential is limited to reading and writing objects in the existing
+bucket. CI receives no DNS or custom-domain permissions because hosting setup
+remains a separate local operation. `GITHUB_TOKEN` is generated per job and
+receives only `contents: write`.
 
 No secret is committed, included in an artifact, passed as a command-line
 value, or printed. Shell tracing is disabled in all credential-bearing steps.
@@ -224,7 +235,7 @@ value, or printed. Shell tracing is disabled in all credential-bearing steps.
 
 - Invalid arguments or configuration exit with status 64.
 - Missing required local files exit with status 66.
-- Apple, Sparkle, Wrangler, `curl`, and GitHub CLI failures propagate as a
+- Apple, Sparkle, `curl`, and GitHub CLI failures propagate as a
   non-zero workflow result.
 - Public publishing never begins until tests, signing, notarization, stapling,
   checksums, appcast parsing, and tag/version validation succeed.
@@ -249,7 +260,7 @@ The tests cover:
 - signature and checksum validation failures;
 - idempotent bucket/domain setup and conflict handling;
 - R2 upload order, MIME types, immutable-object checks, and appcast-last
-  publication;
+  publication, including reversed tag completion and conditional-write races;
 - GitHub draft creation, asset reuse, final publication, and rerun behavior;
 - propagation of every external command failure;
 - cleanup behavior for temporary CI credentials; and
