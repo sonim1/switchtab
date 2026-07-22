@@ -307,22 +307,6 @@ jobs:
           UPDATE_DOMAIN: updates.switchtab.app
         run: scripts/publish-release.sh "$RELEASE_TAG"
 
-      - name: Create tap GitHub App token
-        id: tap-token
-        uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42
-        with:
-          app-id: "${{ vars.TAP_GITHUB_APP_ID }}"
-          private-key: "${{ secrets.TAP_GITHUB_APP_PRIVATE_KEY }}"
-          owner: sonim1
-          repositories: homebrew-tap
-          permission-contents: write
-
-      - name: Notify Homebrew tap
-        shell: bash
-        env:
-          TAP_GH_TOKEN: "${{ steps.tap-token.outputs.token }}"
-        run: scripts/dispatch-homebrew-update.sh "$RELEASE_TAG"
-
       - name: Cleanup Apple credentials
         if: always()
         shell: bash
@@ -353,3 +337,52 @@ jobs:
           rm -f -- "$signing_temp_dir/switchtab-release-certificate.p12" || true
           rm -f -- "$signing_temp_dir/switchtab-notary-auth-key.p8" || true
           rmdir "$signing_temp_dir" || true
+
+  notify:
+    needs: [verify, release]
+    environment: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+    steps:
+      - name: Checkout verified release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: "${{ needs.verify.outputs.release_commit }}"
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify release commit
+        shell: bash
+        env:
+          VERIFIED_RELEASE_COMMIT: "${{ needs.verify.outputs.release_commit }}"
+        run: |
+          set -euo pipefail
+          if [[ ! "$VERIFIED_RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Verified release commit must be lowercase 40-hex" >&2
+            exit 64
+          fi
+          head_commit="$(git rev-parse HEAD)"
+          if [[ "$head_commit" != "$VERIFIED_RELEASE_COMMIT" ]]; then
+            echo "Checked-out HEAD does not match the verified release commit" >&2
+            exit 64
+          fi
+
+      - name: Create tap GitHub App token
+        id: tap-token
+        uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42
+        with:
+          app-id: "${{ vars.TAP_GITHUB_APP_ID }}"
+          private-key: "${{ secrets.TAP_GITHUB_APP_PRIVATE_KEY }}"
+          owner: sonim1
+          repositories: homebrew-tap
+          permission-contents: write
+
+      - name: Notify Homebrew tap
+        shell: bash
+        env:
+          TAP_GH_TOKEN: "${{ steps.tap-token.outputs.token }}"
+        run: scripts/dispatch-homebrew-update.sh "$RELEASE_TAG"
