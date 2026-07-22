@@ -150,6 +150,22 @@ run_generator() {
     set -e
 }
 
+assert_no_manifest_temps() {
+    if [[ -n "$(find "$UPDATE_DIR" -maxdepth 1 -name '.release-manifest.*' -print -quit)" ]]; then
+        fail "generator left a temporary manifest in the update directory"
+    fi
+}
+
+assert_only_sentinel() {
+    local directory="$1"
+
+    if [[ -n "$(find "$directory" -mindepth 1 ! -name sentinel -print -quit)" ]]; then
+        fail "generator moved a temporary or generated file inside $directory"
+    fi
+    [[ "$(<"$directory/sentinel")" == 'preserve me' ]] \
+        || fail "generator changed the destination sentinel in $directory"
+}
+
 failure_cases=(
     'missing-appcast:66'
     'malformed-tag:64'
@@ -174,6 +190,32 @@ for entry in "${failure_cases[@]}"; do
     [[ ! -e "$UPDATE_DIR/release-manifest.json" ]] \
         || fail "$scenario wrote a manifest"
 done
+
+prepare_fixture success
+MANIFEST="$UPDATE_DIR/release-manifest.json"
+mkdir "$MANIFEST"
+printf 'preserve me\n' > "$MANIFEST/sentinel"
+run_generator
+[[ "$status" -ne 0 ]] \
+    || fail "manifest directory destination returned success; output: $output"
+[[ -d "$MANIFEST" && ! -L "$MANIFEST" ]] \
+    || fail "manifest directory destination was changed"
+assert_only_sentinel "$MANIFEST"
+assert_no_manifest_temps
+
+prepare_fixture success
+SYMLINK_TARGET="$TEMP_ROOT/manifest-symlink-target"
+rm -rf "$SYMLINK_TARGET"
+mkdir "$SYMLINK_TARGET"
+printf 'preserve me\n' > "$SYMLINK_TARGET/sentinel"
+ln -s "$SYMLINK_TARGET" "$MANIFEST"
+run_generator
+[[ "$status" -ne 0 ]] \
+    || fail "manifest symlink-to-directory destination returned success; output: $output"
+[[ -L "$MANIFEST" && "$(readlink "$MANIFEST")" == "$SYMLINK_TARGET" ]] \
+    || fail "manifest symlink destination was changed"
+assert_only_sentinel "$SYMLINK_TARGET"
+assert_no_manifest_temps
 
 prepare_fixture success
 run_generator

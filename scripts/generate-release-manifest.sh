@@ -128,6 +128,10 @@ if [[ ! "$commit" =~ $commit_pattern ]]; then
     fail "Invalid release commit" 64
 fi
 
+if [[ -L "$manifest" || ( -e "$manifest" && ! -f "$manifest" ) ]]; then
+    fail "Release manifest destination is not a regular file: $manifest" 66
+fi
+
 temp_manifest=''
 cleanup() {
     if [[ -n "$temp_manifest" ]]; then
