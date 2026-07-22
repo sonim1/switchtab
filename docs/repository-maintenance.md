@@ -29,8 +29,9 @@ scan.
 - The generated distribution workspace pins Sparkle 2.9.4 at
   `b6496a74a087257ef5e6da1c5b29a447a60f5bd7`:
   https://github.com/sparkle-project/Sparkle/releases/tag/2.9.4
-- `package-lock.json` locks the repository release tooling to Wrangler 4.112.0;
-  install it with `npm ci --ignore-scripts`.
+- `package-lock.json` locks the repository release tooling to Wrangler 4.112.0
+  and overrides its transitive `sharp` dependency to patched 0.35.3; install it
+  with `npm ci --ignore-scripts`.
 - `scripts/generate-appcast.sh`, `scripts/setup-update-hosting.sh`,
   `scripts/publish-update.sh`, and `scripts/publish-release.sh` implement signed
   appcast generation, fail-closed R2 setup, atomic update publication, and
@@ -110,7 +111,8 @@ Recorded on 2026-07-21 without live external publication:
   --prepare-only`: passed.
 - Bash 3.2 syntax validation passed for all release and contract-test scripts.
 - `.github/workflows/release.yml` parsed successfully as YAML.
-- `npm ls --depth=0` reported the locked Wrangler 4.112.0 installation.
+- `npm ls` reported Wrangler 4.112.0 with transitive `sharp` 0.35.3, and
+  `npm audit --audit-level=high` reported zero vulnerabilities.
 - `git diff --check`: passed.
 - User-specific path, Korean text, private-key block, and high-risk secret-literal
   scans found no release-content matches.
