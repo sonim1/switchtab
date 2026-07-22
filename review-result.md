@@ -64,7 +64,7 @@ In practice, this app is limited to direct distribution through DMG and Sparkle.
 ### 8. Sparkle Configuration Is Sound
 
 Requiring an EdDSA public key, enforcing an HTTPS feed, and planning to keep the private key outside the repository are all correct.
-Remaining work: Automate notarization and appcast signing, which is already covered in a follow-up document under `docs/superpowers/plans`.
+The notarization, appcast-signing, R2, and GitHub release automation was implemented on 2026-07-21. Live credential-backed validation remains outstanding.
 
 ### 9. Debug Log Grows Without Limit
 
@@ -102,8 +102,8 @@ The rest of the security surface is sound: Sparkle is the only network dependenc
    `CGWindowID` is used directly for `windowIdentifier` and `screenCaptureIdentifier`, with the previous index-based approach as a fallback.
    The title-based thumbnail matching heuristic remains only in the fallback path. This resolves bugs 1 and 5.
 2. ~~**Restore minimized windows**~~ ✅ Completed — `canFocus` now includes minimized windows, and `AXWindowFocuser` clears `kAXMinimizedAttribute` before focusing. This resolves bug 2.
-3. **Finish release automation** — a plan already exists for notarization, appcast signing, and R2 upload. Complete it to make the app distributable.
-   ← **Recommended as the next task**; requires the Sparkle private key and Developer ID certificate.
+3. ~~**Finish release automation**~~ ✅ Completed (2026-07-21) — notarization, appcast signing, atomic R2 publication, and tag-driven GitHub releases are automated.
+   Live validation still requires the Sparkle private key, Developer ID certificate, scoped Cloudflare/R2 credentials, and approval to mutate the external services.
 4. ~~**Improve flush durability**~~ ✅ Completed — recency and usage data are flushed immediately when a window selection is confirmed. This resolves bug 4.
 5. **Support keyboard layouts** — not started. Dynamic mapping based on `UCKeyTranslate` is required before accepting international users.
 6. ~~**Place the overlay correctly on multiple monitors**~~ ✅ Completed — the overlay appears on the screen containing the pointer, with an `activeScreenFrame` policy and tests.

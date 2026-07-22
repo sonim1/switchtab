@@ -6,20 +6,22 @@ This is an operating manual. Follow it literally; when instinct and manual confl
 
 ## Ground Truth (verified)
 
-- **Package.swift:** library `SwitchTab` (path `SwitchTab/`, excludes Resources) + executable `SwitchTabTestRunner` (path `SwitchTabTests/`). **Tests run via the custom runner — `swift run SwitchTabTestRunner` — not `swift test`.**
+- **Package.swift:** library `SwitchTab` (path `SwitchTab/`, excludes Resources) + XCTest target `SwitchTabTests` (path `SwitchTabTests/`). **`swift test` is the supported SwiftPM test gate and currently runs 18 tests.**
 - **App source (`SwitchTab/`):** `AppDelegate.swift` (~15K — core wiring), `SwitchTabApp.swift`, `Models/`, `Services/` (window/shortcut logic), `UI/`, `Resources/` (Info.plist, entitlements, MenuBarIcon, Assets).
-- **Tests (`SwitchTabTests/`):** `Models/`, `Services/`, `Support/`, `TestRunner.swift`.
-- **App builds via Xcode:** `SwitchTab.xcodeproj`, scheme `SwitchTab` (app), `SwitchTabTests` scheme for Xcode-side tests. Full verification = SwiftPM build + TestRunner + Xcode Debug app build when Xcode is available.
+- **Tests (`SwitchTabTests/`):** XCTest suites under `Models/`, `Services/`, and `Support/`.
+- **App builds via Xcode:** `SwitchTab.xcodeproj`, scheme `SwitchTab` (app), `SwitchTabTests` scheme for Xcode-side tests. Full verification = `swift test` + unsigned arm64 Xcode Debug app build when Xcode is available.
 - **Direct distribution:** `scripts/build-direct-distribution.sh` generates a Sparkle-enabled variant into `.build/direct-distribution/` from env (`SPARKLE_PUBLIC_ED_KEY`, `SWITCHTAB_UPDATE_FEED_URL` — https only; `--prepare-only`; `--release` needs `DEVELOPER_ID_APPLICATION` + `NOTARYTOOL_KEYCHAIN_PROFILE`). **The checked-in xcodeproj stays Sparkle-free** (App Store-oriented) — the script patches a generated copy.
+- **Release tooling:** `package-lock.json` pins Wrangler 4.112.0. `scripts/setup-update-hosting.sh`, `scripts/generate-appcast.sh`, `scripts/publish-update.sh`, and `scripts/publish-release.sh` implement R2 setup, signed appcast generation, atomic R2 publication, and GitHub release publication. `.github/workflows/release.yml` runs the pipeline for exact version tags.
+- **Release credentials:** local notarization uses `NOTARYTOOL_KEYCHAIN_PROFILE`; CI creates a temporary Keychain and supplies `NOTARYTOOL_KEYCHAIN_PATH`. Immutable R2 writes require `R2_ACCESS_KEY_ID` + `R2_SECRET_ACCESS_KEY`; Wrangler appcast publication uses `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Never commit credential values.
 - **Maintenance notes:** `docs/repository-maintenance.md`.
 
 ## Commands
 
 ```bash
 swift build                        # SwiftPM library build
-swift run SwitchTabTestRunner      # THE test command
+swift test                         # SwiftPM test gate (18 tests at last verification)
 # Xcode (when available): build SwitchTab scheme (Debug), test SwitchTabTests scheme
-scripts/build-direct-distribution.sh --prepare-only   # generate patched workspace, no build
+SPARKLE_PUBLIC_ED_KEY=dummy scripts/build-direct-distribution.sh --prepare-only
 ```
 
 ## Conventions
@@ -31,36 +33,39 @@ Kendrick's (observed — keep):
 - Spec-driven via `specs/001-macos-switchtab/`.
 
 Added (follow these too):
-- New logic lands in the SwiftPM-visible library (`SwitchTab/Models|Services`) with runner-covered tests — the custom TestRunner only sees what's registered; adding a test file means wiring it the way `TestRunner.swift` + existing suites do.
+- New logic lands in the SwiftPM-visible library (`SwitchTab/Models|Services`) with XCTest coverage in the `SwitchTabTests` test target.
 - Window enumeration/focus code touches macOS Accessibility APIs — behavior is permission-dependent; runtime claims require actually running the app with Accessibility permission granted.
 - Swift 6 concurrency: the toolchain enforces strict concurrency — match existing isolation annotations rather than sprinkling `@unchecked Sendable`.
 
 ## Named Failure Modes
 
-1. **Wrong Test Invocation** — running `swift test` (no XCTest target) or claiming tests pass without the runner. *Rule: `swift run SwitchTabTestRunner` is the test gate; paste its output.*
+1. **Incomplete Test Invocation** — claiming tests pass without running the XCTest target. *Rule: `swift test` is the SwiftPM gate; report its executed-test count and failures.*
 2. **Sparkle Contamination** — adding Sparkle/update code to the checked-in project. *Rule: Sparkle exists only in the script-generated variant; `git diff` on the xcodeproj must stay clean of it.*
 3. **Cmd+Tab Trespass** — features that intercept or alter system app switching. *Rule: scope is current-app windows; global shortcut changes → ask.*
 4. **Permission-Blind Claim** — "window switching works" from a build. *Rule: builds prove compilation; behavior claims need a run with Accessibility permission (or an explicit "not runtime-verified" statement).*
 5. **Concurrency Sledgehammer** — silencing Swift 6 isolation errors with `@unchecked Sendable`/`nonisolated(unsafe)`. *Rule: match the isolation patterns of the surrounding file; hacks → ask.*
 6. **Resource Exclusion Break** — adding files under `SwitchTab/Resources` that SwiftPM then tries to compile. *Rule: Package.swift excludes specific Resources entries; new resource files need matching excludes.*
-7. **Confident Green Claim** — *Rule: fresh build + runner output before "done".*
+7. **Confident Green Claim** — *Rule: fresh build + `swift test` output before "done".*
 
 ## Quality Bars (checkable)
 
 Any change:
 - [ ] `swift build` → 0
-- [ ] `swift run SwitchTabTestRunner` → 0 (output pasted)
+- [ ] `swift test` → 0 (report executed-test count)
 - [ ] Xcode Debug build of the `SwitchTab` scheme → succeeds, when Xcode is available (state if unavailable)
 - [ ] `git diff --stat` only task files; no new SwiftPM dependencies without approval
 
 Logic change: additionally
-- [ ] New/changed behavior covered by a runner-registered test (name it)
+- [ ] New/changed behavior covered by an XCTest in `SwitchTabTests` (name it)
 
 Shortcut/window behavior change: additionally
 - [ ] Runtime-verified with the app running + Accessibility permission (describe the switch you performed), or explicitly reported as not runtime-verified
 
 Distribution change: additionally
-- [ ] `scripts/build-direct-distribution.sh --prepare-only` succeeds; checked-in project untouched by Sparkle
+- [ ] `SPARKLE_PUBLIC_ED_KEY=dummy scripts/build-direct-distribution.sh --prepare-only` succeeds; checked-in project untouched by Sparkle
+- [ ] All seven release contract tests pass: tooling, local wrapper, appcast generation, hosting setup, R2 publication, GitHub release publication, and workflow
+- [ ] Bash syntax and release workflow YAML parsing pass
+- [ ] No live hosting setup, upload, tag push, or release mutation is run without explicit approval and real scoped credentials
 
 ## Escalation Rules (exact)
 

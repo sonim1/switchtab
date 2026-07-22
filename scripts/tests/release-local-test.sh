@@ -146,10 +146,18 @@ for text in \
     "git push origin v" \
     "updates.switchtab.app/appcast.xml" \
     "refs/tags/" \
+    "https://developers.cloudflare.com/r2/api/tokens/" \
+    "https://developers.cloudflare.com/r2/api/s3/api/#conditional-operations" \
+    "--account ed25519" \
     "Base64" \
     "Recovery"; do
-    grep -Fq "$text" "$README" || fail "$README is missing '$text'"
+    grep -Fq -- "$text" "$README" || fail "$README is missing '$text'"
 done
+
+stale_cloudflare_auth_url='https://developers.cloudflare.com/r2/api/s3/'"tokens/"
+if grep -Fq "$stale_cloudflare_auth_url" "$README"; then
+    fail "$README contains the stale Cloudflare R2 authentication link"
+fi
 
 grep -Eq 'v\*.*(ruleset|protection)|(ruleset|protection).*v\*' "$README" || \
     fail "$README is missing v* tag protection guidance"

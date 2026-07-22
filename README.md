@@ -108,6 +108,7 @@ scripts/release-local.sh
 scripts/generate-appcast.sh
 git tag -a v1.2.3 -m "SwitchTab 1.2.3"
 git push origin v1.2.3
+# Only when the tag-triggered CI run is disabled or cancelled:
 scripts/publish-release.sh v1.2.3
 ```
 
@@ -115,10 +116,14 @@ scripts/publish-release.sh v1.2.3
 `generate-appcast.sh` signs the appcast with the local Keychain key.
 `publish-release.sh v<MARKETING_VERSION>` validates the exact tag, uploads the
 R2 artifacts, and publishes the matching GitHub draft release last. The tag
-commit must already be on `origin/main`. Choose one publisher for a tag: when
-the GitHub release workflow is enabled, pushing the tag starts CI, so do not run
-the local publisher concurrently. Use the local publisher only for an
-intentional local release or documented recovery while no CI run owns the tag.
+commit must already be on `origin/main`. It calls `publish-update.sh` internally
+to publish R2 objects; do not normally call that child script directly.
+
+Choose one publisher for a tag. When the GitHub release workflow is enabled,
+pushing the tag starts CI and that run owns publication. Run the local publisher
+only after confirming the tag-triggered run is disabled or cancelled, or during
+documented recovery when no active CI run owns the tag. Never race local and CI
+publication.
 
 ### Cloudflare publishing credentials
 
@@ -137,7 +142,7 @@ An R2 Object Read & Write S3 credential is not a replacement for the regular
 Cloudflare API token used by Wrangler. Conversely, do not give CI the broader
 zone, DNS, custom-domain, or account-administration credential used for initial
 hosting setup. See Cloudflare's official [R2 authentication
-documentation](https://developers.cloudflare.com/r2/api/s3/tokens/) and
+documentation](https://developers.cloudflare.com/r2/api/tokens/) and
 [conditional S3 API
 documentation](https://developers.cloudflare.com/r2/api/s3/api/#conditional-operations).
 
@@ -184,7 +189,7 @@ export the Sparkle key with `generate_keys -x` before uploading it:
 ```bash
 release_secret_dir="$(mktemp -d)"
 chmod 700 "$release_secret_dir"
-/path/to/Sparkle/bin/generate_keys -x "$release_secret_dir/sparkle-private-key"
+/path/to/Sparkle/bin/generate_keys --account ed25519 -x "$release_secret_dir/sparkle-private-key"
 gh secret set SPARKLE_PRIVATE_ED_KEY < "$release_secret_dir/sparkle-private-key"
 openssl base64 -A -in /path/to/certificate.p12 | gh secret set APPLE_CERTIFICATE_P12_BASE64
 openssl base64 -A -in /path/to/AuthKey.p8 | gh secret set APPLE_NOTARY_KEY_P8_BASE64
