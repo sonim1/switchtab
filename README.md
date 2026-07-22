@@ -74,11 +74,16 @@ npm ci --ignore-scripts
 cp .env.release.local.example .env.release.local
 ```
 
-`.env.release.local` is ignored by Git. Fill in the public settings and local
-credential placeholders without committing the file. For the one-time hosting
-setup, authenticate with `node_modules/.bin/wrangler login` or use a separate,
-broader setup credential. Set `CLOUDFLARE_ACCOUNT_ID` and
-`CLOUDFLARE_ZONE_ID`, then run:
+`.env.release.local` is ignored by Git. Fill in its public settings without
+committing the file. Leave the three publishing-secret lines commented during
+the one-time OAuth hosting setup so placeholder values cannot override Wrangler
+authentication. Authenticate with `node_modules/.bin/wrangler login`, then set
+`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_ZONE_ID`.
+
+If OAuth is not used, supply a separate setup management token through an
+approved secret mechanism. Do not put it in the example file or confuse it with
+the narrower CI bucket-item token used only for publishing to the existing
+bucket. Run:
 
 ```bash
 scripts/setup-update-hosting.sh
@@ -90,6 +95,11 @@ HTTPS with TLS 1.2 or later, fails closed on ambiguous errors, and never deletes
 resources. Wait for the custom domain to become available, then verify
 `https://updates.switchtab.app/appcast.xml` over HTTPS. A 404 is expected before
 the first release.
+
+After setup, for an intentional local publish, uncomment and fill them in only
+inside the ignored `.env.release.local`, or supply the three scoped environment
+values through a safe secret mechanism. CI receives them from GitHub Secrets;
+tracked files must keep the examples commented.
 
 ### Local signing and publishing
 
@@ -114,10 +124,11 @@ scripts/publish-release.sh v1.2.3
 
 `release-local.sh` builds, signs, notarizes, and staples the DMG.
 `generate-appcast.sh` signs the appcast with the local Keychain key.
-`publish-release.sh v<MARKETING_VERSION>` validates the exact tag, uploads the
-R2 artifacts, and publishes the matching GitHub draft release last. The tag
-commit must already be on `origin/main`. It calls `publish-update.sh` internally
-to publish R2 objects; do not normally call that child script directly.
+`publish-release.sh v<MARKETING_VERSION>` validates the exact tag and requires
+its commit to be on `origin/main`. It calls `publish-update.sh` internally to
+publish R2 objects; do not normally call that child script directly.
+The draft is created or reused first, exact assets are staged, R2 and the
+appcast are published, and the draft is made public last.
 
 Choose one publisher for a tag. When the GitHub release workflow is enabled,
 pushing the tag starts CI and that run owns publication. Run the local publisher
@@ -216,9 +227,10 @@ git push origin v1.2.3
 The workflow accepts only exact `refs/tags/v<version>` references, checks that
 the tag commit is on `origin/main`, runs the contract and Swift tests, creates a
 temporary Keychain, signs and notarizes the DMG, generates the signed appcast,
-publishes to R2, and publishes the GitHub draft release last. Manual workflow
-dispatch is recovery-only and must name an existing version tag; it does not
-create or move tags.
+creates or reuses the GitHub draft, and stages its exact assets. It then
+publishes R2 objects and the appcast before making the draft public last. Manual
+workflow dispatch is recovery-only and must name an existing version tag; it
+does not create or move tags.
 
 ### Recovery and immutability
 

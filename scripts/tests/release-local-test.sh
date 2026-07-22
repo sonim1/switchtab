@@ -133,10 +133,7 @@ for name in \
     R2_BUCKET_NAME \
     UPDATE_DOMAIN \
     CLOUDFLARE_ACCOUNT_ID \
-    CLOUDFLARE_ZONE_ID \
-    CLOUDFLARE_API_TOKEN \
-    R2_ACCESS_KEY_ID \
-    R2_SECRET_ACCESS_KEY; do
+    CLOUDFLARE_ZONE_ID; do
     grep -q "^${name}=" "$EXAMPLE" || fail "$EXAMPLE is missing $name"
 done
 
@@ -168,6 +165,11 @@ for text in \
     "Never race local and CI publication" \
     "Do not rebuild or re-tag" \
     "Do not automatically delete objects" \
+    "Leave the three publishing-secret lines commented" \
+    "uncomment and fill them in" \
+    "setup management token" \
+    "CI bucket-item token" \
+    "The draft is created or reused first, exact assets are staged" \
     "Base64" \
     "Recovery"; do
     grep -Fq -- "$text" "$README" || fail "$README is missing '$text'"
@@ -200,12 +202,29 @@ assert_exact_example_placeholder SPARKLE_PUBLIC_ED_KEY \
     "SPARKLE_PUBLIC_ED_KEY='your-sparkle-public-ed-key'"
 assert_exact_example_placeholder DEVELOPER_ID_APPLICATION \
     "DEVELOPER_ID_APPLICATION='Developer ID Application: Your Name (TEAMID)'"
-assert_exact_example_placeholder CLOUDFLARE_API_TOKEN \
-    "CLOUDFLARE_API_TOKEN='your-scoped-cloudflare-api-token'"
-assert_exact_example_placeholder R2_ACCESS_KEY_ID \
-    "R2_ACCESS_KEY_ID='your-r2-access-key-id'"
-assert_exact_example_placeholder R2_SECRET_ACCESS_KEY \
-    "R2_SECRET_ACCESS_KEY='your-r2-secret-access-key'"
+
+assert_commented_secret_placeholder() {
+    local name="$1"
+    local expected_line="$2"
+    local assignment_count exact_count
+
+    assignment_count="$(grep -Ec "^# ${name}=" "$EXAMPLE" || true)"
+    exact_count="$(grep -Fxc -- "$expected_line" "$EXAMPLE" || true)"
+    [[ "$assignment_count" -eq 1 ]] || \
+        fail "$EXAMPLE must contain exactly one commented $name placeholder"
+    [[ "$exact_count" -eq 1 ]] || \
+        fail "$EXAMPLE must use the exact commented placeholder for $name"
+    if grep -Eq "^${name}=" "$EXAMPLE"; then
+        fail "$EXAMPLE must not activate the $name placeholder"
+    fi
+}
+
+assert_commented_secret_placeholder CLOUDFLARE_API_TOKEN \
+    "# CLOUDFLARE_API_TOKEN='your-scoped-cloudflare-api-token'"
+assert_commented_secret_placeholder R2_ACCESS_KEY_ID \
+    "# R2_ACCESS_KEY_ID='your-r2-access-key-id'"
+assert_commented_secret_placeholder R2_SECRET_ACCESS_KEY \
+    "# R2_SECRET_ACCESS_KEY='your-r2-secret-access-key'"
 
 stale_cloudflare_auth_url='https://developers.cloudflare.com/r2/api/s3/'"tokens/"
 if grep -Fq "$stale_cloudflare_auth_url" "$README"; then

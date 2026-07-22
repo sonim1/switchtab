@@ -76,6 +76,6 @@ Distribution change: additionally
 
 ## Skills
 
-- `verify` — build + custom test runner + Xcode decision rules
+- `verify` — SwiftPM build + `swift test` + Xcode decision rules
 - `direct-distribution` — the Sparkle/DMG release pipeline
 - `spec-flow` — working against the speckit plan
