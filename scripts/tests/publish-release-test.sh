@@ -70,6 +70,12 @@ set -euo pipefail
 
 printf '%s\n' "$*" >> "$GIT_LOG"
 case "$1 ${2:-}" in
+    'remote get-url')
+        [[ "${3:-}" == origin ]] || exit 89
+        exit_status="${FAKE_GIT_REMOTE_STATUS:-0}"
+        [[ "$exit_status" -eq 0 ]] || exit "$exit_status"
+        printf '%s\n' "${FAKE_ORIGIN_URL:-git@github.com:sonim1/switchtab.git}"
+        ;;
     'rev-parse HEAD')
         exit_status="${FAKE_GIT_HEAD_STATUS:-0}"
         [[ "$exit_status" -eq 0 ]] || exit "$exit_status"
@@ -93,6 +99,10 @@ cat > "$FAKE_BIN/gh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${GH_REPO:-}" != 'sonim1/switchtab' ]]; then
+    printf 'unexpected GitHub repository binding: %s\n' "${GH_REPO:-<unset>}" >&2
+    exit 78
+fi
 printf '%s\n' "$*" >> "$GH_LOG"
 state='absent'
 [[ ! -f "$GH_STATE" ]] || state="$(<"$GH_STATE")"
@@ -255,6 +265,7 @@ mutate_manifest() {
       data = JSON.parse(File.read(path))
       case mutation
       when "schema-type" then data["schemaVersion"] = "1"
+      when "schema-float" then data["schemaVersion"] = 1.0
       when "repository" then data["repository"] = "someone/something"
       when "tag" then data["tag"] = "v9.9"
       when "version" then data["version"] = "9.9"
@@ -275,6 +286,28 @@ mutate_manifest() {
     ' "$UPDATE_DIR/$MANIFEST_NAME" "$1"
 }
 
+duplicate_manifest_key() {
+    /usr/bin/ruby -e '
+      path, duplicate, asset_name = ARGV
+      text = File.read(path)
+      case duplicate
+      when "repository"
+        needle = %Q{  "repository": "sonim1/switchtab",}
+        replacement = %Q{  "repository": "attacker/repo",\n#{needle}}
+      when "source-name"
+        needle = %Q{        "name": "#{asset_name}",}
+        replacement = %Q{        "name": "Other.dmg",\n#{needle}}
+      when "source-sha"
+        needle = text.lines.find { |line| line.start_with?(%Q{        "sha256": }) }.to_s.chomp
+        replacement = %Q{        "sha256": "#{"0" * 64}",\n#{needle}}
+      else
+        abort "unknown duplicate"
+      end
+      abort "duplicate fixture needle missing" unless text.sub!(needle, replacement)
+      File.open(path, "w") { |file| file.write(text) }
+    ' "$UPDATE_DIR/$MANIFEST_NAME" "$1" "$DMG_NAME"
+}
+
 reset_scenario() {
     rm -f "$GH_STATE" "$GH_ASSETS"/* "$UPDATE_DIR"/* "$CONFIG_PATH"
     : > "$GH_LOG"
@@ -288,6 +321,8 @@ reset_scenario() {
     FAKE_GIT_HEAD_STATUS=0
     FAKE_GIT_TAG_STATUS=0
     FAKE_GIT_ANCESTOR_STATUS=0
+    FAKE_GIT_REMOTE_STATUS=0
+    FAKE_ORIGIN_URL='git@github.com:sonim1/switchtab.git'
     FAKE_GH_PROBE_STATUS=0
     FAKE_GH_PROBE_OUTPUT=''
     FAKE_GH_CREATE_STATUS=0
@@ -298,6 +333,7 @@ reset_scenario() {
     FAKE_EXTRA_ASSET_NAMES=''
     FAKE_CMP_STATUS=0
     FAKE_RUBY_STATUS=0
+    AMBIENT_GH_REPO='attacker/ambient-repository'
     PUBLISH_STATUS=0
     write_valid_artifacts
 }
@@ -311,6 +347,7 @@ run_release() {
         GH_BIN="$FAKE_BIN/gh" \
         CMP_BIN="$FAKE_BIN/cmp" \
         RUBY_BIN="$FAKE_BIN/ruby" \
+        GH_REPO="$AMBIENT_GH_REPO" \
         PUBLISH_UPDATE_SCRIPT="$FIXTURE_ROOT/scripts/publish-update.sh" \
         GH_STATE="$GH_STATE" \
         GH_ASSETS="$GH_ASSETS" \
@@ -325,6 +362,8 @@ run_release() {
         FAKE_GIT_HEAD_STATUS="$FAKE_GIT_HEAD_STATUS" \
         FAKE_GIT_TAG_STATUS="$FAKE_GIT_TAG_STATUS" \
         FAKE_GIT_ANCESTOR_STATUS="$FAKE_GIT_ANCESTOR_STATUS" \
+        FAKE_GIT_REMOTE_STATUS="$FAKE_GIT_REMOTE_STATUS" \
+        FAKE_ORIGIN_URL="$FAKE_ORIGIN_URL" \
         FAKE_GH_PROBE_STATUS="$FAKE_GH_PROBE_STATUS" \
         FAKE_GH_PROBE_OUTPUT="$FAKE_GH_PROBE_OUTPUT" \
         FAKE_GH_CREATE_STATUS="$FAKE_GH_CREATE_STATUS" \
@@ -347,7 +386,9 @@ run_release() {
 cp "$SCRIPT_SOURCE" "$FIXTURE_SCRIPT"
 chmod +x "$FIXTURE_SCRIPT"
 
-# New draft: stage all exact assets, publish R2, and expose the release last.
+# New draft: override an attacker-controlled ambient GH_REPO, stage all exact assets,
+# publish R2, and expose the release last. The fake gh rejects every call not bound
+# to sonim1/switchtab.
 reset_scenario
 run_release v1.2
 assert_status 0
@@ -610,8 +651,19 @@ assert_output_contains 'Release manifest is invalid'
 assert_no_mutation
 assert_no_publish_or_edit
 
+for duplicate in repository source-name source-sha; do
+    reset_scenario
+    duplicate_manifest_key "$duplicate"
+    run_release v1.2
+    assert_status 64
+    assert_output_contains 'Release manifest is invalid'
+    [[ ! -s "$GH_LOG" ]] || fail "GitHub was accessed after duplicate manifest key: $duplicate"
+    assert_no_mutation
+    assert_no_publish_or_edit
+done
+
 for mutation in \
-    schema-type repository tag version commit packages-shape missing-token package-type package-token \
+    schema-type schema-float repository tag version commit packages-shape missing-token package-type package-token \
     package-extra source-kind source-name source-sha source-extra root-extra; do
     reset_scenario
     mutate_manifest "$mutation"
@@ -633,6 +685,23 @@ assert_no_mutation
 assert_no_publish_or_edit
 
 # Git provenance checks fail before GitHub access/mutation and preserve true tool errors.
+reset_scenario
+FAKE_GIT_REMOTE_STATUS=30
+run_release v1.2
+assert_status 30
+[[ ! -s "$GH_LOG" ]] || fail "GitHub was accessed after origin inspection failed"
+assert_no_mutation
+assert_no_publish_or_edit
+
+reset_scenario
+FAKE_ORIGIN_URL='git@github.com:attacker/switchtab.git'
+run_release v1.2
+assert_status 64
+assert_output_contains 'official repository'
+[[ ! -s "$GH_LOG" ]] || fail "GitHub was accessed from an unrelated local checkout"
+assert_no_mutation
+assert_no_publish_or_edit
+
 reset_scenario
 FAKE_HEAD_COMMIT='ABCDEF0123456789ABCDEF0123456789ABCDEF01'
 FAKE_TAG_COMMIT="$FAKE_HEAD_COMMIT"

@@ -32,6 +32,9 @@ if [[ -f "$RELEASE_CONFIG_PATH" ]]; then
 fi
 set +x
 
+RELEASE_REPOSITORY='sonim1/switchtab'
+GH_REPO="$RELEASE_REPOSITORY"
+export GH_REPO
 DIRECT_BUILD_ROOT="${DIRECT_BUILD_ROOT:-$PROJECT_ROOT/.build/direct-distribution}"
 UPDATE_OUTPUT_DIR="${UPDATE_OUTPUT_DIR:-$DIRECT_BUILD_ROOT/updates}"
 UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.app}"
@@ -242,6 +245,25 @@ if [[ "$LOCAL_DMG_HASH" != "$EXPECTED_DMG_HASH" ]]; then
     fail "Local DMG checksum mismatch"
 fi
 
+if ORIGIN_URL="$("$GIT_BIN" remote get-url origin)"; then
+    :
+else
+    git_status=$?
+    echo "Unable to resolve the origin repository" >&2
+    exit "$git_status"
+fi
+case "$ORIGIN_URL" in
+    "https://github.com/$RELEASE_REPOSITORY"|\
+    "https://github.com/$RELEASE_REPOSITORY.git"|\
+    "git@github.com:$RELEASE_REPOSITORY.git"|\
+    "ssh://git@github.com/$RELEASE_REPOSITORY"|\
+    "ssh://git@github.com/$RELEASE_REPOSITORY.git")
+        ;;
+    *)
+        fail "Release checkout origin is not the official repository: $RELEASE_REPOSITORY" 64
+        ;;
+esac
+
 if HEAD_COMMIT="$("$GIT_BIN" rev-parse HEAD)"; then
     :
 else
@@ -275,11 +297,19 @@ fi
 
 set +e
 "$RUBY_BIN" -rjson -e '
-  path, expected_tag, expected_version, expected_commit, expected_name, expected_sha = ARGV
+  class DuplicateJSONKeyError < StandardError; end
+  class UniqueJSONObject < Hash
+    def []=(key, value)
+      raise DuplicateJSONKeyError, key if key?(key)
+      super
+    end
+  end
+
+  path, expected_repository, expected_tag, expected_version, expected_commit, expected_name, expected_sha = ARGV
 
   begin
-    data = JSON.parse(File.read(path))
-  rescue JSON::ParserError => error
+    data = JSON.parse(File.read(path), object_class: UniqueJSONObject)
+  rescue JSON::ParserError, DuplicateJSONKeyError => error
     warn "Release manifest JSON is malformed: #{error.message}"
     exit 64
   rescue SystemCallError => error
@@ -295,8 +325,8 @@ set +e
 
   valid =
     exact_keys.call(data, %w[commit packages repository schemaVersion tag version]) &&
-    data["schemaVersion"] == 1 &&
-    data["repository"] == "sonim1/switchtab" &&
+    data["schemaVersion"].is_a?(Integer) && data["schemaVersion"] == 1 &&
+    data["repository"] == expected_repository &&
     data["tag"] == expected_tag &&
     data["version"] == expected_version &&
     data["commit"] == expected_commit &&
@@ -309,7 +339,7 @@ set +e
     source["sha256"] == expected_sha
 
   exit(valid ? 0 : 64)
-' "$MANIFEST_PATH" "$TAG" "$SHORT_VERSION" "$HEAD_COMMIT" "$DMG_NAME" "$LOCAL_DMG_HASH"
+' "$MANIFEST_PATH" "$RELEASE_REPOSITORY" "$TAG" "$SHORT_VERSION" "$HEAD_COMMIT" "$DMG_NAME" "$LOCAL_DMG_HASH"
 manifest_status=$?
 set -e
 if [[ "$manifest_status" -ne 0 ]]; then
