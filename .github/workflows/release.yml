@@ -12,18 +12,22 @@ name: Release
         type: string
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: switchtab-release
+  cancel-in-progress: false
 
 jobs:
-  release:
+  verify:
     runs-on: macos-15
-    timeout-minutes: 60
-    concurrency:
-      group: switchtab-release
-      cancel-in-progress: false
+    timeout-minutes: 30
+    permissions:
+      contents: read
     env:
       RELEASE_TAG: "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
-      NOTARYTOOL_KEYCHAIN_PROFILE: switchtab-ci-notary
+    outputs:
+      release_commit: "${{ steps.provenance.outputs.release_commit }}"
     steps:
       - name: Checkout release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -33,6 +37,7 @@ jobs:
           persist-credentials: false
 
       - name: Validate release tag and provenance
+        id: provenance
         shell: bash
         run: |
           set -euo pipefail
@@ -47,6 +52,10 @@ jobs:
             exit 64
           fi
           tag_commit="$(git rev-parse "$tag_ref^{commit}")"
+          if [[ ! "$tag_commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Release tag commit must be lowercase 40-hex" >&2
+            exit 64
+          fi
           head_commit="$(git rev-parse HEAD)"
           if [[ "$head_commit" != "$tag_commit" ]]; then
             echo "Checked-out HEAD does not match $RELEASE_TAG" >&2
@@ -87,6 +96,7 @@ jobs:
             echo "Release tag commit is not on origin/main" >&2
             exit 64
           fi
+          printf 'release_commit=%s\n' "$tag_commit" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
@@ -105,9 +115,11 @@ jobs:
             scripts/tests/release-tooling-test.sh
             scripts/tests/release-local-test.sh
             scripts/tests/generate-appcast-test.sh
+            scripts/tests/generate-release-manifest-test.sh
             scripts/tests/setup-update-hosting-test.sh
             scripts/tests/publish-update-test.sh
             scripts/tests/publish-release-test.sh
+            scripts/tests/dispatch-homebrew-update-test.sh
             scripts/tests/release-workflow-test.sh
           )
           for test_script in "${release_tests[@]}"; do
@@ -130,6 +142,40 @@ jobs:
               -destination 'platform=macOS,arch=arm64' \
               CODE_SIGNING_ALLOWED=NO \
               build
+
+  release:
+    needs: verify
+    environment: release
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+      NOTARYTOOL_KEYCHAIN_PROFILE: switchtab-ci-notary
+    steps:
+      - name: Checkout verified release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: "${{ needs.verify.outputs.release_commit }}"
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify release commit
+        shell: bash
+        env:
+          VERIFIED_RELEASE_COMMIT: "${{ needs.verify.outputs.release_commit }}"
+        run: |
+          set -euo pipefail
+          if [[ ! "$VERIFIED_RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Verified release commit must be lowercase 40-hex" >&2
+            exit 64
+          fi
+          head_commit="$(git rev-parse HEAD)"
+          if [[ "$head_commit" != "$VERIFIED_RELEASE_COMMIT" ]]; then
+            echo "Checked-out HEAD does not match the verified release commit" >&2
+            exit 64
+          fi
 
       - name: Prepare signing workspace
         shell: bash
@@ -246,6 +292,10 @@ jobs:
           UPDATE_DOMAIN: updates.switchtab.app
         run: scripts/generate-appcast.sh
 
+      - name: Generate release manifest
+        shell: bash
+        run: scripts/generate-release-manifest.sh "$RELEASE_TAG"
+
       - name: Publish release
         shell: bash
         env:
@@ -256,6 +306,22 @@ jobs:
           R2_BUCKET_NAME: switchtab-updates
           UPDATE_DOMAIN: updates.switchtab.app
         run: scripts/publish-release.sh "$RELEASE_TAG"
+
+      - name: Create tap GitHub App token
+        id: tap-token
+        uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42
+        with:
+          app-id: "${{ vars.TAP_GITHUB_APP_ID }}"
+          private-key: "${{ secrets.TAP_GITHUB_APP_PRIVATE_KEY }}"
+          owner: sonim1
+          repositories: homebrew-tap
+          permission-contents: write
+
+      - name: Notify Homebrew tap
+        shell: bash
+        env:
+          TAP_GH_TOKEN: "${{ steps.tap-token.outputs.token }}"
+        run: scripts/dispatch-homebrew-update.sh "$RELEASE_TAG"
 
       - name: Cleanup Apple credentials
         if: always()
