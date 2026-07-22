@@ -128,7 +128,8 @@ test -z "$(git status --porcelain=v1 --untracked-files=all)"
 test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
 release_commit="$(git rev-parse HEAD)"
 git tag -a "$release_tag" "$release_commit" -m "SwitchTab ${release_tag#v}"
-test "$(git rev-parse "$release_tag^{commit}")" = "$release_commit"
+git show-ref --verify --quiet "refs/tags/$release_tag"
+test "$(git rev-parse "refs/tags/$release_tag^{commit}")" = "$release_commit"
 git push origin "refs/tags/$release_tag:refs/tags/$release_tag"
 )
 ```
@@ -149,7 +150,8 @@ git fetch --prune --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
 git fetch --prune --tags origin
 test -z "$(git status --porcelain=v1 --untracked-files=all)"
 test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
-test "$(git rev-parse "$release_tag^{commit}")" = "$(git rev-parse HEAD)"
+git show-ref --verify --quiet "refs/tags/$release_tag"
+test "$(git rev-parse "refs/tags/$release_tag^{commit}")" = "$(git rev-parse HEAD)"
 scripts/release-local.sh
 scripts/generate-appcast.sh
 scripts/generate-release-manifest.sh "$release_tag"

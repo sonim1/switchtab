@@ -271,11 +271,13 @@ def local_release_steps(section)
       :head_matches_main
     when /\Agit tag -a /
       :annotated_tag
-    when /\Atest .*release_tag\^\{commit\}.*release_commit/
+    when /\Agit show-ref --verify --quiet "refs\/tags\/\$release_tag"\z/
+      :exact_tag_ref
+    when /\Atest .*git rev-parse "refs\/tags\/\$release_tag\^\{commit\}".*release_commit/
       :tag_matches_recorded_head
     when /\Agit push origin .*refs\/tags\/\$release_tag:refs\/tags\/\$release_tag/
       :push_exact_tag
-    when /\Atest .*release_tag\^\{commit\}.*git rev-parse HEAD/
+    when /\Atest .*git rev-parse "refs\/tags\/\$release_tag\^\{commit\}".*git rev-parse HEAD/
       :tag_matches_head
     when "scripts/release-local.sh"
       :release_local
@@ -311,6 +313,7 @@ def validate_release_operations!(readme)
       :clean,
       :head_matches_main,
       :annotated_tag,
+      :exact_tag_ref,
       :tag_matches_recorded_head,
       :push_exact_tag,
       :strict_shell,
@@ -319,6 +322,7 @@ def validate_release_operations!(readme)
       :fetch_tags,
       :clean,
       :head_matches_main,
+      :exact_tag_ref,
       :tag_matches_head,
       :release_local,
       :generate_appcast,
@@ -447,6 +451,16 @@ assert_mutation_rejected(
   "missing tap dispatch",
   readme,
   readme.sub(/^scripts\/dispatch-homebrew-update[.]sh "\$release_tag"\n/, "")
+)
+fallback_start = readme.index("Use the local fallback")
+fallback_finish = readme.index("### Cloudflare publishing credentials")
+raise "FAIL: local fallback mutation bounds are missing" unless fallback_start && fallback_finish
+fallback = readme[fallback_start...fallback_finish]
+ambiguous_fallback = fallback.gsub('refs/tags/$release_tag', '$release_tag')
+assert_mutation_rejected(
+  "ambiguous bare local release tag",
+  readme,
+  readme[0...fallback_start] + ambiguous_fallback + readme[fallback_finish..-1]
 )
 assert_mutation_rejected(
   "missing Administration read permission",
