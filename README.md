@@ -112,35 +112,77 @@ private key in the macOS Keychain under account `ed25519` (or the value of
 store Apple notarization credentials in the local notarytool profile named by
 `NOTARYTOOL_KEYCHAIN_PROFILE`.
 
-With `gh auth status` and Cloudflare authentication working, the local release
-flow is:
+With `gh auth status` and Cloudflare authentication working, start every release
+from the authoritative remote state. The following block fails closed unless
+tracked files and all non-ignored untracked files are clean, `HEAD` is exactly
+the freshly fetched `origin/main`, and the annotated tag resolves to that same
+commit:
 
 ```bash
+(
+set -euo pipefail
+release_tag=v1.2.3
+git fetch --prune --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+git fetch --prune --tags origin
+test -z "$(git status --porcelain=v1 --untracked-files=all)"
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+release_commit="$(git rev-parse HEAD)"
+git tag -a "$release_tag" "$release_commit" -m "SwitchTab ${release_tag#v}"
+test "$(git rev-parse "$release_tag^{commit}")" = "$release_commit"
+git push origin "refs/tags/$release_tag:refs/tags/$release_tag"
+)
+```
+
+The normal CI path stops here. After the tag push, GitHub CI owns the build and
+public GitHub/Sparkle publication; do not run any local build or publisher.
+
+Use the local fallback only after confirming that the tag-triggered CI run is
+disabled or cancelled and that no active run owns the tag. Run this complete
+block from the same tagged checkout. Its prompt securely reads a short-lived
+tap token without placing it in shell history:
+
+```bash
+(
+set -euo pipefail
+release_tag=v1.2.3
+git fetch --prune --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+git fetch --prune --tags origin
+test -z "$(git status --porcelain=v1 --untracked-files=all)"
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+test "$(git rev-parse "$release_tag^{commit}")" = "$(git rev-parse HEAD)"
 scripts/release-local.sh
 scripts/generate-appcast.sh
-scripts/generate-release-manifest.sh v1.2.3
-git tag -a v1.2.3 -m "SwitchTab 1.2.3"
-git push origin v1.2.3
-# Only when the tag-triggered CI run is disabled or cancelled:
-scripts/publish-release.sh v1.2.3
+scripts/generate-release-manifest.sh "$release_tag"
+scripts/publish-release.sh "$release_tag"
+trap 'unset TAP_GH_TOKEN' EXIT HUP INT TERM
+read -r -s -p "Temporary tap dispatch token: " TAP_GH_TOKEN
+printf '\n'
+export TAP_GH_TOKEN
+set +e
+scripts/dispatch-homebrew-update.sh "$release_tag"
+dispatch_status=$?
+set -e
+unset TAP_GH_TOKEN
+trap - EXIT HUP INT TERM
+exit "$dispatch_status"
+)
 ```
 
 `release-local.sh` builds, signs, notarizes, and staples the DMG.
-`generate-appcast.sh` signs the appcast with the local Keychain key.
-`generate-release-manifest.sh v<MARKETING_VERSION>` binds that exact DMG and
-checksum to the release tag, repository, and current commit for Homebrew.
-`publish-release.sh v<MARKETING_VERSION>` validates the exact tag, requires its
-commit to be on `origin/main`, and requires the generated manifest.
-It calls `publish-update.sh` internally to publish R2 objects; do not normally
-call that child script directly.
+`generate-appcast.sh` signs the appcast with the local Keychain key, and
+`generate-release-manifest.sh` binds that exact DMG and checksum to the tagged
+commit. `publish-release.sh` validates the tag and manifest.
+It calls `publish-update.sh` internally to publish R2 and makes the staged
+GitHub draft public last. Only after that succeeds does the dispatch run. The
+`homebrew_release` dispatch sends only `repository` and `tag`; the tap downloads
+`release-manifest.json` from the public GitHub Release.
 The draft is created or reused first, exact assets are staged, R2 and the
 appcast are published, and the draft is made public last.
 
-Choose one publisher for a tag. When the GitHub release workflow is enabled,
-pushing the tag starts CI and that run owns publication. Run the local publisher
-only after confirming the tag-triggered run is disabled or cancelled, or during
-documented recovery when no active CI run owns the tag.
-Never race local and CI publication.
+The generated ignored artifacts do not change source provenance.
+Choose one publisher for a tag. Never race local and CI publication. If
+dispatch fails, rerun the same secure token-read and dispatch commands without
+rebuilding or replacing the public release.
 
 ### Cloudflare publishing credentials
 
