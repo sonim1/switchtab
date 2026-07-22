@@ -199,6 +199,34 @@ for repository_variable in \
         fail "$README is missing repository variable $repository_variable"
 done
 
+README_NORMALIZED="$(/usr/bin/tr '\n' ' ' < "$README" | /usr/bin/tr -s '[:space:]' ' ')"
+for release_operations_text in \
+    'GitHub `release` Environment' \
+    'required reviewer protection' \
+    'Both the `release` and `notify` jobs request approval' \
+    'A notify-only rerun can request approval again' \
+    '`TAP_GITHUB_APP_ID`' \
+    '`TAP_GITHUB_APP_PRIVATE_KEY`' \
+    'gh secret set --env release TAP_GITHUB_APP_PRIVATE_KEY' \
+    '`sonim1/homebrew-tap`' \
+    '`Contents: Read & write`' \
+    'does not need installation on `sonim1/switchtab`' \
+    '`release-manifest.json`' \
+    'scripts/generate-release-manifest.sh v1.2.3' \
+    '`homebrew_release`' \
+    'tag push -> secret-free `verify` -> protected signed `release` -> public GitHub/Sparkle publication -> protected `notify` -> tap PR/CI/auto-merge' \
+    'shared by the Sparkle appcast, GitHub Release, and Homebrew Cask' \
+    'rerun only the failed `notify` job' \
+    'does not rebuild, sign, notarize, or replace public assets' \
+    'Do not delete or recreate the tag' \
+    'read -r -s -p "Temporary tap dispatch token: " TAP_GH_TOKEN' \
+    'Apple, Sparkle, and R2 secrets are available only to `release`' \
+    'tap App private key is available only to `notify`' \
+    '`verify` receives no production secrets'; do
+    [[ "$README_NORMALIZED" == *"$release_operations_text"* ]] || \
+        fail "$README is missing release operations text '$release_operations_text'"
+done
+
 assert_exact_example_placeholder() {
     local name="$1"
     local expected_line="$2"

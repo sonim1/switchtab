@@ -118,6 +118,7 @@ flow is:
 ```bash
 scripts/release-local.sh
 scripts/generate-appcast.sh
+scripts/generate-release-manifest.sh v1.2.3
 git tag -a v1.2.3 -m "SwitchTab 1.2.3"
 git push origin v1.2.3
 # Only when the tag-triggered CI run is disabled or cancelled:
@@ -126,9 +127,12 @@ scripts/publish-release.sh v1.2.3
 
 `release-local.sh` builds, signs, notarizes, and staples the DMG.
 `generate-appcast.sh` signs the appcast with the local Keychain key.
-`publish-release.sh v<MARKETING_VERSION>` validates the exact tag and requires
-its commit to be on `origin/main`. It calls `publish-update.sh` internally to
-publish R2 objects; do not normally call that child script directly.
+`generate-release-manifest.sh v<MARKETING_VERSION>` binds that exact DMG and
+checksum to the release tag, repository, and current commit for Homebrew.
+`publish-release.sh v<MARKETING_VERSION>` validates the exact tag, requires its
+commit to be on `origin/main`, and requires the generated manifest.
+It calls `publish-update.sh` internally to publish R2 objects; do not normally
+call that child script directly.
 The draft is created or reused first, exact assets are staged, R2 and the
 appcast are published, and the draft is made public last.
 
@@ -162,6 +166,7 @@ The release workflow expects these GitHub repository variables:
 - `DEVELOPER_ID_APPLICATION`
 - `SPARKLE_PUBLIC_ED_KEY`
 - `CLOUDFLARE_ACCOUNT_ID`
+- `TAP_GITHUB_APP_ID`
 
 It expects these GitHub Actions secrets:
 
@@ -173,6 +178,7 @@ It expects these GitHub Actions secrets:
 - `SPARKLE_PRIVATE_ED_KEY`
 - `R2_ACCESS_KEY_ID`
 - `R2_SECRET_ACCESS_KEY`
+- `TAP_GITHUB_APP_PRIVATE_KEY`
 
 Set non-secret values directly, and let `gh` read secrets from a prompt or a
 file rather than placing secret text in shell history:
@@ -181,12 +187,14 @@ file rather than placing secret text in shell history:
 gh variable set DEVELOPER_ID_APPLICATION --body "Developer ID Application: Your Name (TEAMID)"
 gh variable set SPARKLE_PUBLIC_ED_KEY --body "your-public-ed25519-key"
 gh variable set CLOUDFLARE_ACCOUNT_ID --body "your-account-id"
+gh variable set TAP_GITHUB_APP_ID --body "your-github-app-id"
 
-gh secret set APPLE_CERTIFICATE_PASSWORD
-gh secret set APPLE_NOTARY_KEY_ID
-gh secret set APPLE_NOTARY_ISSUER_ID
-gh secret set R2_ACCESS_KEY_ID
-gh secret set R2_SECRET_ACCESS_KEY
+gh secret set --env release APPLE_CERTIFICATE_PASSWORD
+gh secret set --env release APPLE_NOTARY_KEY_ID
+gh secret set --env release APPLE_NOTARY_ISSUER_ID
+gh secret set --env release R2_ACCESS_KEY_ID
+gh secret set --env release R2_SECRET_ACCESS_KEY
+gh secret set --env release TAP_GITHUB_APP_PRIVATE_KEY
 ```
 
 Export transport values only into a permission-restricted temporary directory.
@@ -197,9 +205,9 @@ export the Sparkle key with `generate_keys -x` before uploading it:
 release_secret_dir="$(mktemp -d)"
 chmod 700 "$release_secret_dir"
 /path/to/Sparkle/bin/generate_keys --account ed25519 -x "$release_secret_dir/sparkle-private-key"
-gh secret set SPARKLE_PRIVATE_ED_KEY < "$release_secret_dir/sparkle-private-key"
-openssl base64 -A -in /path/to/certificate.p12 | gh secret set APPLE_CERTIFICATE_P12_BASE64
-openssl base64 -A -in /path/to/AuthKey.p8 | gh secret set APPLE_NOTARY_KEY_P8_BASE64
+gh secret set --env release SPARKLE_PRIVATE_ED_KEY < "$release_secret_dir/sparkle-private-key"
+openssl base64 -A -in /path/to/certificate.p12 | gh secret set --env release APPLE_CERTIFICATE_P12_BASE64
+openssl base64 -A -in /path/to/AuthKey.p8 | gh secret set --env release APPLE_NOTARY_KEY_P8_BASE64
 rm -f "$release_secret_dir/sparkle-private-key"
 rmdir "$release_secret_dir"
 ```
@@ -208,6 +216,33 @@ Replace the example paths with your own temporary inputs. Base64 is transport
 encoding, not encryption. Never commit the `.p12`, `.p8`, exported Sparkle
 private key, or decoded copies, and remove temporary exports immediately after
 the secrets are registered.
+
+### Protected release environment and tap integration
+
+Create a GitHub `release` Environment under repository settings and enable
+required reviewer protection. Store the Apple, Sparkle, and R2 production
+secrets there, along with the protected `TAP_GITHUB_APP_PRIVATE_KEY` secret.
+`TAP_GITHUB_APP_ID` may be a repository variable, as shown above, or an
+environment variable on `release`; the workflow reads it through the `vars`
+context in either case. Both the `release` and `notify` jobs request approval
+because both use this Environment sequentially. A notify-only rerun can request
+approval again.
+
+The GitHub App must be installed only on `sonim1/homebrew-tap`. Grant the
+installation the minimum permission needed for repository dispatches:
+`Contents: Read & write`. It does not need installation on `sonim1/switchtab`;
+the source workflow holds the App ID and protected private key and creates a
+short-lived installation token scoped to the tap repository.
+
+Before enabling releases, configure `sonim1/homebrew-tap` to accept the
+`homebrew_release` repository-dispatch event, enable pull-request auto-merge,
+and protect its default branch in strict mode with the exact required checks
+`contracts` and `homebrew`. These settings and the source `release` Environment
+are administrative prerequisites; the release scripts do not mutate them.
+
+Production credentials stay separated by job: Apple, Sparkle, and R2 secrets
+are available only to `release`; the tap App private key is available only to
+`notify`; `verify` receives no production secrets.
 
 ### Tags and release execution
 
@@ -223,14 +258,31 @@ git push origin v1.2.3
 ```
 
 The workflow accepts only exact `refs/tags/v<version>` references, checks that
-the tag commit is on `origin/main`, installs the pinned Node 24.18.0 runtime,
-runs the contract and Swift tests, creates a temporary Keychain, signs and
-notarizes the DMG, generates the signed appcast, creates or reuses the GitHub
-draft, and stages its exact assets. It then publishes R2 objects and the appcast
-before making the draft public last. All tags share one release concurrency
-group, and the appcast update itself uses an R2 ETag precondition so an older
-run cannot roll the feed back. Manual workflow dispatch is recovery-only and
-must name an existing version tag; it does not create or move tags.
+the tag commit is on `origin/main`, and follows this exact flow:
+
+```text
+tag push -> secret-free `verify` -> protected signed `release` -> public GitHub/Sparkle publication -> protected `notify` -> tap PR/CI/auto-merge
+```
+
+The secret-free `verify` job installs the pinned Node 24.18.0 runtime and runs
+the contract, Swift, and unsigned Xcode checks. After approval, `release`
+creates a temporary Keychain, signs and notarizes the DMG, generates the signed
+appcast and `release-manifest.json`, creates or reuses the GitHub draft, and
+stages its exact assets. It then publishes R2 objects and the appcast before
+making the draft public last. The manifest is both a GitHub Release asset and
+the package-update contract sent to `sonim1/homebrew-tap` by the
+`homebrew_release` event.
+
+The canonical `SwitchTab-<version>-<build>.dmg` is shared by the Sparkle
+appcast, GitHub Release, and Homebrew Cask; it is not rebuilt separately for
+each channel. The protected `notify` job runs only after public publication and
+asks the tap to render its Cask change, open a pull request, run CI, and
+auto-merge after the protected checks pass.
+
+All tags share one release concurrency group, and the appcast update itself
+uses an R2 ETag precondition so an older run cannot roll the feed back. Manual
+workflow dispatch is recovery-only and must name an existing version tag; it
+does not create or move tags.
 
 ### Recovery and immutability
 
@@ -248,3 +300,27 @@ draft, and publish that draft after resolving the failure.
 Do not rebuild or re-tag the same release. Do not automatically delete objects
 or run a destructive rollback; investigate and recover from the existing
 artifacts.
+
+If release publication fails before the GitHub Release becomes public, resolve
+the cause and rerun the failed `release` job. The existing draft and
+byte-idempotent asset rules make that narrow rerun safe; after publication, the
+dependent `notify` job proceeds through its own approval. Do not delete or
+recreate the tag, and do not rerun the full workflow unnecessarily.
+
+If `notify` fails after the release is already public, use **Re-run failed
+jobs** in GitHub Actions to rerun only the failed `notify` job. A notify-only
+rerun can request approval again, but it does not rebuild, sign, notarize, or
+replace public assets. As a manual fallback, provide a short-lived token with
+`Contents: Read & write` access only to `sonim1/homebrew-tap` without putting
+the token in shell history:
+
+```bash
+read -r -s -p "Temporary tap dispatch token: " TAP_GH_TOKEN
+printf '\n'
+export TAP_GH_TOKEN
+scripts/dispatch-homebrew-update.sh v1.2.3
+unset TAP_GH_TOKEN
+```
+
+The fallback sends the same `homebrew_release` event and does not alter the
+already-public release.
