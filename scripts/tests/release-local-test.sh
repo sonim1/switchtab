@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 WRAPPER="$PROJECT_ROOT/scripts/release-local.sh"
 EXAMPLE="$PROJECT_ROOT/.env.release.local.example"
+README="$PROJECT_ROOT/README.md"
 
 fail() {
     echo "FAIL: $1" >&2
@@ -116,9 +117,55 @@ if git -C "$PROJECT_ROOT" check-ignore -q .env.release.local.example; then
     fail ".env.release.local.example is unexpectedly ignored"
 fi
 
-for name in SPARKLE_PUBLIC_ED_KEY DEVELOPER_ID_APPLICATION NOTARYTOOL_KEYCHAIN_PROFILE; do
+for name in \
+    SPARKLE_PUBLIC_ED_KEY \
+    DEVELOPER_ID_APPLICATION \
+    NOTARYTOOL_KEYCHAIN_PROFILE \
+    SPARKLE_KEY_ACCOUNT \
+    R2_BUCKET_NAME \
+    UPDATE_DOMAIN \
+    CLOUDFLARE_ACCOUNT_ID \
+    CLOUDFLARE_ZONE_ID \
+    CLOUDFLARE_API_TOKEN \
+    R2_ACCESS_KEY_ID \
+    R2_SECRET_ACCESS_KEY; do
     grep -q "^${name}=" "$EXAMPLE" || fail "$EXAMPLE is missing $name"
 done
+
+for text in \
+    "npm ci --ignore-scripts" \
+    "setup-update-hosting.sh" \
+    "release-local.sh" \
+    "generate-appcast.sh" \
+    "publish-release.sh" \
+    "CLOUDFLARE_API_TOKEN" \
+    "R2_ACCESS_KEY_ID" \
+    "R2_SECRET_ACCESS_KEY" \
+    "SPARKLE_PRIVATE_ED_KEY" \
+    "APPLE_CERTIFICATE_P12_BASE64" \
+    "git push origin v" \
+    "updates.switchtab.app/appcast.xml" \
+    "refs/tags/" \
+    "Base64" \
+    "Recovery"; do
+    grep -Fq "$text" "$README" || fail "$README is missing '$text'"
+done
+
+grep -Eq 'v\*.*(ruleset|protection)|(ruleset|protection).*v\*' "$README" || \
+    fail "$README is missing v* tag protection guidance"
+
+user_specific_path='/Users/'"kendrick"
+if grep -Fq "$user_specific_path" "$README" "$EXAMPLE"; then
+    fail "documentation contains a user-specific local path"
+fi
+
+if grep -Eq -- '-----BEGIN (OPENSSH |RSA |EC |ED25519 )?PRIVATE KEY-----' "$README" "$EXAMPLE"; then
+    fail "documentation contains a private-key block"
+fi
+
+if grep -Eq -- '(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,})' "$README" "$EXAMPLE"; then
+    fail "documentation contains an obvious secret literal"
+fi
 
 bash -n "$WRAPPER"
 bash -n "$PROJECT_ROOT/scripts/build-direct-distribution.sh"
