@@ -173,6 +173,14 @@ for text in \
     grep -Fq -- "$text" "$README" || fail "$README is missing '$text'"
 done
 
+for repository_variable in \
+    SPARKLE_PUBLIC_ED_KEY \
+    DEVELOPER_ID_APPLICATION \
+    CLOUDFLARE_ACCOUNT_ID; do
+    grep -Fq -- "$repository_variable" "$README" || \
+        fail "$README is missing repository variable $repository_variable"
+done
+
 assert_exact_example_placeholder() {
     local name="$1"
     local expected_line="$2"
@@ -188,6 +196,10 @@ assert_exact_example_placeholder CLOUDFLARE_ACCOUNT_ID \
     "CLOUDFLARE_ACCOUNT_ID='your-cloudflare-account-id'"
 assert_exact_example_placeholder CLOUDFLARE_ZONE_ID \
     "CLOUDFLARE_ZONE_ID='your-cloudflare-zone-id'"
+assert_exact_example_placeholder SPARKLE_PUBLIC_ED_KEY \
+    "SPARKLE_PUBLIC_ED_KEY='your-sparkle-public-ed-key'"
+assert_exact_example_placeholder DEVELOPER_ID_APPLICATION \
+    "DEVELOPER_ID_APPLICATION='Developer ID Application: Your Name (TEAMID)'"
 assert_exact_example_placeholder CLOUDFLARE_API_TOKEN \
     "CLOUDFLARE_API_TOKEN='your-scoped-cloudflare-api-token'"
 assert_exact_example_placeholder R2_ACCESS_KEY_ID \
