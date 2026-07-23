@@ -622,9 +622,9 @@ fi
 grep -Eq 'v\*.*(ruleset|protection)|(ruleset|protection).*v\*' "$README" || \
     fail "$README is missing v* tag protection guidance"
 
-user_specific_path='/Users/'"kendrick"
-if grep -Fq "$user_specific_path" "${DOCUMENTATION_FILES[@]}"; then
-    fail "documentation contains a user-specific local path"
+absolute_macos_user_path='/Users/[^/[:space:]]+'
+if grep -Eq "$absolute_macos_user_path" "${DOCUMENTATION_FILES[@]}"; then
+    fail "documentation contains an absolute macOS user path"
 fi
 
 if grep -Eq -- '-----BEGIN (OPENSSH |RSA |EC |ED25519 )?PRIVATE KEY-----' "${DOCUMENTATION_FILES[@]}"; then
