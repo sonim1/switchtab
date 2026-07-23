@@ -26,6 +26,117 @@ def assert(condition, message)
   raise "FAIL: #{message}" unless condition
 end
 
+def steps_by_name(job, label)
+  steps = job.fetch("steps")
+  grouped = steps.group_by { |step| step["name"] }
+  duplicates = grouped.select { |_name, entries| entries.length != 1 }.keys
+  assert(duplicates.empty?, "#{label} step names must be unique: #{duplicates.join(', ')}")
+  grouped.transform_values(&:first)
+end
+
+def assert_default_success_guard(step, label)
+  assert(!step.key?("continue-on-error"), "#{label} must fail the job on error")
+  assert(!step.key?("if"), "#{label} must use the default success condition")
+end
+
+def validate_publication_and_notification(release, notify)
+  release_names = release.fetch("steps").map { |step| step["name"] }
+  expected_release_names = [
+    "Checkout verified release commit",
+    "Verify release commit",
+    "Prepare signing workspace",
+    "Install Apple credentials",
+    "Build notarized DMG",
+    "Generate signed appcast",
+    "Generate release manifest",
+    "Publish release",
+    "Cleanup Apple credentials"
+  ]
+  assert(release_names == expected_release_names, "release semantic step list must be exact")
+  release_steps = steps_by_name(release, "release")
+  publish = release_steps.fetch("Publish release")
+  assert_default_success_guard(publish, "Publish release")
+  assert(publish["shell"] == "bash", "Publish release must explicitly use bash")
+  assert(publish["run"] == 'scripts/publish-release.sh "$RELEASE_TAG"', "Publish release command must be exact")
+  assert(publish["env"] == {
+    "GH_TOKEN" => "${{ github.token }}",
+    "CLOUDFLARE_ACCOUNT_ID" => "${{ vars.CLOUDFLARE_ACCOUNT_ID }}",
+    "R2_ACCESS_KEY_ID" => "${{ secrets.R2_ACCESS_KEY_ID }}",
+    "R2_SECRET_ACCESS_KEY" => "${{ secrets.R2_SECRET_ACCESS_KEY }}",
+    "R2_BUCKET_NAME" => "switchtab-updates",
+    "UPDATE_DOMAIN" => "updates.switchtab.app"
+  }, "Publish release environment must be exact")
+  assert(!release.to_s.include?("create-github-app-token"), "release must not mint the tap token")
+  assert(!release.to_s.include?("dispatch-homebrew-update.sh"), "release must not dispatch to the tap")
+
+  notify_names = notify.fetch("steps").map { |step| step["name"] }
+  expected_notify_names = [
+    "Checkout verified release commit",
+    "Verify release commit",
+    "Create tap GitHub App token",
+    "Notify Homebrew tap"
+  ]
+  assert(notify_names == expected_notify_names, "notify semantic step list must be exact")
+  notify_steps = steps_by_name(notify, "notify")
+  token = notify_steps.fetch("Create tap GitHub App token")
+  assert_default_success_guard(token, "Create tap GitHub App token")
+  assert(token["id"] == "tap-token", "tap token step must use the stable tap-token id")
+  assert(token["uses"] == "actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42", "GitHub App token action must use the reviewed SHA")
+  assert(token["with"] == {
+    "app-id" => "${{ vars.TAP_GITHUB_APP_ID }}",
+    "private-key" => "${{ secrets.TAP_GITHUB_APP_PRIVATE_KEY }}",
+    "owner" => "sonim1",
+    "repositories" => "homebrew-tap",
+    "permission-contents" => "write"
+  }, "tap token must be scoped only to contents: write on homebrew-tap")
+  dispatch = notify_steps.fetch("Notify Homebrew tap")
+  assert_default_success_guard(dispatch, "Notify Homebrew tap")
+  assert(dispatch["shell"] == "bash", "tap notification must explicitly use bash")
+  assert(dispatch["env"] == { "TAP_GH_TOKEN" => "${{ steps.tap-token.outputs.token }}" }, "tap notification may receive only the installation token")
+  assert(dispatch["run"] == 'scripts/dispatch-homebrew-update.sh "$RELEASE_TAG"', "tap notification command must be exact")
+  %w[
+    build-direct-distribution.sh
+    generate-appcast.sh
+    generate-release-manifest.sh
+    publish-update.sh
+    publish-release.sh
+    APPLE_CERTIFICATE
+    APPLE_NOTARY
+    SPARKLE_PRIVATE
+    R2_ACCESS
+    CLOUDFLARE
+  ].each do |forbidden|
+    assert(!notify.to_s.include?(forbidden), "notify must not build, sign, notarize, or publish: #{forbidden}")
+  end
+end
+
+def deep_copy(value)
+  Marshal.load(Marshal.dump(value))
+end
+
+def insert_after_named_step(job, existing_name, new_step)
+  steps = job.fetch("steps")
+  position = steps.index { |step| step["name"] == existing_name }
+  assert(!position.nil?, "cannot mutate missing step: #{existing_name}")
+  steps.insert(position + 1, new_step)
+end
+
+def swap_named_steps(job, first_name, second_name)
+  steps = job.fetch("steps")
+  first_position = steps.index { |step| step["name"] == first_name }
+  second_position = steps.index { |step| step["name"] == second_name }
+  assert(!first_position.nil? && !second_position.nil?, "cannot reorder missing critical steps")
+  steps[first_position], steps[second_position] = steps[second_position], steps[first_position]
+end
+
+def assert_rejects_mutation(label)
+  yield
+rescue RuntimeError => error
+  raise unless error.message.start_with?("FAIL:")
+else
+  raise "FAIL: workflow contract accepted adversarial mutation: #{label}"
+end
+
 assert(workflow.is_a?(Hash), "workflow must parse as a mapping")
 assert(workflow["name"] == "Release", "workflow name must be Release")
 
@@ -40,55 +151,60 @@ assert(manual_tag["type"] == "string", "workflow_dispatch.tag must be a string")
 assert(manual_tag["description"].to_s.downcase.include?("existing version tag"), "manual tag must be described as an existing version tag")
 assert(!workflow_source.include?("pull_request"), "pull_request must not trigger releases")
 
-assert(workflow["permissions"] == { "contents" => "write" }, "job must receive only contents: write")
-jobs = workflow.fetch("jobs")
-assert(jobs.keys == ["release"], "workflow must contain one release job")
-job = jobs.fetch("release")
-assert(job["runs-on"] == "macos-15", "release job must run on macos-15")
-assert(job["timeout-minutes"] == 60, "release job timeout must be 60 minutes")
-assert(job.dig("env", "RELEASE_TAG") == "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}", "RELEASE_TAG must resolve push and manual tags")
-assert(job.dig("env", "NOTARYTOOL_KEYCHAIN_PROFILE") == "switchtab-ci-notary", "CI notary profile must be fixed")
-concurrency = job["concurrency"]
-assert(concurrency.is_a?(Hash), "release concurrency must be job-scoped")
-assert(concurrency["cancel-in-progress"] == false, "release concurrency must not cancel in-progress releases")
-assert(concurrency["group"] == "switchtab-release", "all release tags must share one concurrency group")
+assert(workflow["permissions"] == { "contents" => "read" }, "workflow must default to contents: read")
+assert(workflow["concurrency"] == { "group" => "switchtab-release", "cancel-in-progress" => false }, "release concurrency must remain global and non-cancelling")
 
-steps = job.fetch("steps")
-names = steps.map { |step| step["name"] }
-required_order = [
+jobs = workflow.fetch("jobs")
+assert(jobs.keys == %w[verify release notify], "workflow must contain verify, release, and notify jobs")
+verify = jobs.fetch("verify")
+release = jobs.fetch("release")
+notify_job = jobs.fetch("notify")
+
+assert(verify["runs-on"] == "macos-15", "verify job must run on macos-15")
+assert(verify["timeout-minutes"].is_a?(Integer) && verify["timeout-minutes"].between?(1, 60), "verify timeout must be bounded")
+assert(verify["permissions"] == { "contents" => "read" }, "verify must receive only contents: read")
+assert(!verify.key?("environment"), "verify must not use a protected production environment")
+assert(verify.dig("env", "RELEASE_TAG") == "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}", "verify RELEASE_TAG must resolve push and manual tags")
+assert(verify.dig("outputs", "release_commit") == "${{ steps.provenance.outputs.release_commit }}", "verify must expose the provenance commit exactly")
+assert(!verify.to_s.include?("secrets."), "verify must not receive production secrets")
+%w[
+  APPLE_CERTIFICATE
+  APPLE_NOTARY
+  SPARKLE_PRIVATE
+  R2_ACCESS
+  CLOUDFLARE
+  create-github-app-token
+  build-direct-distribution.sh
+  generate-appcast.sh
+  publish-update.sh
+  publish-release.sh
+].each do |forbidden|
+  assert(!verify.to_s.include?(forbidden), "verify must not activate production operation #{forbidden}")
+end
+
+verify_steps = verify.fetch("steps")
+verify_names = verify_steps.map { |step| step["name"] }
+verify_order = [
   "Checkout release tag",
   "Validate release tag and provenance",
   "Setup Node.js",
   "Install release tooling",
   "Run release contract tests",
   "Run Swift tests",
-  "Build unsigned Debug app",
-  "Prepare signing workspace",
-  "Install Apple credentials",
-  "Build notarized DMG",
-  "Generate signed appcast",
-  "Publish release",
-  "Cleanup Apple credentials"
+  "Build unsigned Debug app"
 ]
-positions = required_order.map { |name| names.index(name) }
-assert(positions.none?(&:nil?), "required release steps are missing")
-assert(positions == positions.sort, "release steps are out of order")
+verify_positions = verify_order.map { |name| verify_names.index(name) }
+assert(verify_positions.none?(&:nil?) && verify_positions == verify_positions.sort, "verify steps are missing or out of order")
 
-uses_steps = steps.select { |step| step.key?("uses") }
-assert(uses_steps.length == 2, "only the pinned checkout and setup-node actions are allowed")
-checkout = steps.fetch(names.index("Checkout release tag"))
-assert(checkout["uses"] == "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "checkout must use the approved full SHA")
-assert(checkout.dig("with", "ref") == "refs/tags/${{ env.RELEASE_TAG }}", "checkout must use the fully qualified release tag ref")
-assert(checkout.dig("with", "fetch-depth") == 0, "checkout must fetch complete history")
-assert(checkout.dig("with", "persist-credentials") == false, "checkout credentials must not persist into validation or tests")
-setup_node = steps.fetch(names.index("Setup Node.js"))
-assert(setup_node["uses"] == "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020", "setup-node must use the approved full SHA")
-assert(setup_node.dig("with", "node-version") == "24.18.0", "setup-node must pin the current Node 24 LTS patch")
-uses_steps.each do |step|
-  assert(step["uses"].match?(%r{\A[^@]+@[0-9a-f]{40}\z}), "all actions must be SHA-pinned")
-end
+verify_checkout = verify_steps.fetch(verify_names.index("Checkout release tag"))
+assert(verify_checkout["uses"] == "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "verify checkout must use the approved full SHA")
+assert(verify_checkout.dig("with", "ref") == "refs/tags/${{ env.RELEASE_TAG }}", "verify checkout must use the fully qualified release tag ref")
+assert(verify_checkout.dig("with", "fetch-depth") == 0, "verify checkout must fetch complete history")
+assert(verify_checkout.dig("with", "persist-credentials") == false, "verify checkout credentials must not persist")
 
-validation = steps.fetch(names.index("Validate release tag and provenance")).fetch("run")
+provenance_step = verify_steps.fetch(verify_names.index("Validate release tag and provenance"))
+assert(provenance_step["id"] == "provenance", "provenance step must have the stable provenance id")
+validation = provenance_step.fetch("run")
 assert(validation.include?("^v[0-9]+(\\.[0-9]+)*$"), "tag shape validation is missing")
 assert(validation.include?('tag_ref="refs/tags/$RELEASE_TAG"'), "validation must construct the exact tag ref")
 assert(validation.include?('git show-ref --verify --quiet "$tag_ref"'), "validation must verify the exact tag ref exists")
@@ -109,27 +225,71 @@ assert(validation.include?("if ! git rev-parse --verify origin/main"), "origin/m
 assert(validation.include?("git fetch --no-tags origin"), "unauthenticated origin/main fallback fetch is missing")
 assert(validation.include?("refs/heads/main:refs/remotes/origin/main"), "origin/main fallback fetch must update only the main remote-tracking ref")
 assert(validation.include?("git merge-base --is-ancestor HEAD origin/main"), "main ancestry validation is missing")
+assert(validation.include?('"$tag_commit" =~ ^[0-9a-f]{40}$'), "provenance commit must be exact lowercase 40-hex")
+assert(validation.include?("printf 'release_commit=%s\\n' \"$tag_commit\" >> \"$GITHUB_OUTPUT\""), "provenance must emit the exact tag commit")
 
-tooling = steps.fetch(names.index("Install release tooling")).fetch("run")
+setup_node = verify_steps.fetch(verify_names.index("Setup Node.js"))
+assert(setup_node["uses"] == "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020", "setup-node must use the approved full SHA")
+assert(setup_node.dig("with", "node-version") == "24.18.0", "setup-node must pin the current Node 24 LTS patch")
+tooling = verify_steps.fetch(verify_names.index("Install release tooling")).fetch("run")
 assert(tooling.include?("npm ci --ignore-scripts"), "release tooling must use npm ci --ignore-scripts")
-contracts = steps.fetch(names.index("Run release contract tests")).fetch("run")
+contracts = verify_steps.fetch(verify_names.index("Run release contract tests")).fetch("run")
 %w[
   release-tooling-test.sh
   release-local-test.sh
   generate-appcast-test.sh
+  generate-release-manifest-test.sh
   setup-update-hosting-test.sh
   publish-update-test.sh
   publish-release-test.sh
+  dispatch-homebrew-update-test.sh
   release-workflow-test.sh
 ].each do |script|
   assert(contracts.include?("scripts/tests/#{script}"), "contract suite does not invoke #{script}")
 end
-assert(steps.fetch(names.index("Run Swift tests")).fetch("run").include?("swift test"), "Swift tests are missing")
-unsigned_build = steps.fetch(names.index("Build unsigned Debug app")).fetch("run")
+assert(verify_steps.fetch(verify_names.index("Run Swift tests")).fetch("run").include?("swift test"), "Swift tests are missing")
+unsigned_build = verify_steps.fetch(verify_names.index("Build unsigned Debug app")).fetch("run")
 %w[xcodebuild SwitchTab.xcodeproj SwitchTab Debug arm64 CODE_SIGNING_ALLOWED=NO].each do |token|
   assert(unsigned_build.include?(token), "unsigned Xcode build is missing #{token}")
 end
 assert(unsigned_build.include?("DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer"), "unsigned build must select Xcode.app")
+
+assert(release["needs"] == "verify", "release must depend only on verify")
+assert(release["environment"] == "release", "release must use the protected release environment")
+assert(release["permissions"] == { "contents" => "write" }, "release must receive only contents: write")
+assert(release["runs-on"] == "macos-15", "release job must run on macos-15")
+assert(release["timeout-minutes"].is_a?(Integer) && release["timeout-minutes"].between?(1, 90), "release timeout must be bounded")
+assert(release.dig("env", "RELEASE_TAG") == "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}", "release RELEASE_TAG must resolve push and manual tags")
+assert(release.dig("env", "NOTARYTOOL_KEYCHAIN_PROFILE") == "switchtab-ci-notary", "CI notary profile must be fixed")
+
+steps = release.fetch("steps")
+names = steps.map { |step| step["name"] }
+expected_release_steps = [
+  "Checkout verified release commit",
+  "Verify release commit",
+  "Prepare signing workspace",
+  "Install Apple credentials",
+  "Build notarized DMG",
+  "Generate signed appcast",
+  "Generate release manifest",
+  "Publish release",
+  "Cleanup Apple credentials"
+]
+assert(names == expected_release_steps, "protected release semantic step list must be exact")
+
+release_checkout = steps.fetch(names.index("Checkout verified release commit"))
+assert(release_checkout["uses"] == "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "release checkout must use the approved full SHA")
+assert(release_checkout.dig("with", "ref") == "${{ needs.verify.outputs.release_commit }}", "release checkout must use only the verified commit")
+assert(release_checkout.dig("with", "fetch-depth") == 0, "release checkout must fetch complete history")
+assert(release_checkout.dig("with", "persist-credentials") == false, "release checkout credentials must not persist")
+assert(!release_checkout.dig("with", "ref").include?("tags"), "protected release must not check out a mutable tag ref")
+
+commit_check = steps.fetch(names.index("Verify release commit"))
+assert(commit_check.dig("env", "VERIFIED_RELEASE_COMMIT") == "${{ needs.verify.outputs.release_commit }}", "release commit check must receive the verified output")
+commit_check_run = commit_check.fetch("run")
+assert(commit_check_run.include?('"$VERIFIED_RELEASE_COMMIT" =~ ^[0-9a-f]{40}$'), "release commit check must reject malformed provenance")
+assert(commit_check_run.include?('head_commit="$(git rev-parse HEAD)"'), "release commit check must resolve HEAD")
+assert(commit_check_run.include?('[[ "$head_commit" != "$VERIFIED_RELEASE_COMMIT" ]]'), "release commit check must fail closed on mismatch")
 
 credentials_index = names.index("Install Apple credentials")
 prepare_index = names.index("Prepare signing workspace")
@@ -207,8 +367,12 @@ assert(appcast.dig("env", "SPARKLE_PUBLIC_ED_KEY") == "${{ vars.SPARKLE_PUBLIC_E
 assert(appcast.dig("env", "SPARKLE_PRIVATE_ED_KEY") == "${{ secrets.SPARKLE_PRIVATE_ED_KEY }}", "appcast generation needs the private key secret")
 assert(appcast.dig("env", "UPDATE_DOMAIN") == "updates.switchtab.app", "appcast generation must use the production update domain")
 
+manifest = steps.fetch(names.index("Generate release manifest"))
+assert(manifest.fetch("shell") == "bash", "manifest generation must explicitly use bash")
+assert(manifest.fetch("run") == 'scripts/generate-release-manifest.sh "$RELEASE_TAG"', "manifest generation must receive the validated tag")
+
 publish = steps.fetch(names.index("Publish release"))
-assert(publish.fetch("run").include?("scripts/publish-release.sh \"$RELEASE_TAG\""), "release publisher must receive the validated tag")
+assert(publish.fetch("run") == "scripts/publish-release.sh \"$RELEASE_TAG\"", "release publisher command must be exact")
 publish_env = publish.fetch("env")
 expected_publish_env = {
   "GH_TOKEN" => "${{ github.token }}",
@@ -221,13 +385,98 @@ expected_publish_env = {
 assert(publish_env == expected_publish_env, "publish step environment is incomplete or overprivileged")
 assert(!workflow_source.include?("CLOUDFLARE_ZONE_ID"), "release workflow must not receive zone credentials")
 
+assert(notify_job["needs"] == %w[verify release], "notify must depend on both verified provenance and public release success")
+assert(notify_job["environment"] == "release", "notify must use the protected release environment")
+assert(notify_job["permissions"] == { "contents" => "read" }, "notify must receive only contents: read")
+assert(notify_job["runs-on"] == "ubuntu-latest", "notify job must use the narrow Linux runner")
+assert(notify_job["timeout-minutes"].is_a?(Integer) && notify_job["timeout-minutes"].between?(1, 15), "notify timeout must be bounded")
+assert(notify_job.dig("env", "RELEASE_TAG") == "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}", "notify RELEASE_TAG must resolve push and manual tags")
+
+notify_steps = notify_job.fetch("steps")
+notify_names = notify_steps.map { |step| step["name"] }
+assert(notify_names == [
+  "Checkout verified release commit",
+  "Verify release commit",
+  "Create tap GitHub App token",
+  "Notify Homebrew tap"
+], "notify semantic step list must be exact")
+notify_checkout = steps_by_name(notify_job, "notify").fetch("Checkout verified release commit")
+assert(notify_checkout["uses"] == "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "notify checkout must use the approved full SHA")
+assert(notify_checkout.dig("with", "ref") == "${{ needs.verify.outputs.release_commit }}", "notify checkout must use only the verified commit")
+assert(notify_checkout.dig("with", "persist-credentials") == false, "notify checkout credentials must not persist")
+notify_commit_check = steps_by_name(notify_job, "notify").fetch("Verify release commit")
+assert(notify_commit_check.dig("env", "VERIFIED_RELEASE_COMMIT") == "${{ needs.verify.outputs.release_commit }}", "notify commit check must receive the verified output")
+notify_commit_check_run = notify_commit_check.fetch("run")
+assert(notify_commit_check_run.include?('"$VERIFIED_RELEASE_COMMIT" =~ ^[0-9a-f]{40}$'), "notify commit check must reject malformed provenance")
+assert(notify_commit_check_run.include?('head_commit="$(git rev-parse HEAD)"'), "notify commit check must resolve HEAD")
+assert(notify_commit_check_run.include?('[[ "$head_commit" != "$VERIFIED_RELEASE_COMMIT" ]]'), "notify commit check must fail closed on mismatch")
+
+validate_publication_and_notification(release, notify_job)
+
+mutation = deep_copy(jobs)
+steps_by_name(mutation.fetch("release"), "mutated release").fetch("Publish release")["run"] = ":"
+assert_rejects_mutation("no-op publish command") { validate_publication_and_notification(mutation.fetch("release"), mutation.fetch("notify")) }
+
+%w[Publish\ release].each do |step_name|
+  %w[continue-on-error if].each do |bypass|
+    mutation = deep_copy(jobs)
+    steps_by_name(mutation.fetch("release"), "mutated release").fetch(step_name)[bypass] = bypass == "if" ? "always()" : true
+    assert_rejects_mutation("#{step_name} #{bypass}") { validate_publication_and_notification(mutation.fetch("release"), mutation.fetch("notify")) }
+  end
+end
+%w[Create\ tap\ GitHub\ App\ token Notify\ Homebrew\ tap].each do |step_name|
+  %w[continue-on-error if].each do |bypass|
+    mutation = deep_copy(jobs)
+    steps_by_name(mutation.fetch("notify"), "mutated notify").fetch(step_name)[bypass] = bypass == "if" ? "always()" : true
+    assert_rejects_mutation("#{step_name} #{bypass}") { validate_publication_and_notification(mutation.fetch("release"), mutation.fetch("notify")) }
+  end
+end
+
+mutation = deep_copy(jobs)
+insert_after_named_step(mutation.fetch("release"), "Publish release", { "name" => "Unpublish release", "run" => "gh release delete \"$RELEASE_TAG\"" })
+assert_rejects_mutation("release edit after publication") { validate_publication_and_notification(mutation.fetch("release"), mutation.fetch("notify")) }
+
+mutation = deep_copy(jobs)
+insert_after_named_step(mutation.fetch("notify"), "Create tap GitHub App token", { "name" => "Redraft release", "run" => "gh release edit --draft \"$RELEASE_TAG\"" })
+assert_rejects_mutation("release edit between token and dispatch") { validate_publication_and_notification(mutation.fetch("release"), mutation.fetch("notify")) }
+
+[
+  ["release", "Publish release"],
+  ["notify", "Create tap GitHub App token"],
+  ["notify", "Notify Homebrew tap"]
+].each do |job_name, step_name|
+  mutation = deep_copy(jobs)
+  duplicate = deep_copy(steps_by_name(mutation.fetch(job_name), "mutated #{job_name}").fetch(step_name))
+  mutation.fetch(job_name).fetch("steps") << duplicate
+  assert_rejects_mutation("duplicate #{step_name}") { validate_publication_and_notification(mutation.fetch("release"), mutation.fetch("notify")) }
+end
+
+mutation = deep_copy(jobs)
+swap_named_steps(mutation.fetch("release"), "Generate release manifest", "Publish release")
+assert_rejects_mutation("reordered publication") { validate_publication_and_notification(mutation.fetch("release"), mutation.fetch("notify")) }
+
+mutation = deep_copy(jobs)
+swap_named_steps(mutation.fetch("notify"), "Create tap GitHub App token", "Notify Homebrew tap")
+assert_rejects_mutation("reordered token and dispatch") { validate_publication_and_notification(mutation.fetch("release"), mutation.fetch("notify")) }
+
+all_uses_steps = (verify_steps + steps + notify_steps).select { |step| step.key?("uses") }
+assert(all_uses_steps.length == 5, "only verify/release/notify checkout, setup-node, and GitHub App token actions are allowed")
+all_uses_steps.each do |step|
+  assert(step["uses"].match?(%r{\A[^@]+@[0-9a-f]{40}\z}), "all actions must be SHA-pinned")
+end
+
 all_secret_references = workflow_source.scan(/secrets\.([A-Z0-9_]+)/).flatten.uniq.sort
 expected_secret_references = (apple_secrets + %w[
   R2_ACCESS_KEY_ID
   R2_SECRET_ACCESS_KEY
   SPARKLE_PRIVATE_ED_KEY
+  TAP_GITHUB_APP_PRIVATE_KEY
 ]).sort
 assert(all_secret_references == expected_secret_references, "workflow secret set is incomplete or overprivileged")
+assert(!release.to_s.include?("TAP_GITHUB_APP_PRIVATE_KEY"), "tap private key must not be available to release")
+assert(notify_job.to_s.scan(/secrets\.([A-Z0-9_]+)/).flatten == ["TAP_GITHUB_APP_PRIVATE_KEY"], "notify may receive only the tap private key secret")
+release_secret_names = release.to_s.scan(/secrets\.([A-Z0-9_]+)/).flatten.uniq.sort
+assert(release_secret_names == (expected_secret_references - ["TAP_GITHUB_APP_PRIVATE_KEY"]).sort, "Apple, Sparkle, and R2 secrets must stay in release")
 
 cleanup = steps.fetch(names.index("Cleanup Apple credentials"))
 assert(cleanup["if"] == "always()", "credential cleanup must run unconditionally")
@@ -270,18 +519,22 @@ PREPARE_HARNESS="$TEMP_ROOT/prepare-signing-workspace.sh"
 CLEANUP_HARNESS="$TEMP_ROOT/cleanup-signing-workspace.sh"
 VALIDATION_SOURCE="$TEMP_ROOT/validate-release.sh"
 TAG_REF_HARNESS="$TEMP_ROOT/validate-tag-ref.sh"
+RELEASE_COMMIT_CHECK_HARNESS="$TEMP_ROOT/verify-release-commit.sh"
+NOTIFY_COMMIT_CHECK_HARNESS="$TEMP_ROOT/verify-notify-commit.sh"
 mkdir -p "$FAKE_BIN"
 
 extract_workflow_step() {
-    local step_name="$1"
-    local destination="$2"
+    local job_name="$1"
+    local step_name="$2"
+    local destination="$3"
 
-    /usr/bin/ruby - "$WORKFLOW_PATH" "$step_name" > "$destination" <<'RUBY'
+    /usr/bin/ruby - "$WORKFLOW_PATH" "$job_name" "$step_name" > "$destination" <<'RUBY'
 require "yaml"
 
 workflow = YAML.safe_load(File.read(ARGV.fetch(0)), permitted_classes: [], permitted_symbols: [], aliases: false)
-step_name = ARGV.fetch(1)
-step = workflow.fetch("jobs").fetch("release").fetch("steps").find { |entry| entry["name"] == step_name }
+job_name = ARGV.fetch(1)
+step_name = ARGV.fetch(2)
+step = workflow.fetch("jobs").fetch(job_name).fetch("steps").find { |entry| entry["name"] == step_name }
 raise "missing workflow step: #{step_name}" unless step
 
 puts "#!/usr/bin/env bash"
@@ -290,9 +543,11 @@ RUBY
     chmod +x "$destination"
 }
 
-extract_workflow_step "Prepare signing workspace" "$PREPARE_HARNESS"
-extract_workflow_step "Cleanup Apple credentials" "$CLEANUP_HARNESS"
-extract_workflow_step "Validate release tag and provenance" "$VALIDATION_SOURCE"
+extract_workflow_step release "Prepare signing workspace" "$PREPARE_HARNESS"
+extract_workflow_step release "Cleanup Apple credentials" "$CLEANUP_HARNESS"
+extract_workflow_step verify "Validate release tag and provenance" "$VALIDATION_SOURCE"
+extract_workflow_step release "Verify release commit" "$RELEASE_COMMIT_CHECK_HARNESS"
+extract_workflow_step notify "Verify release commit" "$NOTIFY_COMMIT_CHECK_HARNESS"
 
 {
     printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail'
@@ -335,6 +590,25 @@ TAG_COMMIT="$(cd -- "$TAG_REPOSITORY" && git rev-parse 'refs/tags/v1.2^{commit}'
 [[ "$TAG_COMMIT" != "$BRANCH_COMMIT" ]] || fail "tag/branch ambiguity fixture did not use distinct commits"
 output="$(cd -- "$TAG_REPOSITORY" && RELEASE_TAG='v1.2' /bin/bash "$TAG_REF_HARNESS")"
 [[ "$output" == "$TAG_COMMIT" ]] || fail "exact tag validation resolved the branch instead of the tag: $output"
+
+# Both protected jobs must accept only the exact verified commit and fail closed otherwise.
+commit_check_harnesses=("$RELEASE_COMMIT_CHECK_HARNESS" "$NOTIFY_COMMIT_CHECK_HARNESS")
+for commit_check_harness in "${commit_check_harnesses[@]}"; do
+    (
+        cd -- "$TAG_REPOSITORY"
+        VERIFIED_RELEASE_COMMIT="$TAG_COMMIT" /bin/bash "$commit_check_harness"
+    )
+    set +e
+    output="$(cd -- "$TAG_REPOSITORY" && VERIFIED_RELEASE_COMMIT="$BRANCH_COMMIT" /bin/bash "$commit_check_harness" 2>&1)"
+    status=$?
+    set -e
+    [[ "$status" -ne 0 ]] || fail "protected job accepted a mismatched verified commit"
+    set +e
+    output="$(cd -- "$TAG_REPOSITORY" && VERIFIED_RELEASE_COMMIT='refs/tags/v1.2' /bin/bash "$commit_check_harness" 2>&1)"
+    status=$?
+    set -e
+    [[ "$status" -ne 0 ]] || fail "protected job accepted non-commit provenance"
+done
 
 # The non-secret preparation creates a random private directory and exports only its safe paths.
 RUNNER_FIXTURE="$TEMP_ROOT/runner"

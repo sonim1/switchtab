@@ -55,9 +55,12 @@ GIT_LOG="$TEMP_ROOT/git.log"
 ORDER_LOG="$TEMP_ROOT/order.log"
 MUTATION_LOG="$TEMP_ROOT/mutations.log"
 CMP_LOG="$TEMP_ROOT/cmp.log"
+RUBY_LOG="$TEMP_ROOT/ruby.log"
 CONFIG_PATH="$TEMP_ROOT/release.env"
 DMG_NAME='SwitchTab-1.2-7.dmg'
 CHECKSUM_NAME="$DMG_NAME.sha256"
+MANIFEST_NAME='release-manifest.json'
+VALID_COMMIT='0123456789abcdef0123456789abcdef01234567'
 
 mkdir -p "$FIXTURE_ROOT/scripts" "$UPDATE_DIR" "$FAKE_BIN" "$GH_ASSETS"
 
@@ -67,15 +70,21 @@ set -euo pipefail
 
 printf '%s\n' "$*" >> "$GIT_LOG"
 case "$1 ${2:-}" in
+    'remote get-url')
+        [[ "${3:-}" == origin ]] || exit 89
+        exit_status="${FAKE_GIT_REMOTE_STATUS:-0}"
+        [[ "$exit_status" -eq 0 ]] || exit "$exit_status"
+        printf '%s\n' "${FAKE_ORIGIN_URL:-git@github.com:sonim1/switchtab.git}"
+        ;;
     'rev-parse HEAD')
         exit_status="${FAKE_GIT_HEAD_STATUS:-0}"
         [[ "$exit_status" -eq 0 ]] || exit "$exit_status"
-        printf '%s\n' "${FAKE_HEAD_COMMIT:-head-commit}"
+        printf '%s\n' "${FAKE_HEAD_COMMIT:-0123456789abcdef0123456789abcdef01234567}"
         ;;
     'rev-parse v'*'^{commit}')
         exit_status="${FAKE_GIT_TAG_STATUS:-0}"
         [[ "$exit_status" -eq 0 ]] || exit "$exit_status"
-        printf '%s\n' "${FAKE_TAG_COMMIT:-head-commit}"
+        printf '%s\n' "${FAKE_TAG_COMMIT:-0123456789abcdef0123456789abcdef01234567}"
         ;;
     'merge-base --is-ancestor')
         exit "${FAKE_GIT_ANCESTOR_STATUS:-0}"
@@ -90,6 +99,14 @@ cat > "$FAKE_BIN/gh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${GH_REPO:-}" != 'sonim1/switchtab' ]]; then
+    printf 'unexpected GitHub repository binding: %s\n' "${GH_REPO:-<unset>}" >&2
+    exit 78
+fi
+if [[ "${GH_HOST:-}" != 'github.com' ]]; then
+    printf 'unexpected GitHub host binding: %s\n' "${GH_HOST:-<unset>}" >&2
+    exit 78
+fi
 printf '%s\n' "$*" >> "$GH_LOG"
 state='absent'
 [[ ! -f "$GH_STATE" ]] || state="$(<"$GH_STATE")"
@@ -184,6 +201,17 @@ fi
 exec /usr/bin/cmp "$@"
 EOF
 
+cat > "$FAKE_BIN/ruby" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "$*" >> "$RUBY_LOG"
+if [[ "${FAKE_RUBY_STATUS:-0}" -ne 0 ]]; then
+    exit "$FAKE_RUBY_STATUS"
+fi
+exec /usr/bin/ruby "$@"
+EOF
+
 cat > "$FIXTURE_ROOT/scripts/publish-update.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -192,7 +220,8 @@ printf 'publish-update\n' >> "$ORDER_LOG"
 exit "${PUBLISH_STATUS:-0}"
 EOF
 
-chmod +x "$FAKE_BIN/git" "$FAKE_BIN/gh" "$FAKE_BIN/cmp" "$FIXTURE_ROOT/scripts/publish-update.sh"
+chmod +x "$FAKE_BIN/git" "$FAKE_BIN/gh" "$FAKE_BIN/cmp" "$FAKE_BIN/ruby" \
+    "$FIXTURE_ROOT/scripts/publish-update.sh"
 
 write_appcast() {
     local url="${1:-https://updates.test.example/$DMG_NAME}"
@@ -211,7 +240,76 @@ write_valid_artifacts() {
     local hash
     hash="$(/usr/bin/shasum -a 256 "$UPDATE_DIR/$DMG_NAME" | awk '{print $1}')"
     printf '%s  %s\n' "$hash" "$DMG_NAME" > "$UPDATE_DIR/$CHECKSUM_NAME"
+    cat > "$UPDATE_DIR/$MANIFEST_NAME" <<EOF
+{
+  "schemaVersion": 1,
+  "repository": "sonim1/switchtab",
+  "tag": "v1.2",
+  "version": "1.2",
+  "commit": "$VALID_COMMIT",
+  "packages": [
+    {
+      "type": "cask",
+      "token": "switchtab",
+      "source": {
+        "kind": "release-asset",
+        "name": "$DMG_NAME",
+        "sha256": "$hash"
+      }
+    }
+  ]
+}
+EOF
     write_appcast
+}
+
+mutate_manifest() {
+    /usr/bin/ruby -rjson -e '
+      path, mutation = ARGV
+      data = JSON.parse(File.read(path))
+      case mutation
+      when "schema-type" then data["schemaVersion"] = "1"
+      when "schema-float" then data["schemaVersion"] = 1.0
+      when "repository" then data["repository"] = "someone/something"
+      when "tag" then data["tag"] = "v9.9"
+      when "version" then data["version"] = "9.9"
+      when "commit" then data["commit"] = "fedcba9876543210fedcba9876543210fedcba98"
+      when "packages-shape" then data["packages"] = []
+      when "missing-token" then data["packages"][0].delete("token")
+      when "package-type" then data["packages"][0]["type"] = "formula"
+      when "package-token" then data["packages"][0]["token"] = "other"
+      when "package-extra" then data["packages"][0]["extra"] = true
+      when "source-kind" then data["packages"][0]["source"]["kind"] = "url"
+      when "source-name" then data["packages"][0]["source"]["name"] = "Other.dmg"
+      when "source-sha" then data["packages"][0]["source"]["sha256"] = "0" * 64
+      when "source-extra" then data["packages"][0]["source"]["extra"] = true
+      when "root-extra" then data["extra"] = true
+      else abort "unknown mutation"
+      end
+      File.open(path, "w") { |file| file.write(JSON.pretty_generate(data)); file.write("\n") }
+    ' "$UPDATE_DIR/$MANIFEST_NAME" "$1"
+}
+
+duplicate_manifest_key() {
+    /usr/bin/ruby -e '
+      path, duplicate, asset_name = ARGV
+      text = File.read(path)
+      case duplicate
+      when "repository"
+        needle = %Q{  "repository": "sonim1/switchtab",}
+        replacement = %Q{  "repository": "attacker/repo",\n#{needle}}
+      when "source-name"
+        needle = %Q{        "name": "#{asset_name}",}
+        replacement = %Q{        "name": "Other.dmg",\n#{needle}}
+      when "source-sha"
+        needle = text.lines.find { |line| line.start_with?(%Q{        "sha256": }) }.to_s.chomp
+        replacement = %Q{        "sha256": "#{"0" * 64}",\n#{needle}}
+      else
+        abort "unknown duplicate"
+      end
+      abort "duplicate fixture needle missing" unless text.sub!(needle, replacement)
+      File.open(path, "w") { |file| file.write(text) }
+    ' "$UPDATE_DIR/$MANIFEST_NAME" "$1" "$DMG_NAME"
 }
 
 reset_scenario() {
@@ -221,11 +319,14 @@ reset_scenario() {
     : > "$ORDER_LOG"
     : > "$MUTATION_LOG"
     : > "$CMP_LOG"
-    FAKE_HEAD_COMMIT='head-commit'
-    FAKE_TAG_COMMIT='head-commit'
+    : > "$RUBY_LOG"
+    FAKE_HEAD_COMMIT="$VALID_COMMIT"
+    FAKE_TAG_COMMIT="$VALID_COMMIT"
     FAKE_GIT_HEAD_STATUS=0
     FAKE_GIT_TAG_STATUS=0
     FAKE_GIT_ANCESTOR_STATUS=0
+    FAKE_GIT_REMOTE_STATUS=0
+    FAKE_ORIGIN_URL='git@github.com:sonim1/switchtab.git'
     FAKE_GH_PROBE_STATUS=0
     FAKE_GH_PROBE_OUTPUT=''
     FAKE_GH_CREATE_STATUS=0
@@ -235,6 +336,9 @@ reset_scenario() {
     FAKE_GH_EDIT_STATUS=0
     FAKE_EXTRA_ASSET_NAMES=''
     FAKE_CMP_STATUS=0
+    FAKE_RUBY_STATUS=0
+    AMBIENT_GH_REPO='attacker/ambient-repository'
+    AMBIENT_GH_HOST='example.invalid'
     PUBLISH_STATUS=0
     write_valid_artifacts
 }
@@ -247,6 +351,9 @@ run_release() {
         GIT_BIN="$FAKE_BIN/git" \
         GH_BIN="$FAKE_BIN/gh" \
         CMP_BIN="$FAKE_BIN/cmp" \
+        RUBY_BIN="$FAKE_BIN/ruby" \
+        GH_REPO="$AMBIENT_GH_REPO" \
+        GH_HOST="$AMBIENT_GH_HOST" \
         PUBLISH_UPDATE_SCRIPT="$FIXTURE_ROOT/scripts/publish-update.sh" \
         GH_STATE="$GH_STATE" \
         GH_ASSETS="$GH_ASSETS" \
@@ -255,11 +362,14 @@ run_release() {
         ORDER_LOG="$ORDER_LOG" \
         MUTATION_LOG="$MUTATION_LOG" \
         CMP_LOG="$CMP_LOG" \
+        RUBY_LOG="$RUBY_LOG" \
         FAKE_HEAD_COMMIT="$FAKE_HEAD_COMMIT" \
         FAKE_TAG_COMMIT="$FAKE_TAG_COMMIT" \
         FAKE_GIT_HEAD_STATUS="$FAKE_GIT_HEAD_STATUS" \
         FAKE_GIT_TAG_STATUS="$FAKE_GIT_TAG_STATUS" \
         FAKE_GIT_ANCESTOR_STATUS="$FAKE_GIT_ANCESTOR_STATUS" \
+        FAKE_GIT_REMOTE_STATUS="$FAKE_GIT_REMOTE_STATUS" \
+        FAKE_ORIGIN_URL="$FAKE_ORIGIN_URL" \
         FAKE_GH_PROBE_STATUS="$FAKE_GH_PROBE_STATUS" \
         FAKE_GH_PROBE_OUTPUT="$FAKE_GH_PROBE_OUTPUT" \
         FAKE_GH_CREATE_STATUS="$FAKE_GH_CREATE_STATUS" \
@@ -269,6 +379,7 @@ run_release() {
         FAKE_GH_EDIT_STATUS="$FAKE_GH_EDIT_STATUS" \
         FAKE_EXTRA_ASSET_NAMES="$FAKE_EXTRA_ASSET_NAMES" \
         FAKE_CMP_STATUS="$FAKE_CMP_STATUS" \
+        FAKE_RUBY_STATUS="$FAKE_RUBY_STATUS" \
         PUBLISH_STATUS="$PUBLISH_STATUS" \
         "$FIXTURE_SCRIPT" "$@" 2>&1
     )"
@@ -281,36 +392,66 @@ run_release() {
 cp "$SCRIPT_SOURCE" "$FIXTURE_SCRIPT"
 chmod +x "$FIXTURE_SCRIPT"
 
-# New draft: stage both exact assets, publish R2, and expose the release last.
+# New draft: override attacker-controlled ambient GH_REPO and GH_HOST, stage all exact assets,
+# publish R2, and expose the release last. The fake gh rejects every call not bound
+# to sonim1/switchtab on github.com.
 reset_scenario
 run_release v1.2
 assert_status 0
 assert_before 'release create v1.2' "release upload v1.2 $UPDATE_DIR/$DMG_NAME"
-assert_before "release upload v1.2 $UPDATE_DIR/$CHECKSUM_NAME" 'publish-update'
+assert_before "release upload v1.2 $UPDATE_DIR/$DMG_NAME" "release upload v1.2 $UPDATE_DIR/$CHECKSUM_NAME"
+assert_before "release upload v1.2 $UPDATE_DIR/$CHECKSUM_NAME" "release upload v1.2 $UPDATE_DIR/$MANIFEST_NAME"
+assert_before "release upload v1.2 $UPDATE_DIR/$MANIFEST_NAME" 'publish-update'
 assert_before 'publish-update' 'release edit v1.2 --draft=false'
 [[ "$(tail -1 "$ORDER_LOG")" == 'release edit v1.2 --draft=false' ]] || fail "final edit was not last"
 grep -Fxq 'release create v1.2 --draft --verify-tag --generate-notes --title SwitchTab 1.2' "$GH_LOG" || \
     fail "draft creation flags/title were incorrect: $(<"$GH_LOG")"
-[[ -f "$GH_ASSETS/$DMG_NAME" && -f "$GH_ASSETS/$CHECKSUM_NAME" ]] || fail "exact assets were not uploaded"
+[[ -f "$GH_ASSETS/$DMG_NAME" && -f "$GH_ASSETS/$CHECKSUM_NAME" && -f "$GH_ASSETS/$MANIFEST_NAME" ]] || \
+    fail "exact assets were not uploaded"
 ! grep -Fq -- '--clobber' "$GH_LOG" || fail "asset upload used --clobber"
 [[ "$(<"$GH_STATE")" == published ]] || fail "draft was not published"
+
+# Release config cannot redirect GitHub operations after it is sourced.
+reset_scenario
+cat > "$CONFIG_PATH" <<'EOF'
+GH_REPO='attacker/config-repository'
+GH_HOST='config.example.invalid'
+EOF
+run_release v1.2
+assert_status 0
+[[ "$(<"$GH_STATE")" == published ]] || fail "config-hostile draft was not published"
 
 # Existing draft and published release are idempotent when both assets match.
 reset_scenario
 printf 'draft' > "$GH_STATE"
 cp "$UPDATE_DIR/$DMG_NAME" "$GH_ASSETS/$DMG_NAME"
 cp "$UPDATE_DIR/$CHECKSUM_NAME" "$GH_ASSETS/$CHECKSUM_NAME"
+cp "$UPDATE_DIR/$MANIFEST_NAME" "$GH_ASSETS/$MANIFEST_NAME"
 run_release v1.2
 assert_status 0
 ! grep -Fq 'release upload ' "$ORDER_LOG" || fail "existing assets were reuploaded"
 assert_before 'publish-update' 'release edit v1.2 --draft=false'
 grep -Fq "$DMG_NAME.download/$DMG_NAME" "$CMP_LOG" || fail "existing DMG was not byte-compared"
 grep -Fq "$CHECKSUM_NAME.download/$CHECKSUM_NAME" "$CMP_LOG" || fail "existing checksum was not byte-compared"
+grep -Fq "$MANIFEST_NAME.download/$MANIFEST_NAME" "$CMP_LOG" || fail "existing manifest was not byte-compared"
+
+# An existing draft with only the manifest absent uploads that final asset before publication.
+reset_scenario
+printf 'draft' > "$GH_STATE"
+cp "$UPDATE_DIR/$DMG_NAME" "$GH_ASSETS/$DMG_NAME"
+cp "$UPDATE_DIR/$CHECKSUM_NAME" "$GH_ASSETS/$CHECKSUM_NAME"
+run_release v1.2
+assert_status 0
+[[ "$(grep -F 'release upload ' "$ORDER_LOG")" == "release upload v1.2 $UPDATE_DIR/$MANIFEST_NAME" ]] || \
+    fail "existing draft did not upload only the absent manifest: $(<"$ORDER_LOG")"
+assert_before "release upload v1.2 $UPDATE_DIR/$MANIFEST_NAME" 'publish-update'
+assert_before 'publish-update' 'release edit v1.2 --draft=false'
 
 reset_scenario
 printf 'published' > "$GH_STATE"
 cp "$UPDATE_DIR/$DMG_NAME" "$GH_ASSETS/$DMG_NAME"
 cp "$UPDATE_DIR/$CHECKSUM_NAME" "$GH_ASSETS/$CHECKSUM_NAME"
+cp "$UPDATE_DIR/$MANIFEST_NAME" "$GH_ASSETS/$MANIFEST_NAME"
 run_release v1.2
 assert_status 0
 [[ "$(<"$ORDER_LOG")" == 'publish-update' ]] || fail "published release was mutated: $(<"$ORDER_LOG")"
@@ -319,6 +460,7 @@ assert_status 0
 reset_scenario
 printf 'published' > "$GH_STATE"
 cp "$UPDATE_DIR/$CHECKSUM_NAME" "$GH_ASSETS/$CHECKSUM_NAME"
+cp "$UPDATE_DIR/$MANIFEST_NAME" "$GH_ASSETS/$MANIFEST_NAME"
 run_release v1.2
 [[ "$status" -ne 0 ]] || fail "published release missing DMG was mutated"
 assert_output_contains 'published release is missing'
@@ -328,18 +470,30 @@ assert_no_publish_or_edit
 reset_scenario
 printf 'published' > "$GH_STATE"
 cp "$UPDATE_DIR/$DMG_NAME" "$GH_ASSETS/$DMG_NAME"
+cp "$UPDATE_DIR/$MANIFEST_NAME" "$GH_ASSETS/$MANIFEST_NAME"
 run_release v1.2
 [[ "$status" -ne 0 ]] || fail "published release missing checksum was mutated"
 assert_output_contains 'published release is missing'
 ! grep -Fq 'release upload ' "$ORDER_LOG" || fail "checksum was uploaded to a published release"
 assert_no_publish_or_edit
 
+reset_scenario
+printf 'published' > "$GH_STATE"
+cp "$UPDATE_DIR/$DMG_NAME" "$GH_ASSETS/$DMG_NAME"
+cp "$UPDATE_DIR/$CHECKSUM_NAME" "$GH_ASSETS/$CHECKSUM_NAME"
+run_release v1.2
+[[ "$status" -ne 0 ]] || fail "published release missing manifest was mutated"
+assert_output_contains 'published release is missing'
+! grep -Fq 'release upload ' "$ORDER_LOG" || fail "manifest was uploaded to a published release"
+assert_no_publish_or_edit
+
 # Existing assets are immutable, unambiguous, and successfully downloaded before comparison.
-for conflicting_name in "$DMG_NAME" "$CHECKSUM_NAME"; do
+for conflicting_name in "$DMG_NAME" "$CHECKSUM_NAME" "$MANIFEST_NAME"; do
     reset_scenario
     printf 'draft' > "$GH_STATE"
     cp "$UPDATE_DIR/$DMG_NAME" "$GH_ASSETS/$DMG_NAME"
     cp "$UPDATE_DIR/$CHECKSUM_NAME" "$GH_ASSETS/$CHECKSUM_NAME"
+    cp "$UPDATE_DIR/$MANIFEST_NAME" "$GH_ASSETS/$MANIFEST_NAME"
     printf 'conflicting bytes\n' > "$GH_ASSETS/$conflicting_name"
     run_release v1.2
     [[ "$status" -ne 0 ]] || fail "conflicting $conflicting_name was accepted"
@@ -352,6 +506,7 @@ reset_scenario
 printf 'draft' > "$GH_STATE"
 cp "$UPDATE_DIR/$DMG_NAME" "$GH_ASSETS/$DMG_NAME"
 cp "$UPDATE_DIR/$CHECKSUM_NAME" "$GH_ASSETS/$CHECKSUM_NAME"
+cp "$UPDATE_DIR/$MANIFEST_NAME" "$GH_ASSETS/$MANIFEST_NAME"
 FAKE_GH_DOWNLOAD_STATUS=46
 run_release v1.2
 assert_status 46
@@ -361,6 +516,7 @@ reset_scenario
 printf 'draft' > "$GH_STATE"
 cp "$UPDATE_DIR/$DMG_NAME" "$GH_ASSETS/$DMG_NAME"
 cp "$UPDATE_DIR/$CHECKSUM_NAME" "$GH_ASSETS/$CHECKSUM_NAME"
+cp "$UPDATE_DIR/$MANIFEST_NAME" "$GH_ASSETS/$MANIFEST_NAME"
 FAKE_CMP_STATUS=37
 run_release v1.2
 assert_status 37
@@ -371,6 +527,7 @@ reset_scenario
 printf 'draft' > "$GH_STATE"
 cp "$UPDATE_DIR/$DMG_NAME" "$GH_ASSETS/$DMG_NAME"
 cp "$UPDATE_DIR/$CHECKSUM_NAME" "$GH_ASSETS/$CHECKSUM_NAME"
+cp "$UPDATE_DIR/$MANIFEST_NAME" "$GH_ASSETS/$MANIFEST_NAME"
 FAKE_EXTRA_ASSET_NAMES="$DMG_NAME"
 run_release v1.2
 [[ "$status" -ne 0 ]] || fail "duplicate asset name was accepted"
@@ -490,7 +647,85 @@ run_release v1.2
 [[ "$status" -ne 0 ]] || fail "checksum mismatch was accepted"
 assert_no_mutation
 
+# The release manifest is mandatory and its exact context is validated before mutation.
+reset_scenario
+rm -f "$UPDATE_DIR/$MANIFEST_NAME"
+run_release v1.2
+assert_status 66
+assert_output_contains 'release manifest is missing'
+[[ ! -s "$GIT_LOG" ]] || fail "git ran before the missing manifest was rejected"
+[[ ! -s "$GH_LOG" ]] || fail "GitHub was accessed after the missing manifest was rejected"
+assert_no_mutation
+assert_no_publish_or_edit
+
+reset_scenario
+printf '{not json\n' > "$UPDATE_DIR/$MANIFEST_NAME"
+run_release v1.2
+assert_status 64
+assert_output_contains 'Release manifest is invalid'
+[[ ! -s "$GH_LOG" ]] || fail "GitHub was accessed after malformed manifest JSON"
+assert_no_mutation
+assert_no_publish_or_edit
+
+for duplicate in repository source-name source-sha; do
+    reset_scenario
+    duplicate_manifest_key "$duplicate"
+    run_release v1.2
+    assert_status 64
+    assert_output_contains 'Release manifest is invalid'
+    [[ ! -s "$GH_LOG" ]] || fail "GitHub was accessed after duplicate manifest key: $duplicate"
+    assert_no_mutation
+    assert_no_publish_or_edit
+done
+
+for mutation in \
+    schema-type schema-float repository tag version commit packages-shape missing-token package-type package-token \
+    package-extra source-kind source-name source-sha source-extra root-extra; do
+    reset_scenario
+    mutate_manifest "$mutation"
+    run_release v1.2
+    assert_status 64
+    assert_output_contains 'Release manifest is invalid'
+    [[ ! -s "$GH_LOG" ]] || fail "GitHub was accessed after manifest mutation: $mutation"
+    assert_no_mutation
+    assert_no_publish_or_edit
+done
+
+reset_scenario
+FAKE_RUBY_STATUS=28
+run_release v1.2
+assert_status 28
+[[ -s "$RUBY_LOG" ]] || fail "injected Ruby command was not called"
+[[ ! -s "$GH_LOG" ]] || fail "GitHub was accessed after Ruby failure"
+assert_no_mutation
+assert_no_publish_or_edit
+
 # Git provenance checks fail before GitHub access/mutation and preserve true tool errors.
+reset_scenario
+FAKE_GIT_REMOTE_STATUS=30
+run_release v1.2
+assert_status 30
+[[ ! -s "$GH_LOG" ]] || fail "GitHub was accessed after origin inspection failed"
+assert_no_mutation
+assert_no_publish_or_edit
+
+reset_scenario
+FAKE_ORIGIN_URL='git@github.com:attacker/switchtab.git'
+run_release v1.2
+assert_status 64
+assert_output_contains 'official repository'
+[[ ! -s "$GH_LOG" ]] || fail "GitHub was accessed from an unrelated local checkout"
+assert_no_mutation
+assert_no_publish_or_edit
+
+reset_scenario
+FAKE_HEAD_COMMIT='ABCDEF0123456789ABCDEF0123456789ABCDEF01'
+FAKE_TAG_COMMIT="$FAKE_HEAD_COMMIT"
+run_release v1.2
+assert_status 64
+assert_output_contains 'invalid commit'
+[[ ! -s "$GH_LOG" ]] || fail "GitHub was accessed after invalid commit provenance"
+
 reset_scenario
 FAKE_GIT_TAG_STATUS=27
 run_release v1.2

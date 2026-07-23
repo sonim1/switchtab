@@ -32,6 +32,10 @@ if [[ -f "$RELEASE_CONFIG_PATH" ]]; then
 fi
 set +x
 
+RELEASE_REPOSITORY='sonim1/switchtab'
+GH_REPO="$RELEASE_REPOSITORY"
+GH_HOST='github.com'
+export GH_REPO GH_HOST
 DIRECT_BUILD_ROOT="${DIRECT_BUILD_ROOT:-$PROJECT_ROOT/.build/direct-distribution}"
 UPDATE_OUTPUT_DIR="${UPDATE_OUTPUT_DIR:-$DIRECT_BUILD_ROOT/updates}"
 UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.app}"
@@ -40,8 +44,11 @@ GH_BIN="${GH_BIN:-gh}"
 SHASUM_BIN="${SHASUM_BIN:-/usr/bin/shasum}"
 XMLLINT_BIN="${XMLLINT_BIN:-/usr/bin/xmllint}"
 CMP_BIN="${CMP_BIN:-/usr/bin/cmp}"
+RUBY_BIN="${RUBY_BIN:-/usr/bin/ruby}"
 PUBLISH_UPDATE_SCRIPT="${PUBLISH_UPDATE_SCRIPT:-$PROJECT_ROOT/scripts/publish-update.sh}"
 APPCAST_PATH="$UPDATE_OUTPUT_DIR/appcast.xml"
+MANIFEST_NAME='release-manifest.json'
+MANIFEST_PATH="$UPDATE_OUTPUT_DIR/$MANIFEST_NAME"
 TEMP_DIR=''
 
 cleanup() {
@@ -102,10 +109,12 @@ require_command "GitHub CLI" "$GH_BIN"
 require_command "shasum" "$SHASUM_BIN"
 require_command "xmllint" "$XMLLINT_BIN"
 require_command "cmp" "$CMP_BIN"
+require_command "Ruby" "$RUBY_BIN"
 if [[ ! -x "$PUBLISH_UPDATE_SCRIPT" ]]; then
     fail "Publish-update script is unavailable: $PUBLISH_UPDATE_SCRIPT" 66
 fi
 require_file "appcast" "$APPCAST_PATH"
+require_file "release manifest" "$MANIFEST_PATH"
 
 if [[ ! "$UPDATE_DOMAIN" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ || "$UPDATE_DOMAIN" == *..* ]]; then
     fail "UPDATE_DOMAIN is not a safe domain name" 64
@@ -237,12 +246,34 @@ if [[ "$LOCAL_DMG_HASH" != "$EXPECTED_DMG_HASH" ]]; then
     fail "Local DMG checksum mismatch"
 fi
 
+if ORIGIN_URL="$("$GIT_BIN" remote get-url origin)"; then
+    :
+else
+    git_status=$?
+    echo "Unable to resolve the origin repository" >&2
+    exit "$git_status"
+fi
+case "$ORIGIN_URL" in
+    "https://github.com/$RELEASE_REPOSITORY"|\
+    "https://github.com/$RELEASE_REPOSITORY.git"|\
+    "git@github.com:$RELEASE_REPOSITORY.git"|\
+    "ssh://git@github.com/$RELEASE_REPOSITORY"|\
+    "ssh://git@github.com/$RELEASE_REPOSITORY.git")
+        ;;
+    *)
+        fail "Release checkout origin is not the official repository: $RELEASE_REPOSITORY" 64
+        ;;
+esac
+
 if HEAD_COMMIT="$("$GIT_BIN" rev-parse HEAD)"; then
     :
 else
     git_status=$?
     echo "Unable to resolve HEAD" >&2
     exit "$git_status"
+fi
+if [[ ! "$HEAD_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+    fail "Git returned an invalid commit for HEAD" 64
 fi
 if TAG_COMMIT="$("$GIT_BIN" rev-parse "$TAG^{commit}")"; then
     :
@@ -263,6 +294,62 @@ else
     fi
     echo "Unable to validate release tag ancestry" >&2
     exit "$git_status"
+fi
+
+set +e
+"$RUBY_BIN" -rjson -e '
+  class DuplicateJSONKeyError < StandardError; end
+  class UniqueJSONObject < Hash
+    def []=(key, value)
+      raise DuplicateJSONKeyError, key if key?(key)
+      super
+    end
+  end
+
+  path, expected_repository, expected_tag, expected_version, expected_commit, expected_name, expected_sha = ARGV
+
+  begin
+    data = JSON.parse(File.read(path), object_class: UniqueJSONObject)
+  rescue JSON::ParserError, DuplicateJSONKeyError => error
+    warn "Release manifest JSON is malformed: #{error.message}"
+    exit 64
+  rescue SystemCallError => error
+    warn "Unable to read release manifest: #{error.message}"
+    exit 66
+  end
+
+  exact_keys = lambda do |value, keys|
+    value.is_a?(Hash) && value.keys.sort == keys.sort
+  end
+  package = data.is_a?(Hash) && data["packages"].is_a?(Array) && data["packages"].length == 1 ? data["packages"][0] : nil
+  source = package.is_a?(Hash) ? package["source"] : nil
+
+  valid =
+    exact_keys.call(data, %w[commit packages repository schemaVersion tag version]) &&
+    data["schemaVersion"].is_a?(Integer) && data["schemaVersion"] == 1 &&
+    data["repository"] == expected_repository &&
+    data["tag"] == expected_tag &&
+    data["version"] == expected_version &&
+    data["commit"] == expected_commit &&
+    exact_keys.call(package, %w[source token type]) &&
+    package["type"] == "cask" &&
+    package["token"] == "switchtab" &&
+    exact_keys.call(source, %w[kind name sha256]) &&
+    source["kind"] == "release-asset" &&
+    source["name"] == expected_name &&
+    source["sha256"] == expected_sha
+
+  exit(valid ? 0 : 64)
+' "$MANIFEST_PATH" "$RELEASE_REPOSITORY" "$TAG" "$SHORT_VERSION" "$HEAD_COMMIT" "$DMG_NAME" "$LOCAL_DMG_HASH"
+manifest_status=$?
+set -e
+if [[ "$manifest_status" -ne 0 ]]; then
+    if [[ "$manifest_status" -eq 64 ]]; then
+        echo "Release manifest is invalid for $TAG" >&2
+    else
+        echo "Release manifest validation failed" >&2
+    fi
+    exit "$manifest_status"
 fi
 
 if TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/switchtab-publish-release.XXXXXX")"; then
@@ -388,12 +475,16 @@ prepare_asset() {
 
 DMG_ASSET_COUNT="$(asset_name_count "$DMG_NAME")"
 CHECKSUM_ASSET_COUNT="$(asset_name_count "$CHECKSUM_NAME")"
+MANIFEST_ASSET_COUNT="$(asset_name_count "$MANIFEST_NAME")"
 if [[ "$release_is_draft" == false ]]; then
     if [[ "$DMG_ASSET_COUNT" -ne 1 ]]; then
         fail "GitHub published release is missing one exact required asset: $DMG_NAME"
     fi
     if [[ "$CHECKSUM_ASSET_COUNT" -ne 1 ]]; then
         fail "GitHub published release is missing one exact required asset: $CHECKSUM_NAME"
+    fi
+    if [[ "$MANIFEST_ASSET_COUNT" -ne 1 ]]; then
+        fail "GitHub published release is missing one exact required asset: $MANIFEST_NAME"
     fi
 fi
 
@@ -403,6 +494,11 @@ else
     exit $?
 fi
 if prepare_asset "$CHECKSUM_PATH" "$CHECKSUM_NAME"; then
+    :
+else
+    exit $?
+fi
+if prepare_asset "$MANIFEST_PATH" "$MANIFEST_NAME"; then
     :
 else
     exit $?
