@@ -289,7 +289,7 @@ jobs:
         env:
           SPARKLE_PUBLIC_ED_KEY: "${{ vars.SPARKLE_PUBLIC_ED_KEY }}"
           SPARKLE_PRIVATE_ED_KEY: "${{ secrets.SPARKLE_PRIVATE_ED_KEY }}"
-          UPDATE_DOMAIN: updates.switchtab.app
+          UPDATE_DOMAIN: updates.switchtab.royjen.com
         run: scripts/generate-appcast.sh
 
       - name: Generate release manifest
@@ -303,8 +303,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: "${{ vars.CLOUDFLARE_ACCOUNT_ID }}"
           R2_ACCESS_KEY_ID: "${{ secrets.R2_ACCESS_KEY_ID }}"
           R2_SECRET_ACCESS_KEY: "${{ secrets.R2_SECRET_ACCESS_KEY }}"
-          R2_BUCKET_NAME: switchtab-updates
-          UPDATE_DOMAIN: updates.switchtab.app
+          R2_BUCKET_NAME: switchtab
+          UPDATE_DOMAIN: updates.switchtab.royjen.com
         run: scripts/publish-release.sh "$RELEASE_TAG"
 
       - name: Cleanup Apple credentials
@@ -340,6 +340,7 @@ jobs:
 
   notify:
     needs: [verify, release]
+    if: ${{ vars.ENABLE_HOMEBREW_NOTIFY == 'true' }}
     environment: release
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -27,7 +27,7 @@ prepare or build the website/DMG distribution variant, use:
 
 ```bash
 SPARKLE_PUBLIC_ED_KEY="<public-ed25519-key>" \
-SWITCHTAB_UPDATE_FEED_URL="https://updates.switchtab.app/appcast.xml" \
+SWITCHTAB_UPDATE_FEED_URL="https://updates.switchtab.royjen.com/appcast.xml" \
 scripts/build-direct-distribution.sh
 ```
 
@@ -44,7 +44,7 @@ checksum:
 
 ```bash
 SPARKLE_PUBLIC_ED_KEY="<public-ed25519-key>" \
-SWITCHTAB_UPDATE_FEED_URL="https://updates.switchtab.app/appcast.xml" \
+SWITCHTAB_UPDATE_FEED_URL="https://updates.switchtab.royjen.com/appcast.xml" \
 DEVELOPER_ID_APPLICATION="Developer ID Application: Your Name (TEAMID)" \
 NOTARYTOOL_KEYCHAIN_PROFILE="switchtab-notary" \
 scripts/build-direct-distribution.sh --release
@@ -62,9 +62,9 @@ selected.
 ## Sparkle Update Hosting
 
 The direct-distribution build reads its update feed from
-`https://updates.switchtab.app/appcast.xml`. The feed and release artifacts are
-hosted in the `switchtab-updates` Cloudflare R2 bucket through the
-`updates.switchtab.app` custom domain.
+`https://updates.switchtab.royjen.com/appcast.xml`. The feed and release artifacts are
+hosted in the `switchtab` Cloudflare R2 bucket through the
+`updates.switchtab.royjen.com` custom domain.
 
 Install the repository-pinned Wrangler version and create a local release
 configuration:
@@ -93,7 +93,7 @@ The setup script creates the bucket or custom domain only when Wrangler proves
 that resource is absent. It otherwise validates the existing domain, requires
 HTTPS with TLS 1.2 or later, fails closed on ambiguous errors, and never deletes
 resources. Wait for the custom domain to become available, then verify
-`https://updates.switchtab.app/appcast.xml` over HTTPS. A 404 is expected before
+`https://updates.switchtab.royjen.com/appcast.xml` over HTTPS. A 404 is expected before
 the first release.
 
 After setup, for an intentional local publish, uncomment and fill in only the
@@ -191,7 +191,7 @@ rebuilding or replacing the public release.
 Release publishing uses one narrowly scoped credential surface:
 
 - `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` are R2 S3-compatible Object
-  Read & Write credentials scoped to `switchtab-updates`. The release script
+  Read & Write credentials scoped to `switchtab`. The release script
   uses them for atomic `If-None-Match: *` writes of immutable artifacts and
   ETag-guarded `If-Match` updates of `appcast.xml`.
 
@@ -262,10 +262,13 @@ the secrets are registered.
 
 Create a GitHub `release` Environment under repository settings and enable
 required reviewer protection. Store the Apple, Sparkle, and R2 production
-secrets there, along with the protected `TAP_GITHUB_APP_PRIVATE_KEY` secret and
-the `TAP_GITHUB_APP_ID` variable. Both the `release` and `notify` jobs request
-approval because both use this Environment sequentially. A notify-only rerun
-can request approval again.
+secrets there. Homebrew notification is opt-in: the `notify` job runs only when
+the repository-level `ENABLE_HOMEBREW_NOTIFY` variable is exactly `true`. Leave
+it unset or set it to `false` to publish GitHub, Sparkle, and R2 without touching
+the tap. When enabled, also store the protected `TAP_GITHUB_APP_PRIVATE_KEY`
+secret and `TAP_GITHUB_APP_ID` variable in the `release` Environment. Both the
+`release` and enabled `notify` jobs request approval because both use this
+Environment sequentially. A notify-only rerun can request approval again.
 
 Both jobs use the same Environment, so Environment secrets are available to
 both jobs after approval. The workflow YAML references and injects Apple,
@@ -293,6 +296,7 @@ Pass the private-key file through standard input so its contents do not enter
 shell history:
 
 ```bash
+gh variable set --repo sonim1/switchtab ENABLE_HOMEBREW_NOTIFY --body "true"
 gh variable set --env release TAP_GITHUB_APP_ID --body "your-github-app-id"
 gh secret set --env release TAP_GITHUB_APP_PRIVATE_KEY < /path/to/github-app-private-key.pem
 
@@ -339,9 +343,9 @@ Release, validates it, renders the Cask change, and opens the tap pull request.
 
 The canonical `SwitchTab-<version>-<build>.dmg` is shared by the Sparkle
 appcast, GitHub Release, and Homebrew Cask; it is not rebuilt separately for
-each channel. The protected `notify` job runs only after public publication and
-asks the tap to render its Cask change, open a pull request, run CI, and
-auto-merge after the protected checks pass.
+each channel. When `ENABLE_HOMEBREW_NOTIFY=true`, the protected `notify` job
+runs only after public publication and asks the tap to render its Cask change,
+open a pull request, run CI, and auto-merge after the protected checks pass.
 
 All tags share one release concurrency group, and the appcast update itself
 uses an R2 ETag precondition so an older run cannot roll the feed back. Manual

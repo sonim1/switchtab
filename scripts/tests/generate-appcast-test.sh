@@ -183,7 +183,9 @@ cat > "$output" <<EOF_XML
   <channel>
     <item>
       <title>SwitchTab</title>
-      <enclosure url="${prefix}${dmg_name}" sparkle:version="${FAKE_SPARKLE_VERSION-7}" sparkle:shortVersionString="${FAKE_SPARKLE_SHORT_VERSION-1.2}" sparkle:edSignature="${signature}" length="1" type="application/octet-stream" />
+      <sparkle:version>${FAKE_SPARKLE_VERSION-7}</sparkle:version>
+      <sparkle:shortVersionString>${FAKE_SPARKLE_SHORT_VERSION-1.2}</sparkle:shortVersionString>
+      <enclosure url="${prefix}${dmg_name}" sparkle:edSignature="${signature}" length="1" type="application/octet-stream" />
     </item>
   </channel>
 </rss>

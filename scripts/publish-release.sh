@@ -38,7 +38,7 @@ GH_HOST='github.com'
 export GH_REPO GH_HOST
 DIRECT_BUILD_ROOT="${DIRECT_BUILD_ROOT:-$PROJECT_ROOT/.build/direct-distribution}"
 UPDATE_OUTPUT_DIR="${UPDATE_OUTPUT_DIR:-$DIRECT_BUILD_ROOT/updates}"
-UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.app}"
+UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.royjen.com}"
 GIT_BIN="${GIT_BIN:-git}"
 GH_BIN="${GH_BIN:-gh}"
 SHASUM_BIN="${SHASUM_BIN:-/usr/bin/shasum}"

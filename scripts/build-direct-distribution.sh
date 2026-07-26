@@ -6,7 +6,7 @@ BUILD_ROOT="${DIRECT_BUILD_ROOT:-$PROJECT_ROOT/.build/direct-distribution}"
 WORKSPACE_DIR="$BUILD_ROOT/workspace"
 DERIVED_DATA_DIR="$BUILD_ROOT/DerivedData"
 CONFIGURATION="${CONFIGURATION:-Release}"
-SWITCHTAB_UPDATE_FEED_URL="${SWITCHTAB_UPDATE_FEED_URL:-https://updates.switchtab.app/appcast.xml}"
+SWITCHTAB_UPDATE_FEED_URL="${SWITCHTAB_UPDATE_FEED_URL:-https://updates.switchtab.royjen.com/appcast.xml}"
 SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-}"
 SPARKLE_PACKAGE_REVISION="${SPARKLE_PACKAGE_REVISION:-b6496a74a087257ef5e6da1c5b29a447a60f5bd7}"
 DEVELOPER_ID_APPLICATION="${DEVELOPER_ID_APPLICATION:-}"
@@ -22,7 +22,7 @@ Usage: scripts/build-direct-distribution.sh [--prepare-only] [--release]
 
 Environment:
   SPARKLE_PUBLIC_ED_KEY          Required Sparkle EdDSA public key.
-  SWITCHTAB_UPDATE_FEED_URL      Optional appcast URL. Defaults to https://updates.switchtab.app/appcast.xml
+  SWITCHTAB_UPDATE_FEED_URL      Optional appcast URL. Defaults to https://updates.switchtab.royjen.com/appcast.xml
   SPARKLE_PACKAGE_REVISION       Optional Sparkle package commit revision. Defaults to Sparkle 2.9.4.
   CONFIGURATION                  Optional Xcode configuration. Defaults to Release
   DIRECT_BUILD_ROOT              Optional generated workspace root. Defaults to .build/direct-distribution

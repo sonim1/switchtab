@@ -393,7 +393,7 @@ invoke_script() {
         cd /
         env \
             RELEASE_CONFIG_PATH="${RELEASE_CONFIG_PATH:-$TEMP_ROOT/missing.env}" \
-            R2_BUCKET_NAME='switchtab-updates' \
+            R2_BUCKET_NAME='switchtab' \
             UPDATE_DOMAIN='updates.test.example' \
             CLOUDFLARE_ACCOUNT_ID="$ACCOUNT_ID" \
             R2_ACCESS_KEY_ID="$ACCESS_KEY_ID" \
@@ -433,7 +433,7 @@ invoke_trace_script() {
         cd /
         env \
             RELEASE_CONFIG_PATH="$TRACE_CONFIG" \
-            R2_BUCKET_NAME='switchtab-updates' \
+            R2_BUCKET_NAME='switchtab' \
             UPDATE_DOMAIN='updates.test.example' \
             CLOUDFLARE_ACCOUNT_ID="$ACCOUNT_ID" \
             R2_ACCESS_KEY_ID="$ACCESS_KEY_ID" \
@@ -481,7 +481,7 @@ invoke_with_missing_r2_credential() {
         env -u CLOUDFLARE_ACCOUNT_ID -u R2_ACCESS_KEY_ID -u R2_SECRET_ACCESS_KEY \
             "${credential_env[@]}" \
             RELEASE_CONFIG_PATH="$TEMP_ROOT/missing.env" \
-            R2_BUCKET_NAME='switchtab-updates' \
+            R2_BUCKET_NAME='switchtab' \
             UPDATE_DOMAIN='updates.test.example' \
             UPDATE_ARTIFACT_DIR="$ARTIFACT_DIR" \
             WRANGLER_BIN="$BIN_DIR/wrangler" \
@@ -509,9 +509,9 @@ conditional-put $DMG_NAME.sha256
 conditional-put appcast.xml"
 [[ "$(<"$MUTATION_LOG")" == "$expected_mutation_log" ]] || fail "appcast was not the final mutation: $(<"$MUTATION_LOG")"
 [[ ! -s "$WRANGLER_LOG" ]] || fail "publication unexpectedly invoked Wrangler: $(<"$WRANGLER_LOG")"
-expected_put_log="method=PUT url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab-updates/$DMG_NAME sigv4=aws:amz:auto:s3 conditional=none:* type=application/x-apple-diskimage cache=public, max-age=31536000, immutable config-stdin=1
-method=PUT url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab-updates/$DMG_NAME.sha256 sigv4=aws:amz:auto:s3 conditional=none:* type=text/plain cache=public, max-age=31536000, immutable config-stdin=1
-method=PUT url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab-updates/appcast.xml sigv4=aws:amz:auto:s3 conditional=none:* type=application/xml cache=public, max-age=60 config-stdin=1"
+expected_put_log="method=PUT url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab/$DMG_NAME sigv4=aws:amz:auto:s3 conditional=none:* type=application/x-apple-diskimage cache=public, max-age=31536000, immutable config-stdin=1
+method=PUT url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab/$DMG_NAME.sha256 sigv4=aws:amz:auto:s3 conditional=none:* type=text/plain cache=public, max-age=31536000, immutable config-stdin=1
+method=PUT url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab/appcast.xml sigv4=aws:amz:auto:s3 conditional=none:* type=application/xml cache=public, max-age=60 config-stdin=1"
 actual_put_log="$(grep '^method=PUT ' "$CURL_LOG")"
 [[ "$actual_put_log" == "$expected_put_log" ]] || fail "unexpected conditional PUT endpoint/metadata: $actual_put_log"
 [[ -f "$ORIGIN_DIR/$DMG_NAME" && -f "$ORIGIN_DIR/$DMG_NAME.sha256" ]] || fail "immutable objects did not reach the origin"
@@ -631,7 +631,7 @@ FAKE_PUBLIC_STALE_ONCE_KEY="$DMG_NAME"
 invoke_script
 assert_status 0
 cmp -s "$ARTIFACT_DIR/$DMG_NAME" "$ORIGIN_DIR/$DMG_NAME" || fail "identical origin DMG was overwritten"
-grep -Fq "method=GET url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab-updates/$DMG_NAME " "$CURL_LOG" || fail "412 did not trigger an authoritative origin GET"
+grep -Fq "method=GET url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab/$DMG_NAME " "$CURL_LOG" || fail "412 did not trigger an authoritative origin GET"
 grep -Fq 'conditional-put appcast.xml' "$MUTATION_LOG" || fail "identical race did not continue to appcast"
 
 # A checksum created concurrently with different bytes blocks appcast publication.

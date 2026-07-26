@@ -167,7 +167,7 @@ for text in \
     "APPLE_NOTARY_KEY_P8_BASE64" \
     "APPLE_NOTARY_KEY_ID" \
     "APPLE_NOTARY_ISSUER_ID" \
-    "updates.switchtab.app/appcast.xml" \
+    "updates.switchtab.royjen.com/appcast.xml" \
     "refs/tags/" \
     "https://developers.cloudflare.com/r2/api/tokens/" \
     "https://developers.cloudflare.com/r2/api/s3/api/#conditional-operations" \

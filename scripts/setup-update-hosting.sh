@@ -18,8 +18,8 @@ if [[ -f "$CONFIG_PATH" ]]; then
     set +a
 fi
 
-export R2_BUCKET_NAME="${R2_BUCKET_NAME:-switchtab-updates}"
-export UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.app}"
+export R2_BUCKET_NAME="${R2_BUCKET_NAME:-switchtab}"
+export UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.royjen.com}"
 export WRANGLER_BIN="${WRANGLER_BIN:-$PROJECT_ROOT/node_modules/.bin/wrangler}"
 
 if [[ -z "${CLOUDFLARE_ZONE_ID:-}" ]]; then
@@ -88,12 +88,13 @@ is_bucket_absent_error() {
 }
 
 is_domain_absent_error() {
-    local diagnostic_line line bucket_name domain_name domain_endpoint domain_error_re
+    local diagnostic_line line bucket_name domain_name domain_endpoint domain_error_re domain_not_found_re
 
     bucket_name="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
     domain_name="$(printf '%s' "$UPDATE_DOMAIN" | tr '[:upper:]' '[:lower:]')"
     domain_endpoint="/r2/buckets/$bucket_name/domains/custom/$domain_name"
     domain_error_re='^the specified custom domain does not exist[.][[:space:]]+[[]code:[[:space:]][0-9]+[]]$'
+    domain_not_found_re='^domain not found[.][[:space:]]+[[]code:[[:space:]][0-9]+[]]$'
 
     while IFS= read -r diagnostic_line || [[ -n "$diagnostic_line" ]]; do
         line="$(normalize_diagnostic_line "$diagnostic_line")"
@@ -107,7 +108,7 @@ is_domain_absent_error() {
                 ;;
         esac
 
-        if [[ "$line" =~ $domain_error_re ]]; then
+        if [[ "$line" =~ $domain_error_re || "$line" =~ $domain_not_found_re ]]; then
             return 0
         fi
     done <<< "$1"

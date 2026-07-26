@@ -16,6 +16,7 @@ xcuserdata/
 
 # Isolated feature worktrees
 .worktrees/
+.claude/worktrees/
 
 # Local secret material
 .env

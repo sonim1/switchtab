@@ -81,7 +81,7 @@ case "$*" in
         ;;
     "r2 bucket info "*)
         if [[ -f "$WRANGLER_STATE/bucket" ]]; then
-            printf '{"name":"%s"}\n' "${R2_BUCKET_NAME:-switchtab-updates}"
+            printf '{"name":"%s"}\n' "${R2_BUCKET_NAME:-switchtab}"
         else
             if [[ -z "${FAKE_BUCKET_INFO_SILENT:-}" ]]; then
                 printf '%s\n' "${FAKE_BUCKET_INFO_ERROR:-bucket not found}" >&2
@@ -112,7 +112,7 @@ case "$*" in
         fi
         if [[ -f "$WRANGLER_STATE/domain" ]]; then
             printf 'domain: %s\nenabled: %s\nmin_tls_version: %s\n' \
-                "${FAKE_DOMAIN_OUTPUT_DOMAIN:-${UPDATE_DOMAIN:-updates.switchtab.app}}" \
+                "${FAKE_DOMAIN_OUTPUT_DOMAIN:-${UPDATE_DOMAIN:-updates.switchtab.royjen.com}}" \
                 "${FAKE_DOMAIN_ENABLED:-Yes}" \
                 "${FAKE_DOMAIN_MIN_TLS:-1.2}"
         else
@@ -155,8 +155,8 @@ invoke_script() {
         env \
             CLOUDFLARE_ZONE_ID="${CLOUDFLARE_ZONE_ID:-zone-123}" \
             RELEASE_CONFIG_PATH="${RELEASE_CONFIG_PATH:-$TEMP_ROOT/does-not-exist}" \
-            R2_BUCKET_NAME="${R2_BUCKET_NAME:-switchtab-updates}" \
-            UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.app}" \
+            R2_BUCKET_NAME="${R2_BUCKET_NAME:-switchtab}" \
+            UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.royjen.com}" \
             WRANGLER_BIN="$FAKE_BIN" \
             WRANGLER_LOG="$WRANGLER_LOG" \
             WRANGLER_STATE="$WRANGLER_STATE" \
@@ -188,8 +188,8 @@ invoke_trace_script() {
             CLOUDFLARE_API_TOKEN="$TRACE_TOKEN" \
             CLOUDFLARE_ZONE_ID=zone-123 \
             RELEASE_CONFIG_PATH="$TRACE_CONFIG" \
-            R2_BUCKET_NAME=switchtab-updates \
-            UPDATE_DOMAIN=updates.switchtab.app \
+            R2_BUCKET_NAME=switchtab \
+            UPDATE_DOMAIN=updates.switchtab.royjen.com \
             WRANGLER_BIN="$FAKE_BIN" \
             WRANGLER_LOG="$WRANGLER_LOG" \
             WRANGLER_STATE="$WRANGLER_STATE" \
@@ -233,14 +233,14 @@ assert_output_contains "npm ci"
 reset_fixture
 invoke_script
 assert_status 0
-assert_output_contains "https://updates.switchtab.app/appcast.xml"
+assert_output_contains "https://updates.switchtab.royjen.com/appcast.xml"
 assert_log_equals "whoami
-r2 bucket info switchtab-updates --json
-r2 bucket create switchtab-updates
-r2 bucket info switchtab-updates --json
-r2 bucket domain get switchtab-updates --domain updates.switchtab.app
-r2 bucket domain add switchtab-updates --domain updates.switchtab.app --zone-id zone-123 --min-tls 1.2 --force
-r2 bucket domain get switchtab-updates --domain updates.switchtab.app"
+r2 bucket info switchtab --json
+r2 bucket create switchtab
+r2 bucket info switchtab --json
+r2 bucket domain get switchtab --domain updates.switchtab.royjen.com
+r2 bucket domain add switchtab --domain updates.switchtab.royjen.com --zone-id zone-123 --min-tls 1.2 --force
+r2 bucket domain get switchtab --domain updates.switchtab.royjen.com"
 [[ -f "$WRANGLER_STATE/bucket" ]] || fail "bucket was not created"
 [[ -f "$WRANGLER_STATE/domain" ]] || fail "domain was not created"
 
@@ -248,10 +248,10 @@ r2 bucket domain get switchtab-updates --domain updates.switchtab.app"
 : > "$WRANGLER_LOG"
 invoke_script
 assert_status 0
-assert_output_contains "https://updates.switchtab.app/appcast.xml"
+assert_output_contains "https://updates.switchtab.royjen.com/appcast.xml"
 assert_log_equals "whoami
-r2 bucket info switchtab-updates --json
-r2 bucket domain get switchtab-updates --domain updates.switchtab.app"
+r2 bucket info switchtab --json
+r2 bucket domain get switchtab --domain updates.switchtab.royjen.com"
 
 # Existing domains must have the requested name, be enabled, and use TLS 1.2+.
 assert_invalid_domain_state() {
@@ -267,12 +267,12 @@ assert_invalid_domain_state() {
     invoke_script
     [[ "$status" -ne 0 ]] || fail "invalid domain state was accepted"
     [[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "invalid domain state triggered an add"
-    [[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed for invalid domain state"
+    [[ "$output" != *"https://updates.switchtab.royjen.com/appcast.xml"* ]] || fail "success was printed for invalid domain state"
 }
 
 assert_invalid_domain_state wrong.example.com Yes 1.2
-assert_invalid_domain_state updates.switchtab.app No 1.2
-assert_invalid_domain_state updates.switchtab.app Yes 1.0
+assert_invalid_domain_state updates.switchtab.royjen.com No 1.2
+assert_invalid_domain_state updates.switchtab.royjen.com Yes 1.0
 
 # The post-add verification is subject to the same state checks.
 reset_fixture
@@ -280,7 +280,7 @@ FAKE_DOMAIN_OUTPUT_DOMAIN=wrong.example.com
 invoke_script
 [[ "$status" -ne 0 ]] || fail "invalid post-add domain state was accepted"
 [[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 1 ]] || fail "post-add state test did not add the domain"
-[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed for invalid post-add domain state"
+[[ "$output" != *"https://updates.switchtab.royjen.com/appcast.xml"* ]] || fail "success was printed for invalid post-add domain state"
 
 # Valid resource names containing zone/token words still create and connect.
 reset_fixture
@@ -330,12 +330,12 @@ assert_output_equals "API token not found"
 # An auth diagnostic mentioning the requested bucket is still not bucket absence.
 reset_fixture
 FAKE_BUCKET_INFO_STATUS=51
-FAKE_BUCKET_INFO_ERROR='API token not found for bucket switchtab-updates'
+FAKE_BUCKET_INFO_ERROR='API token not found for bucket switchtab'
 invoke_script
 assert_status 51
 assert_output_equals "$FAKE_BUCKET_INFO_ERROR"
 [[ "$(grep -c '^r2 bucket create' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "bucket was created after a same-line auth diagnostic"
-[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed after a same-line bucket auth diagnostic"
+[[ "$output" != *"https://updates.switchtab.royjen.com/appcast.xml"* ]] || fail "success was printed after a same-line bucket auth diagnostic"
 
 # A bare unrelated 404 is not treated as an absent bucket.
 reset_fixture
@@ -349,60 +349,70 @@ assert_output_equals "HTTP 404 from zone endpoint"
 # Endpoint context and an auth error on separate lines are not bucket absence.
 reset_fixture
 FAKE_BUCKET_INFO_STATUS=47
-FAKE_BUCKET_INFO_ERROR=$'request failed for /r2/buckets/switchtab-updates\nAPI token not found'
+FAKE_BUCKET_INFO_ERROR=$'request failed for /r2/buckets/switchtab\nAPI token not found'
 invoke_script
 assert_status 47
 assert_output_equals "$FAKE_BUCKET_INFO_ERROR"
 [[ "$(grep -c '^r2 bucket create' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "bucket was created from split-line diagnostics"
-[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed from split-line bucket diagnostics"
+[[ "$output" != *"https://updates.switchtab.royjen.com/appcast.xml"* ]] || fail "success was printed from split-line bucket diagnostics"
 
 # An endpoint-style bucket 404 is a legitimate bucket absence.
 reset_fixture
 FAKE_BUCKET_INFO_STATUS=46
-FAKE_BUCKET_INFO_ERROR='404 /r2/buckets/switchtab-updates'
+FAKE_BUCKET_INFO_ERROR='404 /r2/buckets/switchtab'
 invoke_script
 assert_status 0
-assert_output_contains "https://updates.switchtab.app/appcast.xml"
+assert_output_contains "https://updates.switchtab.royjen.com/appcast.xml"
 [[ -f "$WRANGLER_STATE/bucket" ]] || fail "endpoint-style bucket absence was not created"
 
 # Wrangler's resource-specific missing-bucket transcript is a legitimate absence.
 reset_fixture
 FAKE_BUCKET_INFO_STATUS=49
-FAKE_BUCKET_INFO_ERROR=$'A request to the Cloudflare API (/accounts/test-account/r2/buckets/switchtab-updates) failed.\n  The specified bucket does not exist. [code: 10006]'
+FAKE_BUCKET_INFO_ERROR=$'A request to the Cloudflare API (/accounts/test-account/r2/buckets/switchtab) failed.\n  The specified bucket does not exist. [code: 10006]'
 invoke_script
 assert_status 0
-assert_output_contains "https://updates.switchtab.app/appcast.xml"
+assert_output_contains "https://updates.switchtab.royjen.com/appcast.xml"
 [[ -f "$WRANGLER_STATE/bucket" ]] || fail "Wrangler missing-bucket transcript did not create"
 
 # An endpoint-style domain 404 is a legitimate domain absence.
 reset_fixture
 FAKE_DOMAIN_GET_STATUS=45
-FAKE_DOMAIN_GET_ERROR='404 /r2/buckets/switchtab-updates/domains/custom/updates.switchtab.app'
+FAKE_DOMAIN_GET_ERROR='404 /r2/buckets/switchtab/domains/custom/updates.switchtab.royjen.com'
 invoke_script
 assert_status 0
-assert_output_contains "https://updates.switchtab.app/appcast.xml"
+assert_output_contains "https://updates.switchtab.royjen.com/appcast.xml"
 [[ -f "$WRANGLER_STATE/domain" ]] || fail "endpoint-style domain absence was not added"
 [[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 1 ]] || fail "endpoint-style domain absence did not add exactly once"
 
 # Wrangler's resource-specific missing-domain transcript is a legitimate absence.
 reset_fixture
 FAKE_DOMAIN_GET_STATUS=50
-FAKE_DOMAIN_GET_ERROR=$'A request to the Cloudflare API (/accounts/test-account/r2/buckets/switchtab-updates/domains/custom/updates.switchtab.app) failed.\n  The specified custom domain does not exist. [code: 10006]'
+FAKE_DOMAIN_GET_ERROR=$'A request to the Cloudflare API (/accounts/test-account/r2/buckets/switchtab/domains/custom/updates.switchtab.royjen.com) failed.\n  The specified custom domain does not exist. [code: 10006]'
 invoke_script
 assert_status 0
-assert_output_contains "https://updates.switchtab.app/appcast.xml"
+assert_output_contains "https://updates.switchtab.royjen.com/appcast.xml"
 [[ -f "$WRANGLER_STATE/domain" ]] || fail "Wrangler missing-domain transcript did not add"
 [[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 1 ]] || fail "Wrangler missing-domain transcript did not add exactly once"
+
+# Wrangler 4.112's coded missing-domain transcript is a legitimate absence.
+reset_fixture
+FAKE_DOMAIN_GET_STATUS=53
+FAKE_DOMAIN_GET_ERROR=$'A request to the Cloudflare API (/accounts/test-account/r2/buckets/switchtab/domains/custom/updates.switchtab.royjen.com) failed.\n  Domain not found. [code: 10053]'
+invoke_script
+assert_status 0
+assert_output_contains "https://updates.switchtab.royjen.com/appcast.xml"
+[[ -f "$WRANGLER_STATE/domain" ]] || fail "Wrangler coded missing-domain transcript did not add"
+[[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 1 ]] || fail "Wrangler coded missing-domain transcript did not add exactly once"
 
 # Endpoint context and a zone error on separate lines are not domain absence.
 reset_fixture
 FAKE_DOMAIN_GET_STATUS=48
-FAKE_DOMAIN_GET_ERROR=$'request failed for /r2/buckets/switchtab-updates/domains/custom/updates.switchtab.app\nzone not found'
+FAKE_DOMAIN_GET_ERROR=$'request failed for /r2/buckets/switchtab/domains/custom/updates.switchtab.royjen.com\nzone not found'
 invoke_script
 assert_status 48
 assert_output_equals "$FAKE_DOMAIN_GET_ERROR"
 [[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "domain was added from split-line diagnostics"
-[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed from split-line domain diagnostics"
+[[ "$output" != *"https://updates.switchtab.royjen.com/appcast.xml"* ]] || fail "success was printed from split-line domain diagnostics"
 
 # A zone error is not treated as an absent domain.
 reset_fixture
@@ -412,17 +422,17 @@ invoke_script
 assert_status 43
 assert_output_equals "zone not found"
 [[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "domain was added after a zone error"
-[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed after a domain zone error"
+[[ "$output" != *"https://updates.switchtab.royjen.com/appcast.xml"* ]] || fail "success was printed after a domain zone error"
 
 # A zone diagnostic mentioning the requested domain is still not domain absence.
 reset_fixture
 FAKE_DOMAIN_GET_STATUS=52
-FAKE_DOMAIN_GET_ERROR='zone not found for domain updates.switchtab.app'
+FAKE_DOMAIN_GET_ERROR='zone not found for domain updates.switchtab.royjen.com'
 invoke_script
 assert_status 52
 assert_output_equals "$FAKE_DOMAIN_GET_ERROR"
 [[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "domain was added after a same-line zone diagnostic"
-[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed after a same-line domain zone diagnostic"
+[[ "$output" != *"https://updates.switchtab.royjen.com/appcast.xml"* ]] || fail "success was printed after a same-line domain zone diagnostic"
 
 # A silent initial domain failure is propagated without attempting an add.
 reset_fixture
@@ -431,7 +441,7 @@ FAKE_DOMAIN_GET_SILENT=1
 invoke_script
 assert_status 44
 [[ "$(grep -c '^r2 bucket domain add' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "domain was added after a silent initial failure"
-[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed after a silent initial failure"
+[[ "$output" != *"https://updates.switchtab.royjen.com/appcast.xml"* ]] || fail "success was printed after a silent initial failure"
 
 # An unknown silent bucket failure is not treated as an absent bucket.
 reset_fixture
@@ -439,8 +449,8 @@ FAKE_BUCKET_INFO_STATUS=37
 FAKE_BUCKET_INFO_SILENT=1
 invoke_script
 assert_status 37
-[[ "$(<"$WRANGLER_LOG")" == $'whoami\nr2 bucket info switchtab-updates --json' ]] || fail "silent bucket failure triggered a create"
-[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed after silent bucket failure"
+[[ "$(<"$WRANGLER_LOG")" == $'whoami\nr2 bucket info switchtab --json' ]] || fail "silent bucket failure triggered a create"
+[[ "$output" != *"https://updates.switchtab.royjen.com/appcast.xml"* ]] || fail "success was printed after silent bucket failure"
 
 # Bucket creation failures stop before domain work and preserve the status.
 reset_fixture
@@ -449,7 +459,7 @@ invoke_script
 assert_status 23
 assert_output_contains "bucket create failed"
 [[ "$(grep -c '^r2 bucket domain' "$WRANGLER_LOG" || true)" -eq 0 ]] || fail "domain action ran after bucket create failure"
-[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed after bucket create failure"
+[[ "$output" != *"https://updates.switchtab.royjen.com/appcast.xml"* ]] || fail "success was printed after bucket create failure"
 
 # Domain add failures stop without claiming success.
 reset_fixture
@@ -457,7 +467,7 @@ FAKE_DOMAIN_ADD_STATUS=29
 invoke_script
 assert_status 29
 assert_output_contains "domain add failed"
-[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed after domain add failure"
+[[ "$output" != *"https://updates.switchtab.royjen.com/appcast.xml"* ]] || fail "success was printed after domain add failure"
 
 # Final domain verification failures are propagated.
 reset_fixture
@@ -465,7 +475,7 @@ FAKE_FINAL_DOMAIN_GET_STATUS=31
 invoke_script
 assert_status 31
 assert_output_contains "final domain verification failed"
-[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed after final verification failure"
+[[ "$output" != *"https://updates.switchtab.royjen.com/appcast.xml"* ]] || fail "success was printed after final verification failure"
 
 # A silent final verification failure is still propagated and cannot claim success.
 reset_fixture
@@ -473,7 +483,7 @@ FAKE_FINAL_DOMAIN_GET_STATUS=31
 FAKE_FINAL_DOMAIN_GET_SILENT=1
 invoke_script
 assert_status 31
-[[ "$output" != *"https://updates.switchtab.app/appcast.xml"* ]] || fail "success was printed after silent final verification failure"
+[[ "$output" != *"https://updates.switchtab.royjen.com/appcast.xml"* ]] || fail "success was printed after silent final verification failure"
 
 # Unexpected arguments use the documented usage and status.
 reset_fixture

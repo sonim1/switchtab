@@ -24,6 +24,6 @@
 - Blocked item: Credential-backed validation of the implemented Sparkle appcast, Cloudflare R2 hosting, and GitHub tag-release automation against the live services.
 - Why I cannot resolve it: The scripts and workflow now exist, but live validation requires the user's Sparkle private key, scoped Cloudflare and R2 credentials, GitHub repository access, and explicit approval for external mutations.
 - What the user must do: Register the documented repository variables and secrets, approve the one-time hosting mutation, and approve an actual protected release tag.
-- Required user input or decision: Permission to create or validate `switchtab-updates` and `updates.switchtab.app`, publish immutable release objects and the mutable appcast, and publish the matching GitHub release.
-- Next step after resolution: Run `scripts/setup-update-hosting.sh` once, push an approved `v<MARKETING_VERSION>` tag, then verify the public DMG checksum, `https://updates.switchtab.app/appcast.xml`, the GitHub release assets, and an in-app Sparkle update check.
+- Required user input or decision: Permission to create or validate `switchtab` and `updates.switchtab.royjen.com`, publish immutable release objects and the mutable appcast, and publish the matching GitHub release.
+- Next step after resolution: Run `scripts/setup-update-hosting.sh` once, push an approved `v<MARKETING_VERSION>` tag, then verify the public DMG checksum, `https://updates.switchtab.royjen.com/appcast.xml`, the GitHub release assets, and an in-app Sparkle update check.
 - Why no temporary workaround was used: An unsigned appcast, temporary HTTP feed, or dummy key cannot validate the automatic-update trust chain and would weaken update security for users.

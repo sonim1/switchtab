@@ -30,8 +30,8 @@ if [[ -f "$RELEASE_CONFIG_PATH" ]]; then
 fi
 set +x
 
-R2_BUCKET_NAME="${R2_BUCKET_NAME:-switchtab-updates}"
-UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.app}"
+R2_BUCKET_NAME="${R2_BUCKET_NAME:-switchtab}"
+UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.royjen.com}"
 UPDATE_ARTIFACT_DIR="${UPDATE_ARTIFACT_DIR:-$PROJECT_ROOT/.build/direct-distribution/updates}"
 CURL_BIN="${CURL_BIN:-/usr/bin/curl}"
 SHASUM_BIN="${SHASUM_BIN:-/usr/bin/shasum}"

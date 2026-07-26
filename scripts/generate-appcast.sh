@@ -45,7 +45,7 @@ APPCAST_PRIVATE_KEY="${SPARKLE_PRIVATE_ED_KEY:-}"
 unset SPARKLE_PRIVATE_ED_KEY PRIVATE_ED_KEY
 export -n APPCAST_PRIVATE_KEY 2>/dev/null || :
 SPARKLE_KEY_ACCOUNT="${SPARKLE_KEY_ACCOUNT:-ed25519}"
-UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.app}"
+UPDATE_DOMAIN="${UPDATE_DOMAIN:-updates.switchtab.royjen.com}"
 DOWNLOAD_URL_PREFIX="https://$UPDATE_DOMAIN/"
 
 CODESIGN_BIN="${CODESIGN_BIN:-/usr/bin/codesign}"
@@ -283,14 +283,14 @@ if [[ -z "$ED_SIGNATURE" ]]; then
     fail "Generated appcast enclosure has empty sparkle:edSignature"
 fi
 
-APPCAST_BUILD_NUMBER="$(xml_value 'string((//*[local-name()="enclosure"]/@*[local-name()="version"])[1])')"
+APPCAST_BUILD_NUMBER="$(xml_value 'string((//*[local-name()="item"]/*[local-name()="version"] | //*[local-name()="enclosure"]/@*[local-name()="version"])[1])')"
 if [[ -z "$APPCAST_BUILD_NUMBER" ]]; then
     fail "Generated appcast is missing sparkle:version"
 fi
 if [[ "$APPCAST_BUILD_NUMBER" != "$BUILD_NUMBER" ]]; then
     fail "Generated appcast sparkle:version mismatch: expected $BUILD_NUMBER, got $APPCAST_BUILD_NUMBER"
 fi
-APPCAST_MARKETING_VERSION="$(xml_value 'string((//*[local-name()="enclosure"]/@*[local-name()="shortVersionString"])[1])')"
+APPCAST_MARKETING_VERSION="$(xml_value 'string((//*[local-name()="item"]/*[local-name()="shortVersionString"] | //*[local-name()="enclosure"]/@*[local-name()="shortVersionString"])[1])')"
 if [[ -z "$APPCAST_MARKETING_VERSION" ]]; then
     fail "Generated appcast is missing sparkle:shortVersionString"
 fi

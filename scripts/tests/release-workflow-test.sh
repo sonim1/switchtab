@@ -63,8 +63,8 @@ def validate_publication_and_notification(release, notify)
     "CLOUDFLARE_ACCOUNT_ID" => "${{ vars.CLOUDFLARE_ACCOUNT_ID }}",
     "R2_ACCESS_KEY_ID" => "${{ secrets.R2_ACCESS_KEY_ID }}",
     "R2_SECRET_ACCESS_KEY" => "${{ secrets.R2_SECRET_ACCESS_KEY }}",
-    "R2_BUCKET_NAME" => "switchtab-updates",
-    "UPDATE_DOMAIN" => "updates.switchtab.app"
+    "R2_BUCKET_NAME" => "switchtab",
+    "UPDATE_DOMAIN" => "updates.switchtab.royjen.com"
   }, "Publish release environment must be exact")
   assert(!release.to_s.include?("create-github-app-token"), "release must not mint the tap token")
   assert(!release.to_s.include?("dispatch-homebrew-update.sh"), "release must not dispatch to the tap")
@@ -365,7 +365,7 @@ appcast = steps.fetch(names.index("Generate signed appcast"))
 assert(appcast.fetch("run").include?("scripts/generate-appcast.sh"), "appcast generator invocation is missing")
 assert(appcast.dig("env", "SPARKLE_PUBLIC_ED_KEY") == "${{ vars.SPARKLE_PUBLIC_ED_KEY }}", "appcast generation needs the public key variable")
 assert(appcast.dig("env", "SPARKLE_PRIVATE_ED_KEY") == "${{ secrets.SPARKLE_PRIVATE_ED_KEY }}", "appcast generation needs the private key secret")
-assert(appcast.dig("env", "UPDATE_DOMAIN") == "updates.switchtab.app", "appcast generation must use the production update domain")
+assert(appcast.dig("env", "UPDATE_DOMAIN") == "updates.switchtab.royjen.com", "appcast generation must use the production update domain")
 
 manifest = steps.fetch(names.index("Generate release manifest"))
 assert(manifest.fetch("shell") == "bash", "manifest generation must explicitly use bash")
@@ -379,13 +379,14 @@ expected_publish_env = {
   "CLOUDFLARE_ACCOUNT_ID" => "${{ vars.CLOUDFLARE_ACCOUNT_ID }}",
   "R2_ACCESS_KEY_ID" => "${{ secrets.R2_ACCESS_KEY_ID }}",
   "R2_SECRET_ACCESS_KEY" => "${{ secrets.R2_SECRET_ACCESS_KEY }}",
-  "R2_BUCKET_NAME" => "switchtab-updates",
-  "UPDATE_DOMAIN" => "updates.switchtab.app"
+  "R2_BUCKET_NAME" => "switchtab",
+  "UPDATE_DOMAIN" => "updates.switchtab.royjen.com"
 }
 assert(publish_env == expected_publish_env, "publish step environment is incomplete or overprivileged")
 assert(!workflow_source.include?("CLOUDFLARE_ZONE_ID"), "release workflow must not receive zone credentials")
 
 assert(notify_job["needs"] == %w[verify release], "notify must depend on both verified provenance and public release success")
+assert(notify_job["if"] == "${{ vars.ENABLE_HOMEBREW_NOTIFY == 'true' }}", "notify must be explicitly enabled by a repository variable")
 assert(notify_job["environment"] == "release", "notify must use the protected release environment")
 assert(notify_job["permissions"] == { "contents" => "read" }, "notify must receive only contents: read")
 assert(notify_job["runs-on"] == "ubuntu-latest", "notify job must use the narrow Linux runner")
