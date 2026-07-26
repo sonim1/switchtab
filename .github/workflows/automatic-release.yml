@@ -1,0 +1,96 @@
+name: Automatic Release
+
+"on":
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: switchtab-automatic-release
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Checkout pushed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: "${{ github.sha }}"
+          fetch-depth: 0
+          persist-credentials: true
+          token: "${{ github.token }}"
+
+      - name: Verify pushed commit
+        shell: bash
+        env:
+          EXPECTED_SHA: "${{ github.sha }}"
+        run: |
+          set -euo pipefail
+          if [[ ! "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Pushed commit must be lowercase 40-hex" >&2
+            exit 64
+          fi
+          head_commit="$(git rev-parse HEAD)"
+          if [[ "$head_commit" != "$EXPECTED_SHA" ]]; then
+            echo "Checked-out HEAD does not match the pushed commit" >&2
+            exit 64
+          fi
+
+      - name: Plan release
+        id: release-plan
+        shell: bash
+        env:
+          BASE_SHA: "${{ github.event.before }}"
+          HEAD_SHA: "${{ github.sha }}"
+        run: scripts/plan-release.sh "$BASE_SHA" "$HEAD_SHA" "$GITHUB_OUTPUT"
+
+      - name: Fetch tags
+        if: "${{ steps.release-plan.outputs.release == 'true' }}"
+        shell: bash
+        run: git fetch --force --tags origin
+
+      - name: Create or verify annotated release tag
+        if: "${{ steps.release-plan.outputs.release == 'true' }}"
+        shell: bash
+        env:
+          RELEASE_TAG: "${{ steps.release-plan.outputs.tag }}"
+          EXPECTED_SHA: "${{ github.sha }}"
+        run: |
+          set -euo pipefail
+          tag_ref="refs/tags/$RELEASE_TAG"
+          if git show-ref --verify --quiet "$tag_ref"; then
+            tag_object_type="$(git cat-file -t "$tag_ref")"
+            if [[ "$tag_object_type" != 'tag' ]]; then
+              echo "Existing release tag is not an annotated tag: $tag_ref" >&2
+              exit 65
+            fi
+            tag_commit="$(git rev-parse "$tag_ref^{commit}")"
+            if [[ "$tag_commit" != "$EXPECTED_SHA" ]]; then
+              echo "Existing release tag does not match the pushed commit: $tag_ref" >&2
+              exit 65
+            fi
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag --annotate "$RELEASE_TAG" "$EXPECTED_SHA" --message "Release $RELEASE_TAG"
+          git push origin "$tag_ref:$tag_ref"
+
+      - name: Dispatch release workflow
+        if: "${{ steps.release-plan.outputs.release == 'true' }}"
+        shell: bash
+        env:
+          GH_TOKEN: "${{ github.token }}"
+          RELEASE_TAG: "${{ steps.release-plan.outputs.tag }}"
+        run: gh workflow run release.yml --ref main -f tag="$RELEASE_TAG"
