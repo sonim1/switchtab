@@ -1,0 +1,76 @@
+name: CI
+
+"on":
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: "${{ github.event.pull_request.head.sha }}"
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate release plan
+        id: release-plan
+        shell: bash
+        env:
+          BASE_SHA: "${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
+        run: scripts/plan-release.sh "$BASE_SHA" "$HEAD_SHA" "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24.18.0"
+
+      - name: Install release tooling
+        shell: bash
+        run: npm ci --ignore-scripts
+
+      - name: Run release contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_tests=(
+            scripts/tests/release-tooling-test.sh
+            scripts/tests/release-local-test.sh
+            scripts/tests/generate-appcast-test.sh
+            scripts/tests/generate-release-manifest-test.sh
+            scripts/tests/setup-update-hosting-test.sh
+            scripts/tests/publish-update-test.sh
+            scripts/tests/publish-release-test.sh
+            scripts/tests/dispatch-homebrew-update-test.sh
+            scripts/tests/release-workflow-test.sh
+            scripts/tests/plan-release-test.sh
+            scripts/tests/automatic-release-workflow-test.sh
+          )
+          for test_script in "${release_tests[@]}"; do
+            bash "$test_script"
+          done
+
+      - name: Run Swift tests
+        shell: bash
+        run: swift test
+
+      - name: Build unsigned Debug app
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+            xcodebuild \
+              -project SwitchTab.xcodeproj \
+              -scheme SwitchTab \
+              -configuration Debug \
+              -destination 'platform=macOS,arch=arm64' \
+              CODE_SIGNING_ALLOWED=NO \
+              build

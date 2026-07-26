@@ -152,6 +152,7 @@ for name in \
     grep -q "^${name}=" "$EXAMPLE" || fail "$EXAMPLE is missing $name"
 done
 
+# shellcheck disable=SC2016 # These are literal README snippets containing backticks.
 for text in \
     "npm ci --ignore-scripts" \
     "setup-update-hosting.sh" \
@@ -387,16 +388,19 @@ def validate_release_operations!(readme)
 
   app_setup = markdown_section(readme, "Protected release environment and tap integration")
   app_setup_text = normalized(app_setup)
-  assert_documented(app_setup_text.match?(/release.*Environment.*required reviewer/i), "release Environment must require a reviewer")
-  assert_documented(app_setup_text.match?(/both.*`release`.*`notify`.*(?:request|require).*approval/i), "both protected jobs must document approval")
-  assert_documented(app_setup_text.match?(/notify-only rerun.*approval again/i), "notify rerun approval must be explicit")
+  assert_documented(app_setup_text.include?("The current automatic mode has no required reviewer rule."), "current automatic mode must explicitly have no required reviewer rule")
+  assert_documented(app_setup_text.include?("Merging a release-relevant PR into `main` is the production release authorization point"), "merge to main must be the production release authorization point")
+  assert_documented(app_setup_text.include?("downstream release jobs continue without manual approval"), "current automatic release jobs must continue without manual approval")
+  assert_documented(app_setup_text.include?("Both the `release` and enabled `notify` jobs use this Environment sequentially and request no approval in current mode."), "release and notify must explicitly request no approval in current mode")
+  assert_documented(app_setup_text.include?("Adding required reviewers to the `release` Environment is a deliberate alternative that changes merge-to-main releases to manual approval."), "required reviewers must be documented only as a deliberate manual-approval alternative")
   assert_documented(app_setup_text.match?(/installed only on `sonim1\/homebrew-tap`/i), "GitHub App installation scope must be tap-only")
   ["`Administration: Read`", "`Contents: Read & write`", "`Pull requests: Read & write`"].each do |permission|
     assert_documented(app_setup.include?(permission), "missing unified GitHub App permission: #{permission}")
   end
   assert_documented(app_setup_text.match?(/SwitchTab `notify` token.*dispatch\/contents capability/i), "source notify token scope must be explained")
   assert_documented(app_setup_text.match?(/tap receiver token.*all three permissions/i), "tap receiver token scope must be explained")
-  assert_documented(app_setup_text.match?(/Environment secrets.*available to both jobs.*after approval/i), "shared Environment secret availability must be truthful")
+  assert_documented(app_setup_text.include?("The Environment still scopes production secrets to jobs that explicitly reference it."), "release Environment secret scoping must be explicit")
+  assert_documented(app_setup_text.include?("Environment secrets are available to both jobs when each starts in current mode, not after approval."), "shared Environment secret availability must match current automatic mode")
   assert_documented(app_setup_text.match?(/workflow YAML.*references and injects Apple.*Sparkle.*R2.*`release` steps/i), "release secret references must be documented")
   assert_documented(app_setup_text.match?(/references and injects.*tap App private key.*`notify`/i), "notify secret references must be documented")
   assert_documented(app_setup_text.match?(/secret-availability isolation.*separate Environments/i), "separate Environment isolation boundary must be documented")
@@ -428,6 +432,7 @@ def validate_release_operations!(readme)
     "release flow order is incorrect"
   )
   execution_text = normalized(execution)
+  assert_documented(!execution_text.match?(/\bAfter approval,[[:space:]]*`release`/i), "automatic release execution must not claim an approval gate")
   outside_authoritative_release_block = readme.sub(local, "")
   unsafe_tag_commands = outside_authoritative_release_block.lines.map(&:strip).select do |line|
     line.match?(/\A(?:git tag -a|git push origin)(?:[[:space:]]|\z)/)
