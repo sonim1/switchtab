@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     permissions:
       contents: read
@@ -146,7 +146,7 @@ jobs:
   release:
     needs: verify
     environment: release
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     permissions:
       contents: write
