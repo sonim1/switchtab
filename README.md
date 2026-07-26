@@ -112,11 +112,15 @@ private key in the macOS Keychain under account `ed25519` (or the value of
 store Apple notarization credentials in the local notarytool profile named by
 `NOTARYTOOL_KEYCHAIN_PROFILE`.
 
-With `gh auth status` and Cloudflare authentication working, start every release
-from the authoritative remote state. The following block fails closed unless
-tracked files and all non-ignored untracked files are clean, `HEAD` is exactly
-the freshly fetched `origin/main`, and the annotated tag resolves to that same
-commit:
+The normal release path is automated from pull-request CI through the merge to
+`main`; see **Tags and release execution**. Do not manually create or push a
+release tag during that path, and do not run a local publisher alongside CI.
+
+If the automatic main workflow is unavailable and a maintainer deliberately
+starts the tag path, use this guarded block from the authoritative remote state.
+It fails closed unless tracked files and all non-ignored untracked files are
+clean, `HEAD` is exactly the freshly fetched `origin/main`, and the annotated
+tag resolves to that same commit:
 
 ```bash
 (
@@ -134,10 +138,10 @@ git push origin "refs/tags/$release_tag:refs/tags/$release_tag"
 )
 ```
 
-The normal CI path stops here. After the tag push, GitHub CI owns the build and
-public GitHub/Sparkle publication; do not run any local build or publisher.
+The normal CI handoff for this guarded path stops after the tag push; CI owns
+the release build and public GitHub/Sparkle publication.
 
-Use the local fallback only after confirming that the tag-triggered CI run is
+Use the local fallback only after confirming that automated release CI is
 disabled or cancelled and that no active run owns the tag. Run this complete
 block from the same tagged checkout. Its prompt securely reads a short-lived
 tap token without placing it in shell history:
@@ -315,16 +319,37 @@ no production secrets.
 ### Tags and release execution
 
 Protect creation and updates of `v*` tags with a GitHub ruleset restricted to
-maintainers. Before every release, update the Xcode `MARKETING_VERSION` and
-strictly increase `CURRENT_PROJECT_VERSION`; the build version must contain one
-to three numeric components and must never decrease or be reused. Use the single
-guarded normal CI block under **Local signing and publishing** to fetch the
-authoritative refs, prove a clean exact `origin/main` checkout, create the
-annotated tag matching `MARKETING_VERSION`, and push its fully qualified ref.
-Do not create or push a release tag through a shorter command path.
+maintainers. Every pull request runs secret-free CI. A release-relevant PR must
+strictly increase Xcode `MARKETING_VERSION` and
+strictly increase `CURRENT_PROJECT_VERSION` in both app target configurations.
+The build version must contain one to three numeric components and must never
+decrease or be reused. A docs-only PR still runs CI, but plans `release=false`
+and does not require either version bump.
+
+After a release-relevant PR merges, the push to `main` creates or verifies the
+annotated `refs/tags/v<MARKETING_VERSION>` on that exact merge commit and pushes
+only that tag ref. Because the tag is pushed with the repository
+`GITHUB_TOKEN`, GitHub's recursion suppression does not start another workflow
+from the tag event. The automatic workflow therefore explicitly dispatches
+`release.yml` with that existing tag.
+
+Both automatic planning/tagging and downstream release execution use fixed,
+non-cancelling, max-queued concurrency groups. Rapid main merges and their
+release dispatches are serialized and preserved instead of replacing an older
+queued run.
+
+The guarded normal CI block under **Local signing and publishing** remains the
+operator recovery path for pushing a fully qualified ref for the release tag;
+do not use a shorter tag command.
 
 The workflow accepts only exact `refs/tags/v<version>` references, checks that
 the tag commit is on `origin/main`, and follows this exact flow:
+
+```text
+PR CI -> main merge -> exact annotated tag -> explicit release dispatch -> secret-free `verify` -> protected signed `release` -> public GitHub/Sparkle publication -> protected `notify` -> tap PR/CI/auto-merge
+```
+
+A deliberately maintainer-pushed recovery tag enters the same downstream flow:
 
 ```text
 tag push -> secret-free `verify` -> protected signed `release` -> public GitHub/Sparkle publication -> protected `notify` -> tap PR/CI/auto-merge
@@ -341,18 +366,33 @@ consists only of `repository` and `tag`. After receiving those identifiers,
 `sonim1/homebrew-tap` downloads `release-manifest.json` from the public GitHub
 Release, validates it, renders the Cask change, and opens the tap pull request.
 
-The canonical `SwitchTab-<version>-<build>.dmg` is shared by the Sparkle
-appcast, GitHub Release, and Homebrew Cask; it is not rebuilt separately for
-each channel. When `ENABLE_HOMEBREW_NOTIFY=true`, the protected `notify` job
-runs only after public publication and asks the tap to render its Cask change,
-open a pull request, run CI, and auto-merge after the protected checks pass.
+The GitHub Release assets are exactly
+`SwitchTab-<version>-<build>.dmg`,
+`SwitchTab-<version>-<build>.dmg.sha256`, and `release-manifest.json`. The
+canonical DMG is shared by the Sparkle appcast, GitHub Release, and Homebrew
+Cask; it is not rebuilt separately for each channel. When
+`ENABLE_HOMEBREW_NOTIFY=true`, the protected `notify` job runs only after public
+publication and asks the tap to render its Cask change, open a pull request,
+run CI, and auto-merge after the protected checks pass.
 
-All tags share one release concurrency group, and the appcast update itself
-uses an R2 ETag precondition so an older run cannot roll the feed back. Manual
-workflow dispatch is recovery-only and must name an existing version tag; it
-does not create or move tags.
+The appcast update uses an R2 ETag precondition so an older run cannot roll the
+feed back. Manual workflow dispatch is recovery-only and must name an existing
+version tag; it does not create or move tags.
 
 ### Recovery and immutability
+
+Recover an existing tag through `workflow_dispatch` only after checking that no
+active run owns it and that the annotated tag resolves to the intended commit:
+
+```bash
+gh workflow run release.yml --ref main -f tag=v1.0.1
+```
+
+Do not blindly dispatch a full rebuild after immutable DMG or checksum assets
+have been published. Inspect the existing run, GitHub Release, and public assets
+first, then rerun only the failed job or notification path when possible; a new
+notarized build may differ and immutable publication will reject replacement
+bytes.
 
 Versioned DMG and checksum objects are immutable. Re-running a release with the
 same bytes is safe; different bytes under an existing versioned name stop the

@@ -152,7 +152,11 @@ assert(manual_tag["description"].to_s.downcase.include?("existing version tag"),
 assert(!workflow_source.include?("pull_request"), "pull_request must not trigger releases")
 
 assert(workflow["permissions"] == { "contents" => "read" }, "workflow must default to contents: read")
-assert(workflow["concurrency"] == { "group" => "switchtab-release", "cancel-in-progress" => false }, "release concurrency must remain global and non-cancelling")
+assert(workflow["concurrency"] == {
+  "group" => "switchtab-release",
+  "cancel-in-progress" => false,
+  "queue" => "max"
+}, "release concurrency must serialize and preserve all three rapid dispatches with a non-cancelling max queue")
 
 jobs = workflow.fetch("jobs")
 assert(jobs.keys == %w[verify release notify], "workflow must contain verify, release, and notify jobs")
@@ -234,19 +238,20 @@ assert(setup_node.dig("with", "node-version") == "24.18.0", "setup-node must pin
 tooling = verify_steps.fetch(verify_names.index("Install release tooling")).fetch("run")
 assert(tooling.include?("npm ci --ignore-scripts"), "release tooling must use npm ci --ignore-scripts")
 contracts = verify_steps.fetch(verify_names.index("Run release contract tests")).fetch("run")
-%w[
-  release-tooling-test.sh
-  release-local-test.sh
-  generate-appcast-test.sh
-  generate-release-manifest-test.sh
-  setup-update-hosting-test.sh
-  publish-update-test.sh
-  publish-release-test.sh
-  dispatch-homebrew-update-test.sh
-  release-workflow-test.sh
-].each do |script|
-  assert(contracts.include?("scripts/tests/#{script}"), "contract suite does not invoke #{script}")
-end
+expected_contract_tests = %w[
+  scripts/tests/release-tooling-test.sh
+  scripts/tests/release-local-test.sh
+  scripts/tests/generate-appcast-test.sh
+  scripts/tests/generate-release-manifest-test.sh
+  scripts/tests/setup-update-hosting-test.sh
+  scripts/tests/publish-update-test.sh
+  scripts/tests/publish-release-test.sh
+  scripts/tests/dispatch-homebrew-update-test.sh
+  scripts/tests/release-workflow-test.sh
+  scripts/tests/plan-release-test.sh
+  scripts/tests/automatic-release-workflow-test.sh
+]
+assert(contracts.scan(%r{scripts/tests/[a-z0-9-]+-test\.sh}) == expected_contract_tests, "release verify must run the exact eleven release contract tests")
 assert(verify_steps.fetch(verify_names.index("Run Swift tests")).fetch("run").include?("swift test"), "Swift tests are missing")
 unsigned_build = verify_steps.fetch(verify_names.index("Build unsigned Debug app")).fetch("run")
 %w[xcodebuild SwitchTab.xcodeproj SwitchTab Debug arm64 CODE_SIGNING_ALLOWED=NO].each do |token|
@@ -557,6 +562,7 @@ extract_workflow_step notify "Verify release commit" "$NOTIFY_COMMIT_CHECK_HARNE
         capture { print }
         capture && /tag_commit=.*git rev-parse/ { exit }
     ' "$VALIDATION_SOURCE"
+    # shellcheck disable=SC2016 # Writes literal shell source into the harness.
     printf '%s\n' 'printf "%s\n" "$tag_commit"'
 } > "$TAG_REF_HARNESS"
 chmod +x "$TAG_REF_HARNESS"

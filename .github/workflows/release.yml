@@ -17,6 +17,7 @@ permissions:
 concurrency:
   group: switchtab-release
   cancel-in-progress: false
+  queue: max
 
 jobs:
   verify:
@@ -121,6 +122,8 @@ jobs:
             scripts/tests/publish-release-test.sh
             scripts/tests/dispatch-homebrew-update-test.sh
             scripts/tests/release-workflow-test.sh
+            scripts/tests/plan-release-test.sh
+            scripts/tests/automatic-release-workflow-test.sh
           )
           for test_script in "${release_tests[@]}"; do
             bash "$test_script"
