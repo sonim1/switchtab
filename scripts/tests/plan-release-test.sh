@@ -162,6 +162,12 @@ assert_status 0
 [[ -f "$OUTPUT_FILE" ]] || fail 'output file was not created'
 [[ "$(<"$OUTPUT_FILE")" == "$PLAN_OUTPUT" ]] || fail 'output file did not match stdout'
 
+# The release workflow permits only one to three build-version components.
+git -C "$REPOSITORY" checkout --quiet "$BASE_COMMIT"
+write_project '1.0.1' '2.0.0.1'
+FOUR_COMPONENT_BUILD_COMMIT="$(commit_fixture 'four component build version')"
+assert_plan_failure "$BASE_COMMIT" "$FOUR_COMPONENT_BUILD_COMMIT"
+
 # Inline OpenStep declarations must not hide a conflicting second value.
 git -C "$REPOSITORY" checkout --quiet "$BASE_COMMIT"
 cat > "$REPOSITORY/SwitchTab.xcodeproj/project.pbxproj" <<'EOF'

@@ -55,6 +55,10 @@ is_numeric_dotted() {
     [[ "$1" =~ ^[0-9]+([.][0-9]+)*$ ]]
 }
 
+is_build_version() {
+    [[ "$1" =~ ^[0-9]+([.][0-9]+){0,2}$ ]]
+}
+
 extract_version() {
     local revision="$1"
     local variable="$2"
@@ -152,9 +156,21 @@ extract_version() {
 
     while IFS= read -r value; do
 
-        if ! is_numeric_dotted "$value"; then
-            reject "$variable at $revision must be numeric and dotted: $value"
-        fi
+        case "$variable" in
+            CURRENT_PROJECT_VERSION)
+                if ! is_build_version "$value"; then
+                    reject "$variable at $revision must contain one to three numeric components: $value"
+                fi
+                ;;
+            MARKETING_VERSION)
+                if ! is_numeric_dotted "$value"; then
+                    reject "$variable at $revision must be numeric and dotted: $value"
+                fi
+                ;;
+            *)
+                reject "unsupported project version declaration: $variable"
+                ;;
+        esac
 
         if [[ "$found" -eq 0 ]]; then
             first_value="$value"
