@@ -369,12 +369,13 @@ tag push -> secret-free `verify` -> protected signed `release` -> public GitHub/
 ```
 
 The secret-free `verify` job installs the pinned Node 24.18.0 runtime and runs
-the contract, Swift, and unsigned Xcode checks. After approval, `release`
-creates a temporary Keychain, signs and notarizes the DMG, generates the signed
-appcast and `release-manifest.json`, creates or reuses the GitHub draft, and
-stages its exact assets. It then publishes R2 objects and the appcast before
-making the draft public last. The manifest is both a GitHub Release asset and
-the tap package-update contract. The `homebrew_release` dispatch payload
+the contract, Swift, and unsigned Xcode checks. In current automatic mode,
+`release` starts immediately without an approval gate, creates a temporary
+Keychain, signs and notarizes the DMG, generates the signed appcast and
+`release-manifest.json`, creates or reuses the GitHub draft, and stages its exact
+assets. It then publishes R2 objects and the appcast before making the draft
+public last. The manifest is both a GitHub Release asset and the tap
+package-update contract. The `homebrew_release` dispatch payload
 consists only of `repository` and `tag`. After receiving those identifiers,
 `sonim1/homebrew-tap` downloads `release-manifest.json` from the public GitHub
 Release, validates it, renders the Cask change, and opens the tap pull request.
