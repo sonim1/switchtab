@@ -264,22 +264,35 @@ the secrets are registered.
 
 ### Protected release environment and tap integration
 
-Create a GitHub `release` Environment under repository settings and enable
-required reviewer protection. Store the Apple, Sparkle, and R2 production
-secrets there. Homebrew notification is opt-in: the `notify` job runs only when
-the repository-level `ENABLE_HOMEBREW_NOTIFY` variable is exactly `true`. Leave
-it unset or set it to `false` to publish GitHub, Sparkle, and R2 without touching
+Create a GitHub `release` Environment under repository settings and store the
+Apple, Sparkle, and R2 production secrets there. The current automatic mode has
+no required reviewer rule. Merging a release-relevant PR into `main` is the
+production release authorization point, so downstream release jobs continue
+without manual approval. The Environment still scopes production secrets to
+jobs that explicitly reference it.
+
+Homebrew notification is opt-in: the `notify` job runs only when the
+repository-level `ENABLE_HOMEBREW_NOTIFY` variable is exactly `true`. Leave it
+unset or set it to `false` to publish GitHub, Sparkle, and R2 without touching
 the tap. When enabled, also store the protected `TAP_GITHUB_APP_PRIVATE_KEY`
 secret and `TAP_GITHUB_APP_ID` variable in the `release` Environment. Both the
-`release` and enabled `notify` jobs request approval because both use this
-Environment sequentially. A notify-only rerun can request approval again.
+`release` and enabled `notify` jobs use this Environment sequentially and
+request no approval in current mode.
+A notify-only rerun does not request approval again.
 
 Both jobs use the same Environment, so Environment secrets are available to
-both jobs after approval. The workflow YAML references and injects Apple,
-Sparkle, and R2 secrets only into `release` steps, and references and injects
-the tap App private key only into `notify`. That is a property of the reviewed
-workflow, not an Environment-level availability boundary; true secret-availability
-isolation requires separate Environments.
+both jobs when each starts in current mode, not after approval. The workflow
+YAML references and injects Apple, Sparkle, and R2 secrets only into `release`
+steps, and references and injects the tap App private key only into `notify`.
+That is a property of the reviewed workflow, not an Environment-level
+availability boundary; true secret-availability isolation requires separate
+Environments.
+
+Adding required reviewers to the `release` Environment is a deliberate
+alternative that changes merge-to-main releases to manual approval. Both the
+`release` and enabled `notify` jobs would then pause independently, so configure
+that policy only when the intentional product behavior is no longer immediate
+release after merge.
 
 The GitHub App must be installed only on `sonim1/homebrew-tap`. Grant the
 installation the minimum union of permissions required by the unified release
@@ -412,15 +425,15 @@ artifacts.
 If release publication fails before the GitHub Release becomes public, resolve
 the cause and rerun the failed `release` job. The existing draft and
 byte-idempotent asset rules make that narrow rerun safe; after publication, the
-dependent `notify` job proceeds through its own approval. Do not delete or
+dependent `notify` job runs automatically when enabled. Do not delete or
 recreate the tag, and do not rerun the full workflow unnecessarily.
 
 If `notify` fails after the release is already public, use **Re-run failed
 jobs** in GitHub Actions to rerun only the failed `notify` job. A notify-only
-rerun can request approval again, but it does not rebuild, sign, notarize, or
-replace public assets. As a manual fallback, provide a short-lived token with
-`Contents: Read & write` access only to `sonim1/homebrew-tap` without putting
-the token in shell history:
+rerun does not request approval again in current automatic mode, and it does not
+rebuild, sign, notarize, or replace public assets. As a manual fallback, provide
+a short-lived token with `Contents: Read & write` access only to
+`sonim1/homebrew-tap` without putting the token in shell history:
 
 ```bash
 (
