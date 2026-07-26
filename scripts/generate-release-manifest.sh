@@ -49,12 +49,13 @@ if [[ "$enclosure_count" != '1' ]]; then
     fail "Appcast must contain exactly one enclosure" 64
 fi
 
-short_version_count="$(xml_value 'count((//*[local-name()="enclosure"])[1]/@*[local-name()="shortVersionString" and namespace-uri()="http://www.andymatuschak.org/xml-namespaces/sparkle"])')"
+short_version_expression='(//*[local-name()="item"])[1]/*[local-name()="shortVersionString" and namespace-uri()="http://www.andymatuschak.org/xml-namespaces/sparkle"] | (//*[local-name()="enclosure"])[1]/@*[local-name()="shortVersionString" and namespace-uri()="http://www.andymatuschak.org/xml-namespaces/sparkle"]'
+short_version_count="$(xml_value "count($short_version_expression)")"
 if [[ "$short_version_count" != '1' ]]; then
-    fail "Appcast enclosure must contain one Sparkle shortVersionString" 64
+    fail "Appcast must contain one Sparkle shortVersionString" 64
 fi
 
-appcast_version="$(xml_value 'string((//*[local-name()="enclosure"])[1]/@*[local-name()="shortVersionString" and namespace-uri()="http://www.andymatuschak.org/xml-namespaces/sparkle"])')"
+appcast_version="$(xml_value "string(($short_version_expression)[1])")"
 if [[ "$tag" != "v$appcast_version" ]]; then
     fail "Tag/appcast version mismatch" 64
 fi

@@ -91,11 +91,13 @@ write_appcast() {
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
     <item>
-      <enclosure url="$url" sparkle:version="7" sparkle:shortVersionString="$version" />
+      <sparkle:version>7</sparkle:version>
+      <sparkle:shortVersionString>$version</sparkle:shortVersionString>
+      <enclosure url="$url" />
 EOF
     if [[ "$enclosure_count" -eq 2 ]]; then
         cat >> "$UPDATE_DIR/appcast.xml" <<EOF
-      <enclosure url="$url" sparkle:version="7" sparkle:shortVersionString="$version" />
+      <enclosure url="$url" />
 EOF
     fi
     cat >> "$UPDATE_DIR/appcast.xml" <<'EOF'
