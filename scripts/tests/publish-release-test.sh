@@ -230,6 +230,19 @@ write_appcast() {
     cat > "$UPDATE_DIR/appcast.xml" <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel><item>
+<enclosure url="$url" />
+<sparkle:shortVersionString>$version</sparkle:shortVersionString>
+</item></channel></rss>
+EOF
+}
+
+write_legacy_appcast() {
+    local url="${1:-https://updates.test.example/$DMG_NAME}"
+    local version="${2:-1.2}"
+
+    cat > "$UPDATE_DIR/appcast.xml" <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel><item>
 <enclosure url="$url" sparkle:shortVersionString="$version" />
 </item></channel></rss>
 EOF
@@ -411,6 +424,13 @@ grep -Fxq 'release create v1.2 --draft --verify-tag --generate-notes --title Swi
 ! grep -Fq -- '--clobber' "$GH_LOG" || fail "asset upload used --clobber"
 [[ "$(<"$GH_STATE")" == published ]] || fail "draft was not published"
 
+# Legacy Sparkle enclosure attributes remain accepted for existing appcasts.
+reset_scenario
+write_legacy_appcast
+run_release v1.2
+assert_status 0
+[[ "$(<"$GH_STATE")" == published ]] || fail "legacy appcast was not published"
+
 # Release config cannot redirect GitHub operations after it is sourced.
 reset_scenario
 cat > "$CONFIG_PATH" <<'EOF'
@@ -588,6 +608,18 @@ assert_no_mutation
 
 reset_scenario
 cat > "$UPDATE_DIR/appcast.xml" <<'EOF'
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
+     xmlns:other="https://example.invalid/other"><channel><item>
+<enclosure url="https://updates.test.example/SwitchTab-1.2-7.dmg" />
+<other:shortVersionString>1.2</other:shortVersionString>
+</item></channel></rss>
+EOF
+run_release v1.2
+[[ "$status" -ne 0 ]] || fail "non-Sparkle short version child was accepted"
+assert_no_mutation
+
+reset_scenario
+cat > "$UPDATE_DIR/appcast.xml" <<'EOF'
 <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel><item>
 <enclosure url="https://updates.test.example/SwitchTab-1.2-7.dmg" sparkle:shortVersionString="1.2" />
 <enclosure url="https://updates.test.example/SwitchTab-1.2-8.dmg" sparkle:shortVersionString="1.2" />
@@ -610,10 +642,24 @@ for bad_url in \
 done
 
 reset_scenario
-write_appcast 'https://updates.test.example/SwitchTab-1.2-7.dmg' ''
-sed -i '' 's/ sparkle:shortVersionString="1.2"//' "$UPDATE_DIR/appcast.xml"
+cat > "$UPDATE_DIR/appcast.xml" <<'EOF'
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel><item>
+<enclosure url="https://updates.test.example/SwitchTab-1.2-7.dmg" />
+</item></channel></rss>
+EOF
 run_release v1.2
 [[ "$status" -ne 0 ]] || fail "missing short version was accepted"
+assert_no_mutation
+
+reset_scenario
+cat > "$UPDATE_DIR/appcast.xml" <<'EOF'
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel><item>
+<enclosure url="https://updates.test.example/SwitchTab-1.2-7.dmg" sparkle:shortVersionString="1.2" />
+<sparkle:shortVersionString>1.2</sparkle:shortVersionString>
+</item></channel></rss>
+EOF
+run_release v1.2
+[[ "$status" -ne 0 ]] || fail "duplicate child and attribute short versions were accepted"
 assert_no_mutation
 
 reset_scenario
