@@ -67,8 +67,15 @@ struct SwitcherIconStripView: View {
                 width: layoutMetrics.tileSize.width,
                 height: layoutMetrics.tileSize.height
             )
-            .background(isSelected ? Color.accentColor.opacity(0.20) : Color.clear)
+            .background(isSelected ? Color.accentColor.opacity(0.28) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 7))
+            .overlay {
+                RoundedRectangle(cornerRadius: 7)
+                    .stroke(
+                        isSelected ? Color.accentColor.opacity(0.95) : Color.clear,
+                        lineWidth: 2
+                    )
+            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(item.title))
