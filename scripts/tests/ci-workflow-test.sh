@@ -48,7 +48,7 @@ assert(policy["permissions"] == { "contents" => "read" }, "policy must be read-o
 assert(policy["timeout-minutes"].is_a?(Integer) && policy["timeout-minutes"].between?(1, 5), "policy timeout must be bounded")
 assert(policy["outputs"] == {
   "trusted" => "${{ steps.policy.outputs.trusted }}",
-  "release-kind" => "${{ steps.policy.outputs.release-kind }}",
+  "release_kind" => "${{ steps.policy.outputs.release_kind }}",
 }, "policy outputs must be exact")
 assert(policy.fetch("steps").length == 1, "policy must not check out pull-request code")
 policy_step = policy.fetch("steps").first
@@ -111,7 +111,7 @@ assert(prepare["shell"] == "bash", "prepare step must use bash")
 assert(prepare["env"] == {
   "BASE_SHA" => "${{ github.event.pull_request.base.sha }}",
   "HEAD_SHA" => "${{ github.event.pull_request.head.sha }}",
-  "RELEASE_KIND" => "${{ needs.policy.outputs.release-kind }}",
+  "RELEASE_KIND" => "${{ needs.policy.outputs.release_kind }}",
 }, "prepare inputs must be exact")
 assert(prepare["run"] == 'scripts/prepare-pr-version.sh "$BASE_SHA" "$HEAD_SHA" "$RELEASE_KIND" "$GITHUB_OUTPUT"', "prepare command must be exact")
 
