@@ -1,6 +1,6 @@
 # Repository Maintenance
 
-Checked: 2026-07-21
+Checked: 2026-07-27
 
 ## Current Source Of Truth
 
@@ -78,16 +78,51 @@ scan.
   Inspect status before staging, cleaning, or rewriting history instead of
   recording a temporary dirty/clean state in this document.
 
+## Pull Request Version Policy
+
+- `.github/workflows/ci.yml` owns pull-request version changes. Contributors
+  should not manually maintain `MARKETING_VERSION` or
+  `CURRENT_PROJECT_VERSION` in `SwitchTab.xcodeproj/project.pbxproj`.
+- A release-relevant PR defaults to a patch bump. `release:minor` and
+  `release:major` select the other supported bump kinds; applying both fails
+  policy before checkout mutation.
+- Documentation-only changes (`*.md`, `*.markdown`, `docs/`, and `specs/`) do
+  not change versions and produce `release=false` after merge.
+- The marketing version is derived from the current PR base and normalized to
+  three components. The integer build number increments exactly once.
+- Write-scoped versioning runs only for a same-repository PR targeting `main`
+  whose author association is OWNER, MEMBER, or COLLABORATOR. Fork and
+  untrusted-author PRs fail with an explicit policy message and receive no
+  versioning App token. The job's normal `GITHUB_TOKEN` stays read-only.
+- `VERSION_GITHUB_APP_ID` and `VERSION_GITHUB_APP_PRIVATE_KEY` are repository-
+  level configuration for an App installed only on `switchtab`. Its short-lived
+  job token requests only contents write access. Do not reuse or expose the
+  release-environment credentials in pull-request CI.
+- The bot stages only `SwitchTab.xcodeproj/project.pbxproj`, never force-pushes,
+  and stops after its version commit. The resulting `synchronize` event runs
+  the read-only `verify` job against the new exact head.
+
+Repository rollout requirements:
+
+- labels `release:minor` and `release:major` must exist;
+- `main` must require pull requests and the exact `verify` status check;
+- required status checks must be strict so a branch behind `main` cannot merge.
+
+If CI reports conflicting release labels, remove one. If the PR is stale,
+update it from `main` and let CI recalculate. If a non-fast-forward push loses a
+race with another head update, rerun or update the branch; do not force-push the
+bot commit. `scripts/plan-release.sh` remains the final fail-closed guard after
+merge and rejects equal or decreasing versions.
+
 ## Standard Verification
 
-Run these before treating repo cleanup as complete:
+Run these before treating release automation changes as complete:
 
 ```bash
-swift test
-for test_script in scripts/tests/release-{tooling,local,workflow}-test.sh \
-  scripts/tests/{generate-appcast,setup-update-hosting,publish-update,publish-release}-test.sh; do
+for test_script in scripts/tests/*-test.sh; do
   bash "$test_script"
 done
+swift test
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
   xcodebuild -project SwitchTab.xcodeproj -scheme SwitchTab \
   -configuration Debug -destination 'platform=macOS,arch=arm64' \
