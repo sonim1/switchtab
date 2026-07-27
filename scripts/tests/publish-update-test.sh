@@ -219,6 +219,7 @@ else
         echo "unexpected URL: $url" >&2
         exit 95
     fi
+    key="${key%%\?*}"
 fi
 
 if [[ "$method" == PUT ]]; then
@@ -520,6 +521,9 @@ method=PUT url=https://$ACCOUNT_ID.r2.cloudflarestorage.com/switchtab/appcast.xm
 actual_put_log="$(grep '^method=PUT ' "$CURL_LOG")"
 [[ "$actual_put_log" == "$expected_put_log" ]] || fail "unexpected conditional PUT endpoint/metadata: $actual_put_log"
 [[ -f "$ORIGIN_DIR/$DMG_NAME" && -f "$ORIGIN_DIR/$DMG_NAME.sha256" ]] || fail "immutable objects did not reach the origin"
+grep -Eq "method=GET url=https://updates[.]test[.]example/${DMG_NAME}[?]switchtab-probe=[A-Za-z0-9]+ " "$CURL_LOG" || fail "DMG preflight did not isolate its cache key"
+grep -Eq "method=GET url=https://updates[.]test[.]example/${DMG_NAME}[?]switchtab-verify=[A-Za-z0-9]+ " "$CURL_LOG" || fail "DMG verification did not bypass stale cache"
+grep -Eq 'method=GET url=https://updates[.]test[.]example/appcast[.]xml[?]switchtab-verify=[A-Za-z0-9]+ ' "$CURL_LOG" || fail "appcast verification did not bypass stale cache"
 [[ "$(<"$CURL_LOG")" != *"$ACCESS_KEY_ID"* && "$(<"$CURL_LOG")" != *"$SECRET_ACCESS_KEY"* ]] || fail "R2 credentials appeared in the curl log"
 [[ "$output" != *"$ACCESS_KEY_ID"* && "$output" != *"$SECRET_ACCESS_KEY"* ]] || fail "R2 credentials appeared in output"
 
