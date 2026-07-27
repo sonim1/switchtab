@@ -359,6 +359,10 @@ else
     echo "Unable to create temporary publish directory" >&2
     exit "$temp_status"
 fi
+PUBLIC_CACHE_TOKEN="${TEMP_DIR##*.}"
+if [[ ! "$PUBLIC_CACHE_TOKEN" =~ ^[A-Za-z0-9]+$ ]]; then
+    fail "Unable to create a safe public cache-bypass token"
+fi
 
 fetch_http() {
     local url="$1"
@@ -643,7 +647,7 @@ publish_immutable_dmg() {
     local public_copy="$TEMP_DIR/probe-$DMG_NAME"
     local http_code remote_hash
 
-    http_code="$(fetch_http "$EXPECTED_DMG_URL" "$public_copy")"
+    http_code="$(fetch_http "$EXPECTED_DMG_URL?switchtab-probe=$PUBLIC_CACHE_TOKEN" "$public_copy")"
     case "$http_code" in
         200)
             remote_hash="$(sha256_file "$public_copy")"
@@ -666,7 +670,7 @@ publish_immutable_checksum() {
     local public_copy="$TEMP_DIR/probe-$CHECKSUM_NAME"
     local http_code compare_status
 
-    http_code="$(fetch_http "$CHECKSUM_URL" "$public_copy")"
+    http_code="$(fetch_http "$CHECKSUM_URL?switchtab-probe=$PUBLIC_CACHE_TOKEN" "$public_copy")"
     case "$http_code" in
         200)
             if "$CMP_BIN" -s "$CHECKSUM_PATH" "$public_copy"; then
@@ -696,7 +700,7 @@ verify_public_immutable_artifacts() {
     local public_checksum="$TEMP_DIR/verify-$CHECKSUM_NAME"
     local http_code public_hash compare_status
 
-    http_code="$(fetch_http "$EXPECTED_DMG_URL" "$public_dmg")"
+    http_code="$(fetch_http "$EXPECTED_DMG_URL?switchtab-verify=$PUBLIC_CACHE_TOKEN" "$public_dmg")"
     if [[ "$http_code" != 200 ]]; then
         fail "Public DMG verification returned HTTP $http_code"
     fi
@@ -705,7 +709,7 @@ verify_public_immutable_artifacts() {
         fail "Public DMG verification checksum mismatch"
     fi
 
-    http_code="$(fetch_http "$CHECKSUM_URL" "$public_checksum")"
+    http_code="$(fetch_http "$CHECKSUM_URL?switchtab-verify=$PUBLIC_CACHE_TOKEN" "$public_checksum")"
     if [[ "$http_code" != 200 ]]; then
         fail "Public checksum verification returned HTTP $http_code"
     fi
@@ -729,7 +733,7 @@ verify_public_immutable_artifacts
 publish_appcast
 
 PUBLIC_APPCAST_PATH="$TEMP_DIR/public-appcast.xml"
-PUBLIC_APPCAST_STATUS="$(fetch_http "$APPCAST_URL" "$PUBLIC_APPCAST_PATH")"
+PUBLIC_APPCAST_STATUS="$(fetch_http "$APPCAST_URL?switchtab-verify=$PUBLIC_CACHE_TOKEN" "$PUBLIC_APPCAST_PATH")"
 if [[ "$PUBLIC_APPCAST_STATUS" != 200 ]]; then
     fail "Public appcast verification returned HTTP $PUBLIC_APPCAST_STATUS"
 fi
