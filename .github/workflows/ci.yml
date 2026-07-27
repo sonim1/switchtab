@@ -2,12 +2,149 @@ name: CI
 
 "on":
   pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
 
 permissions:
   contents: read
 
+concurrency:
+  group: "switchtab-ci-${{ github.event.pull_request.number }}"
+  cancel-in-progress: true
+
 jobs:
+  policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      trusted: "${{ steps.policy.outputs.trusted }}"
+      release-kind: "${{ steps.policy.outputs.release-kind }}"
+    steps:
+      - name: Evaluate versioning policy
+        id: policy
+        shell: bash
+        env:
+          BASE_REF: "${{ github.event.pull_request.base.ref }}"
+          BASE_REPOSITORY: "${{ github.event.pull_request.base.repo.full_name }}"
+          HEAD_REPOSITORY: "${{ github.event.pull_request.head.repo.full_name }}"
+          AUTHOR_ASSOCIATION: "${{ github.event.pull_request.author_association }}"
+          LABELS_JSON: "${{ toJSON(github.event.pull_request.labels.*.name) }}"
+        run: |
+          set -euo pipefail
+
+          minor_count="$(jq '[.[] | select(. == "release:minor")] | length' <<< "$LABELS_JSON")"
+          major_count="$(jq '[.[] | select(. == "release:major")] | length' <<< "$LABELS_JSON")"
+          if [[ "$minor_count" -gt 0 && "$major_count" -gt 0 ]]; then
+            echo 'Conflicting release labels: choose only release:minor or release:major.' >&2
+            exit 65
+          fi
+
+          [[ "$BASE_REF" == "main" ]] || {
+            echo "Automatic versioning supports only pull requests targeting main." >&2
+            exit 65
+          }
+          [[ "$HEAD_REPOSITORY" == "$BASE_REPOSITORY" ]] || {
+            echo "Automatic versioning does not run with write access for fork pull requests." >&2
+            exit 65
+          }
+          case "$AUTHOR_ASSOCIATION" in
+            OWNER|MEMBER|COLLABORATOR) ;;
+            *)
+              echo "Automatic versioning requires an OWNER, MEMBER, or COLLABORATOR author." >&2
+              exit 65
+              ;;
+          esac
+
+          release_kind='patch'
+          if [[ "$minor_count" -gt 0 ]]; then
+            release_kind='minor'
+          elif [[ "$major_count" -gt 0 ]]; then
+            release_kind='major'
+          fi
+
+          echo 'trusted=true' >> "$GITHUB_OUTPUT"
+          echo "release-kind=$release_kind" >> "$GITHUB_OUTPUT"
+
+  version:
+    needs: policy
+    if: "${{ needs.policy.outputs.trusted == 'true' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      ready: "${{ steps.prepare.outputs.ready }}"
+      release: "${{ steps.prepare.outputs.release }}"
+      version: "${{ steps.prepare.outputs.version }}"
+      build: "${{ steps.prepare.outputs.build }}"
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: "${{ github.event.pull_request.head.sha }}"
+          fetch-depth: 0
+          persist-credentials: true
+          token: "${{ github.token }}"
+
+      - name: Verify exact pull request head
+        shell: bash
+        env:
+          EXPECTED_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$EXPECTED_HEAD_SHA" ]] || {
+            echo 'Checked-out pull request head does not match the event SHA.' >&2
+            exit 1
+          }
+
+      - name: Prepare pull request version
+        id: prepare
+        shell: bash
+        env:
+          BASE_SHA: "${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
+          RELEASE_KIND: "${{ needs.policy.outputs.release-kind }}"
+        run: scripts/prepare-pr-version.sh "$BASE_SHA" "$HEAD_SHA" "$RELEASE_KIND" "$GITHUB_OUTPUT"
+
+      - name: Commit prepared version
+        if: "${{ steps.prepare.outputs.changed == 'true' }}"
+        shell: bash
+        env:
+          HEAD_REF: "${{ github.event.pull_request.head.ref }}"
+          VERSION: "${{ steps.prepare.outputs.version }}"
+          BUILD: "${{ steps.prepare.outputs.build }}"
+        run: |
+          set -euo pipefail
+
+          git check-ref-format "refs/heads/$HEAD_REF"
+          changed_paths=()
+          while IFS= read -r -d '' changed_path; do
+            changed_paths+=("$changed_path")
+          done < <(git diff --name-only -z --)
+          if [[ "${#changed_paths[@]}" -ne 1 || "${changed_paths[0]}" != 'SwitchTab.xcodeproj/project.pbxproj' ]]; then
+            echo "Version preparation changed an unexpected path." >&2
+            exit 1
+          fi
+
+          git add -- SwitchTab.xcodeproj/project.pbxproj
+          staged_paths=()
+          while IFS= read -r -d '' staged_path; do
+            staged_paths+=("$staged_path")
+          done < <(git diff --cached --name-only -z --)
+          if [[ "${#staged_paths[@]}" -ne 1 || "${staged_paths[0]}" != 'SwitchTab.xcodeproj/project.pbxproj' ]]; then
+            echo "Version preparation staged an unexpected path." >&2
+            exit 1
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "chore: bump version to $VERSION ($BUILD)"
+          git push origin "HEAD:refs/heads/$HEAD_REF"
+
   verify:
+    needs: version
+    if: "${{ needs.version.outputs.ready == 'true' }}"
     runs-on: macos-26
     timeout-minutes: 30
     permissions:
@@ -52,6 +189,8 @@ jobs:
             scripts/tests/dispatch-homebrew-update-test.sh
             scripts/tests/release-workflow-test.sh
             scripts/tests/plan-release-test.sh
+            scripts/tests/prepare-pr-version-test.sh
+            scripts/tests/ci-workflow-test.sh
             scripts/tests/automatic-release-workflow-test.sh
           )
           for test_script in "${release_tests[@]}"; do
