@@ -93,7 +93,11 @@ scan.
 - Write-scoped versioning runs only for a same-repository PR targeting `main`
   whose author association is OWNER, MEMBER, or COLLABORATOR. Fork and
   untrusted-author PRs fail with an explicit policy message and receive no
-  versioning write job.
+  versioning App token. The job's normal `GITHUB_TOKEN` stays read-only.
+- `VERSION_GITHUB_APP_ID` and `VERSION_GITHUB_APP_PRIVATE_KEY` are repository-
+  level configuration for an App installed only on `switchtab`. Its short-lived
+  job token requests only contents write access. Do not reuse or expose the
+  release-environment credentials in pull-request CI.
 - The bot stages only `SwitchTab.xcodeproj/project.pbxproj`, never force-pushes,
   and stops after its version commit. The resulting `synchronize` event runs
   the read-only `verify` job against the new exact head.

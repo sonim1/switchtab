@@ -27,6 +27,7 @@ automatic = YAML.safe_load(automatic_source, permitted_classes: [], permitted_sy
 
 CHECKOUT_ACTION = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
 SETUP_NODE_ACTION = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+APP_TOKEN_ACTION = "actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42"
 RELEASE_CONDITION = "${{ steps.release-plan.outputs.release == 'true' }}"
 
 def assert(condition, message)
@@ -50,8 +51,9 @@ def assert_sha_pinned_actions(workflow, expected, label)
   end
 end
 
-def assert_no_release_secrets(source, label)
-  assert(source.scan(/secrets\.([A-Z0-9_]+)/).empty?, "#{label} must not read repository secrets")
+def assert_no_release_secrets(source, label, allowed: [])
+  unexpected = source.scan(/secrets\.([A-Z0-9_]+)/).flatten - allowed
+  assert(unexpected.empty?, "#{label} contains unexpected repository secrets: #{unexpected.join(', ')}")
   forbidden = %w[
     APPLE_CERTIFICATE_P12_BASE64
     APPLE_CERTIFICATE_PASSWORD
@@ -152,8 +154,8 @@ assert(build_source.include?("-configuration Debug"), "CI build must use Debug c
 assert(build_source.include?("-destination 'platform=macOS,arch=arm64'"), "CI build must target macOS arm64")
 assert(build_source.include?("CODE_SIGNING_ALLOWED=NO"), "CI build must disable code signing")
 
-assert_sha_pinned_actions(ci, [CHECKOUT_ACTION, CHECKOUT_ACTION, SETUP_NODE_ACTION], "CI")
-assert_no_release_secrets(ci_source, "CI")
+assert_sha_pinned_actions(ci, [APP_TOKEN_ACTION, CHECKOUT_ACTION, CHECKOUT_ACTION, SETUP_NODE_ACTION], "CI")
+assert_no_release_secrets(ci_source, "CI", allowed: ["VERSION_GITHUB_APP_PRIVATE_KEY"])
 
 assert(automatic["name"] == "Automatic Release", "main workflow name must be Automatic Release")
 assert(automatic.fetch("on") == { "push" => { "branches" => ["main"] } }, "automatic release must run only for pushes to main")

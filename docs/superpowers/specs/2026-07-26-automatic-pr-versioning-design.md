@@ -36,13 +36,21 @@ The script is idempotent. When the pull-request head already contains the expect
 
 Extend the existing `CI` workflow with a small versioning job that runs before verification on pull-request open, reopen, synchronize, label, and unlabel events.
 
-The versioning job receives `contents: write` only when all of these conditions hold:
+The versioning job creates a short-lived, repository-scoped GitHub App token
+with `contents: write` only when all of these conditions hold:
 
 - the pull request originates from this repository;
 - the target branch is `main`;
 - the author association is `OWNER`, `MEMBER`, or `COLLABORATOR`.
 
-It checks out the exact PR head, runs the version bump script, and commits only the Xcode project when a bump is required. The commit identity is `github-actions[bot]`, and the commit message records the calculated version and build. Pushing that commit triggers a fresh `synchronize` run.
+Its normal `GITHUB_TOKEN` remains read-only. The App token is created from the
+dedicated repository variable `VERSION_GITHUB_APP_ID` and repository secret
+`VERSION_GITHUB_APP_PRIVATE_KEY`; it is not a release-environment credential.
+The job checks out the exact PR head, runs the version bump script, and commits
+only the Xcode project when a bump is required. The commit identity is
+`github-actions[bot]`, and the commit message records the calculated version
+and build. Pushing with the App token triggers a fresh `synchronize` run, which
+a push made with the workflow's normal `GITHUB_TOKEN` would not do.
 
 The verification job keeps `contents: read`. It runs only when the versioning job reports that the current head already has the expected version, so the initial run that creates a bot commit does not produce a misleading release-plan failure. The fresh run then executes the existing release planner, contract tests, Swift tests, and unsigned Xcode build.
 
@@ -72,6 +80,8 @@ Create the repository labels `release:minor` and `release:major` during rollout 
 - Existing bot-authored expected bump: no-op and proceed to verification.
 
 The workflow never force-pushes and never reads release-environment secrets.
+The version App is installed only on `switchtab`, and the generated token asks
+for only repository contents write permission.
 
 ## Testing
 

@@ -55,7 +55,12 @@
 - Modify: `scripts/tests/ci-workflow-test.sh`
 
 1. Add the exact pull-request activity types and a policy job that derives the bump kind from event labels, rejects conflicts, and rejects unsupported trust contexts without checking out PR code.
-2. Add a `contents: write` version job gated by policy outputs. Check out the exact same-repository PR branch with full history, run `scripts/prepare-pr-version.sh`, stage only the project file, commit as `github-actions[bot]`, and push without force.
+2. Add a version job gated by policy outputs. Keep its `GITHUB_TOKEN` read-only,
+   mint a short-lived `switchtab`-scoped GitHub App token with contents write,
+   check out the exact PR head with full history, run
+   `scripts/prepare-pr-version.sh`, stage only the project file, commit as
+   `github-actions[bot]`, and push without force so a fresh `synchronize` run is
+   emitted.
 3. Preserve `contents: read` on verification. Gate it on a successful ready/no-op version result so a mutation run stops and the resulting synchronize run performs verification.
 4. Add the new version and workflow contract tests to the existing release test array.
 5. Run both new contract tests and the complete existing release contract suite.
@@ -82,5 +87,8 @@
 3. Run an unsigned Debug Xcode build for `platform=macOS,arch=arm64`.
 4. Run ShellCheck, Bash syntax checks, YAML parsing, and `git diff --check`.
 5. Create repository labels `release:minor` and `release:major` if missing.
-6. Update `main` protection to require pull requests, require the exact `verify` status, and require branches to be current before merge.
-7. Push the feature branch and open a pull request only after all local checks pass; do not merge it until GitHub reports the required checks successful.
+6. Install the versioning GitHub App on `switchtab`, then store its ID as
+   `VERSION_GITHUB_APP_ID` and its private key as the repository secret
+   `VERSION_GITHUB_APP_PRIVATE_KEY`.
+7. Update `main` protection to require pull requests, require the exact `verify` status, and require branches to be current before merge.
+8. Push the feature branch and open a pull request only after all local checks pass; do not merge it until GitHub reports the required checks successful.

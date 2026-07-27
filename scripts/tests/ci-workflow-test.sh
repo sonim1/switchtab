@@ -19,6 +19,7 @@ workflow = YAML.safe_load(source, permitted_classes: [], permitted_symbols: [], 
 
 CHECKOUT_ACTION = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
 SETUP_NODE_ACTION = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+APP_TOKEN_ACTION = "actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42"
 
 def assert(condition, message)
   raise "FAIL: #{message}" unless condition
@@ -75,7 +76,7 @@ version = workflow.fetch("jobs").fetch("version")
 assert(version["needs"] == "policy", "version job must depend on policy")
 assert(version["if"] == "${{ needs.policy.outputs.trusted == 'true' }}", "version job trust gate must be exact")
 assert(version["runs-on"] == "ubuntu-latest", "version preparation must run on ubuntu-latest")
-assert(version["permissions"] == { "contents" => "write" }, "only version job may receive contents: write")
+assert(version["permissions"] == { "contents" => "read" }, "version job GITHUB_TOKEN must remain read-only")
 assert(version["timeout-minutes"].is_a?(Integer) && version["timeout-minutes"].between?(1, 10), "version timeout must be bounded")
 assert(version["outputs"] == {
   "ready" => "${{ steps.prepare.outputs.ready }}",
@@ -86,19 +87,30 @@ assert(version["outputs"] == {
 
 version_steps = steps_by_name(version)
 assert(version_steps.keys == [
+  "Create version GitHub App token",
   "Checkout exact pull request head",
   "Verify exact pull request head",
   "Prepare pull request version",
   "Commit prepared version",
 ], "version step list must be exact")
+app_token = version_steps.fetch("Create version GitHub App token")
+assert(app_token["id"] == "app-token", "GitHub App token step must expose its token")
+assert(app_token["uses"] == APP_TOKEN_ACTION, "GitHub App token action must use the reviewed SHA")
+assert(app_token["with"] == {
+  "app-id" => "${{ vars.VERSION_GITHUB_APP_ID }}",
+  "private-key" => "${{ secrets.VERSION_GITHUB_APP_PRIVATE_KEY }}",
+  "owner" => "sonim1",
+  "repositories" => "switchtab",
+  "permission-contents" => "write",
+}, "version app token must be repository-scoped and contents-only")
 checkout = version_steps.fetch("Checkout exact pull request head")
 assert(checkout["uses"] == CHECKOUT_ACTION, "version checkout action must use the reviewed SHA")
 assert(checkout["with"] == {
   "ref" => "${{ github.event.pull_request.head.sha }}",
   "fetch-depth" => 0,
   "persist-credentials" => true,
-  "token" => "${{ github.token }}",
-}, "version checkout must retain only the job token for the exact head")
+  "token" => "${{ steps.app-token.outputs.token }}",
+}, "version checkout must retain only the short-lived app token for the exact head")
 
 head_check = version_steps.fetch("Verify exact pull request head")
 assert(head_check["shell"] == "bash", "head verification must use bash")
@@ -169,10 +181,11 @@ assert(contract_source.scan(%r{scripts/tests/[a-z0-9-]+-test\.sh}) == expected_c
 
 actions = workflow.fetch("jobs").values.flat_map { |job| job.fetch("steps") }
   .map { |step| step["uses"] }.compact
-assert(actions == [CHECKOUT_ACTION, CHECKOUT_ACTION, SETUP_NODE_ACTION], "CI action list must be exact")
+assert(actions == [APP_TOKEN_ACTION, CHECKOUT_ACTION, CHECKOUT_ACTION, SETUP_NODE_ACTION], "CI action list must be exact")
 actions.each { |action| assert(action.match?(%r{\A[^@]+@[0-9a-f]{40}\z}), "all actions must be SHA pinned") }
-assert(source.scan(/secrets\.([A-Z0-9_]+)/).empty?, "CI must not read repository secrets")
-assert(source.scan(/permissions:\s*\n\s+contents: write/).length == 1, "only one job may request write permission")
+assert(source.scan(/secrets\.([A-Z0-9_]+)/).flatten.uniq == ["VERSION_GITHUB_APP_PRIVATE_KEY"], "CI may read only the scoped version app key")
+assert(!source.include?("TAP_GITHUB_APP_PRIVATE_KEY"), "CI must not read the release-environment tap key")
+assert(source.scan(/permissions:\s*\n\s+contents: write/).empty?, "no job GITHUB_TOKEN may receive write permission")
 RUBY
 
 echo 'ci-workflow-test: PASS'
