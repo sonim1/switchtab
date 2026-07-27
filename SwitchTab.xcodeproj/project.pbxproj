@@ -20,6 +20,7 @@
 		A00000000000000000000013 /* ShortcutSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000013 /* ShortcutSettingsStore.swift */; };
 		A00000000000000000000015 /* SwitcherOverlayState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000015 /* SwitcherOverlayState.swift */; };
 		A00000000000000000000016 /* SwitcherOverlayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000016 /* SwitcherOverlayController.swift */; };
+		A00000000000000000000098 /* SwitcherOverlayPresentationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000098 /* SwitcherOverlayPresentationModel.swift */; };
 		A00000000000000000000017 /* MenuBarContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000017 /* MenuBarContentView.swift */; };
 		A00000000000000000000018 /* CoreModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000018 /* CoreModelsTests.swift */; };
 		A00000000000000000000019 /* SwitcherItemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000019 /* SwitcherItemTests.swift */; };
@@ -104,6 +105,7 @@
 		B00000000000000000000013 /* ShortcutSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutSettingsStore.swift; sourceTree = "<group>"; };
 		B00000000000000000000015 /* SwitcherOverlayState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayState.swift; sourceTree = "<group>"; };
 		B00000000000000000000016 /* SwitcherOverlayController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayController.swift; sourceTree = "<group>"; };
+		B00000000000000000000098 /* SwitcherOverlayPresentationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayPresentationModel.swift; sourceTree = "<group>"; };
 		B00000000000000000000017 /* MenuBarContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContentView.swift; sourceTree = "<group>"; };
 		B00000000000000000000018 /* CoreModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreModelsTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000019 /* SwitcherItemTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherItemTests.swift; sourceTree = "<group>"; };
@@ -263,6 +265,7 @@
 			children = (
 				B00000000000000000000015 /* SwitcherOverlayState.swift */,
 				B00000000000000000000016 /* SwitcherOverlayController.swift */,
+				B00000000000000000000098 /* SwitcherOverlayPresentationModel.swift */,
 				B00000000000000000000066 /* SwitcherOverlayPresentationPolicy.swift */,
 				B00000000000000000000069 /* SwitcherOverlayLayoutPolicy.swift */,
 				B00000000000000000000050 /* SwitcherOverlayRootView.swift */,
@@ -510,6 +513,7 @@
 				A00000000000000000000064 /* PermissionSettingsDestination.swift in Sources */,
 				A00000000000000000000015 /* SwitcherOverlayState.swift in Sources */,
 				A00000000000000000000016 /* SwitcherOverlayController.swift in Sources */,
+				A00000000000000000000098 /* SwitcherOverlayPresentationModel.swift in Sources */,
 				A00000000000000000000062 /* SwitcherOverlayPresentationPolicy.swift in Sources */,
 				A00000000000000000000065 /* SwitcherOverlayLayoutPolicy.swift in Sources */,
 				A00000000000000000000017 /* MenuBarContentView.swift in Sources */,
