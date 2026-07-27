@@ -59,6 +59,26 @@ The app sources are laid out for an Xcode macOS menu bar app target at
 the SwiftPM test suite, and an Xcode Debug app build when full Xcode is
 selected.
 
+## Pull Request Versions
+
+For normal product work, open a pull request without editing
+`MARKETING_VERSION` or `CURRENT_PROJECT_VERSION`. CI calculates and commits the
+version on the pull-request branch before verification:
+
+- no release label: patch, for example `1.0.4` to `1.0.5`;
+- `release:minor`: minor, for example `1.0.4` to `1.1.0`;
+- `release:major`: major, for example `1.0.4` to `2.0.0`.
+
+Every release bump increments the integer build number once. Applying both
+release labels is invalid and blocks CI until one is removed. Documentation-
+only changes (`*.md`, `*.markdown`, `docs/`, or `specs/`) do not change either
+version and do not create a release after merge.
+
+Automatic version commits are limited to trusted contributors working from a
+branch in this repository. Update an older pull-request branch from `main` when
+GitHub reports it is behind; the version is then recalculated from the latest
+base.
+
 ## Sparkle Update Hosting
 
 The direct-distribution build reads its update feed from
