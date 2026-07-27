@@ -152,7 +152,8 @@ if ENCLOSURE_URL="$(xml_value 'string((//*[local-name()="enclosure"]/@url)[1])')
 else
     exit $?
 fi
-if SHORT_VERSION_COUNT="$(xml_value 'count(//*[local-name()="enclosure"]/@*[local-name()="shortVersionString"])')"; then
+SHORT_VERSION_EXPRESSION='(//*[local-name()="item"])[1]/*[local-name()="shortVersionString" and namespace-uri()="http://www.andymatuschak.org/xml-namespaces/sparkle"] | (//*[local-name()="enclosure"])[1]/@*[local-name()="shortVersionString" and namespace-uri()="http://www.andymatuschak.org/xml-namespaces/sparkle"]'
+if SHORT_VERSION_COUNT="$(xml_value 'count(//*[local-name()="shortVersionString"] | //*[local-name()="enclosure"]/@*[local-name()="shortVersionString"])')"; then
     :
 else
     exit $?
@@ -160,7 +161,7 @@ fi
 if [[ "$SHORT_VERSION_COUNT" != 1 ]]; then
     fail "Appcast must contain exactly one Sparkle short version"
 fi
-if SPARKLE_SHORT_VERSION_COUNT="$(xml_value 'count(//*[local-name()="enclosure"]/@*[local-name()="shortVersionString" and namespace-uri()="http://www.andymatuschak.org/xml-namespaces/sparkle"])')"; then
+if SPARKLE_SHORT_VERSION_COUNT="$(xml_value "count($SHORT_VERSION_EXPRESSION)")"; then
     :
 else
     exit $?
@@ -168,7 +169,7 @@ fi
 if [[ "$SPARKLE_SHORT_VERSION_COUNT" != 1 ]]; then
     fail "Appcast must contain exactly one correctly namespaced Sparkle short version"
 fi
-if SHORT_VERSION="$(xml_value 'string((//*[local-name()="enclosure"]/@*[local-name()="shortVersionString" and namespace-uri()="http://www.andymatuschak.org/xml-namespaces/sparkle"])[1])')"; then
+if SHORT_VERSION="$(xml_value "string(($SHORT_VERSION_EXPRESSION)[1])")"; then
     :
 else
     exit $?
