@@ -25,7 +25,7 @@
 - Create: `SwitchTabTests/Services/SwitcherOverlayPresentationModelTests.swift`
 - Modify: `SwitchTabTests/TestRunner.swift`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```swift
 import Combine
@@ -62,13 +62,13 @@ enum SwitcherOverlayPresentationModelTests {
 
 Add `try SwitcherOverlayPresentationModelTests.run()` immediately after `SwitcherOverlayStateTests.run()` in `SwitchTabTests/TestRunner.swift`.
 
-- [ ] **Step 2: Run the test suite to verify it fails**
+- [x] **Step 2: Run the test suite to verify it fails**
 
 Run: `rtk swift test`
 
 Expected: compilation fails because `SwitcherOverlayPresentationModel` does not exist.
 
-- [ ] **Step 3: Commit the red test**
+- [x] **Step 3: Commit the red test**
 
 ```bash
 rtk git add SwitchTabTests/Services/SwitcherOverlayPresentationModelTests.swift SwitchTabTests/TestRunner.swift
@@ -82,7 +82,7 @@ rtk git commit -m "test: cover switcher selection presentation updates"
 - Modify: `SwitchTab/UI/Overlay/SwitcherOverlayController.swift`
 - Modify: `SwitchTab/UI/Overlay/SwitcherOverlayRootView.swift`
 
-- [ ] **Step 1: Add the minimal observable model**
+- [x] **Step 1: Add the minimal observable model**
 
 ```swift
 import Combine
@@ -101,7 +101,7 @@ public final class SwitcherOverlayPresentationModel: ObservableObject {
 }
 ```
 
-- [ ] **Step 2: Make the root view observe the model**
+- [x] **Step 2: Make the root view observe the model**
 
 Replace its stored `SwitcherOverlayState` with:
 
@@ -111,7 +111,7 @@ Replace its stored `SwitcherOverlayState` with:
 
 Update the initializer to accept `presentationModel`, assign it, and read the active session through `presentationModel.state.session`.
 
-- [ ] **Step 3: Synchronize the model from the controller**
+- [x] **Step 3: Synchronize the model from the controller**
 
 Add:
 
@@ -121,13 +121,13 @@ private let presentationModel = SwitcherOverlayPresentationModel()
 
 For `.updated`, call `presentationModel.update(state)` instead of rebuilding the root view. At the start of `render()`, call `presentationModel.update(state)`, then construct `SwitcherOverlayRootView(presentationModel: presentationModel, ...)`. At the start of `endPresentation()`, update the model once more so dismiss/confirm state is also synchronized.
 
-- [ ] **Step 4: Run the focused regression suite**
+- [x] **Step 4: Run the focused regression suite**
 
 Run: `rtk swift test --filter SwitchTabTests/testAllSuites`
 
 Expected: PASS, including `observedIndices == [1]`.
 
-- [ ] **Step 5: Commit the behavior fix**
+- [x] **Step 5: Commit the behavior fix**
 
 ```bash
 rtk git add SwitchTab/UI/Overlay/SwitcherOverlayPresentationModel.swift SwitchTab/UI/Overlay/SwitcherOverlayController.swift SwitchTab/UI/Overlay/SwitcherOverlayRootView.swift
@@ -139,7 +139,7 @@ rtk git commit -m "fix: keep switcher selection presentation in sync"
 **Files:**
 - Modify: `SwitchTab/UI/Overlay/SwitcherIconStripView.swift`
 
-- [ ] **Step 1: Update the selected tile styling**
+- [x] **Step 1: Update the selected tile styling**
 
 Keep the rounded shape and change the selection decoration to:
 
@@ -155,7 +155,7 @@ Keep the rounded shape and change the selection decoration to:
 }
 ```
 
-- [ ] **Step 2: Run formatting and build checks**
+- [x] **Step 2: Run formatting and build checks**
 
 Run: `rtk git diff --check`
 
@@ -165,7 +165,7 @@ Run: `rtk swift test`
 
 Expected: all tests pass.
 
-- [ ] **Step 3: Commit the visual adjustment**
+- [x] **Step 3: Commit the visual adjustment**
 
 ```bash
 rtk git add SwitchTab/UI/Overlay/SwitcherIconStripView.swift
@@ -177,7 +177,7 @@ rtk git commit -m "fix: clarify switcher selected item"
 **Files:**
 - Verify all branch changes; no additional production files expected.
 
-- [ ] **Step 1: Run full local verification**
+- [x] **Step 1: Run full local verification**
 
 Run: `rtk swift test`
 
@@ -187,7 +187,7 @@ Run the repository's unsigned macOS build command from its release documentation
 
 Expected: build succeeds without signing or notarization.
 
-- [ ] **Step 2: Review branch scope**
+- [x] **Step 2: Review branch scope**
 
 Run: `rtk git status --short --branch`
 
