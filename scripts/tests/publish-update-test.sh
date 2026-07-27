@@ -354,6 +354,7 @@ write_appcast() {
     local count="${2:-1}"
     local build_version="${3-7}"
     local destination="${4:-$ARTIFACT_DIR/appcast.xml}"
+    local version_format="${5:-canonical}"
 
     if [[ "$count" == 0 ]]; then
         printf '%s\n' '<?xml version="1.0"?><rss><channel><item /></channel></rss>' > "$destination"
@@ -361,9 +362,13 @@ write_appcast() {
         cat > "$destination" <<EOF_XML
 <?xml version="1.0"?><rss xmlns:sparkle="https://sparkle-project.org/xml-namespaces/sparkle"><channel><item><enclosure url="$enclosure_url" sparkle:version="$build_version" /><enclosure url="$enclosure_url" sparkle:version="$build_version" /></item></channel></rss>
 EOF_XML
+    elif [[ "$version_format" == legacy ]]; then
+        cat > "$destination" <<EOF_XML
+<?xml version="1.0"?><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel><item><enclosure url="$enclosure_url" sparkle:version="$build_version" /></item></channel></rss>
+EOF_XML
     else
         cat > "$destination" <<EOF_XML
-<?xml version="1.0"?><rss xmlns:sparkle="https://sparkle-project.org/xml-namespaces/sparkle"><channel><item><enclosure url="$enclosure_url" sparkle:version="$build_version" /></item></channel></rss>
+<?xml version="1.0"?><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel><item><enclosure url="$enclosure_url" /><sparkle:version>$build_version</sparkle:version></item></channel></rss>
 EOF_XML
     fi
 }
@@ -518,6 +523,12 @@ actual_put_log="$(grep '^method=PUT ' "$CURL_LOG")"
 [[ "$(<"$CURL_LOG")" != *"$ACCESS_KEY_ID"* && "$(<"$CURL_LOG")" != *"$SECRET_ACCESS_KEY"* ]] || fail "R2 credentials appeared in the curl log"
 [[ "$output" != *"$ACCESS_KEY_ID"* && "$output" != *"$SECRET_ACCESS_KEY"* ]] || fail "R2 credentials appeared in output"
 
+# Sparkle's legacy enclosure attribute remains supported.
+reset_fixture
+write_appcast "$DMG_URL" 1 7 "$ARTIFACT_DIR/appcast.xml" legacy
+invoke_script
+assert_status 0
+
 # A newer release that finishes first cannot be rolled back by an older tag.
 reset_fixture
 write_appcast "$DMG_URL" 1 8
@@ -591,6 +602,27 @@ for unsafe_build_version in missing alpha too_many_parts; do
     assert_no_uploads
     [[ ! -s "$CURL_LOG" ]] || fail "$unsafe_build_version build version reached the network"
 done
+
+# Ambiguous or incorrectly namespaced build versions fail before network mutation.
+reset_fixture
+cat > "$ARTIFACT_DIR/appcast.xml" <<EOF_XML
+<?xml version="1.0"?><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel><item><enclosure url="$DMG_URL" sparkle:version="7" /><sparkle:version>7</sparkle:version></item></channel></rss>
+EOF_XML
+invoke_script
+assert_failed
+assert_output_contains 'exactly one sparkle:version'
+assert_no_uploads
+[[ ! -s "$CURL_LOG" ]] || fail "ambiguous build version reached the network"
+
+reset_fixture
+cat > "$ARTIFACT_DIR/appcast.xml" <<EOF_XML
+<?xml version="1.0"?><rss xmlns:sparkle="https://example.invalid/not-sparkle"><channel><item><enclosure url="$DMG_URL" /><sparkle:version>7</sparkle:version></item></channel></rss>
+EOF_XML
+invoke_script
+assert_failed
+assert_output_contains 'correctly namespaced sparkle:version'
+assert_no_uploads
+[[ ! -s "$CURL_LOG" ]] || fail "incorrectly namespaced build version reached the network"
 
 # Identical immutable public objects are skipped, while appcast still publishes last.
 reset_fixture

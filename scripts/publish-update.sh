@@ -192,7 +192,9 @@ appcast_enclosure_url() {
 
 appcast_build_version() {
     local path="$1"
-    local count version result
+    local version_expression count namespaced_count version result
+
+    version_expression='(//*[local-name()="item"])[1]/*[local-name()="version" and namespace-uri()="http://www.andymatuschak.org/xml-namespaces/sparkle"] | (//*[local-name()="enclosure"])[1]/@*[local-name()="version" and namespace-uri()="http://www.andymatuschak.org/xml-namespaces/sparkle"]'
 
     if validate_xml "$path"; then
         :
@@ -200,7 +202,7 @@ appcast_build_version() {
         result=$?
         return "$result"
     fi
-    if count="$(xml_value "$path" 'count(//*[local-name()="enclosure"]/@*[local-name()="version"])')"; then
+    if count="$(xml_value "$path" 'count((//*[local-name()="item"])[1]/*[local-name()="version"] | (//*[local-name()="enclosure"])[1]/@*[local-name()="version"])')"; then
         :
     else
         result=$?
@@ -209,7 +211,16 @@ appcast_build_version() {
     if [[ "$count" != 1 ]]; then
         fail "Appcast must contain exactly one sparkle:version"
     fi
-    if version="$(xml_value "$path" 'string((//*[local-name()="enclosure"]/@*[local-name()="version"])[1])')"; then
+    if namespaced_count="$(xml_value "$path" "count($version_expression)")"; then
+        :
+    else
+        result=$?
+        return "$result"
+    fi
+    if [[ "$namespaced_count" != 1 ]]; then
+        fail "Appcast must contain exactly one correctly namespaced sparkle:version"
+    fi
+    if version="$(xml_value "$path" "string(($version_expression)[1])")"; then
         :
     else
         result=$?
