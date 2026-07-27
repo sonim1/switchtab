@@ -8,6 +8,7 @@ final class SwitchTabTests: XCTestCase {
         try PermissionServiceTests.run()
         try ShortcutValidationTests.run()
         try SwitcherOverlayStateTests.run()
+        try SwitcherOverlayPresentationModelTests.run()
         try SwitcherOverlayPresentationTests.run()
         try SwitcherOverlayConfirmationTests.run()
         try AccessibilityWindowProviderTests.run()
