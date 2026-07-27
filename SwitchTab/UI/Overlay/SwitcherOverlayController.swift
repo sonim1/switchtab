@@ -6,6 +6,7 @@ import SwiftUI
 @MainActor
 final class SwitcherOverlayController {
     private var state = SwitcherOverlayState()
+    private let presentationModel = SwitcherOverlayPresentationModel()
     private var panel: SwitcherOverlayPanel?
     private var hostingController: NSHostingController<SwitcherOverlayRootView>?
     private var localEventMonitor: Any?
@@ -104,7 +105,7 @@ final class SwitcherOverlayController {
         }
         switch result {
         case .updated:
-            render()
+            presentationModel.update(state)
         case .confirmed, .cancelled:
             apply(result)
         case .none:
@@ -190,6 +191,7 @@ final class SwitcherOverlayController {
     }
 
     private func render() {
+        presentationModel.update(state)
         let layoutSize = presentationLayoutSize
         guard let panel else {
             return
@@ -201,7 +203,7 @@ final class SwitcherOverlayController {
         }
 
         let rootView = SwitcherOverlayRootView(
-            state: state,
+            presentationModel: presentationModel,
             layoutSize: layoutSize,
             layoutMetrics: presentationLayoutMetrics,
             gridColumns: presentationGridColumns,
@@ -416,6 +418,7 @@ final class SwitcherOverlayController {
     }
 
     private func endPresentation() {
+        presentationModel.update(state)
         panel?.orderOut(nil)
         removeEventTap()
         removeEventMonitor()

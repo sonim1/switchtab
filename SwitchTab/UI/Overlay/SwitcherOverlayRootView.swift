@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 struct SwitcherOverlayRootView: View {
-    private let state: SwitcherOverlayState
+    @ObservedObject private var presentationModel: SwitcherOverlayPresentationModel
     private let layoutSize: CGSize
     private let layoutMetrics: SwitcherOverlayLayoutMetrics
     private let onItemClicked: (SwitcherListItem, Int) -> Void
@@ -11,7 +11,7 @@ struct SwitcherOverlayRootView: View {
     private let applicationIconStore: ApplicationIconStore
 
     init(
-        state: SwitcherOverlayState,
+        presentationModel: SwitcherOverlayPresentationModel,
         layoutSize: CGSize,
         layoutMetrics: SwitcherOverlayLayoutMetrics,
         gridColumns: [GridItem],
@@ -19,7 +19,7 @@ struct SwitcherOverlayRootView: View {
         applicationIconStore: ApplicationIconStore,
         onItemClicked: @escaping (SwitcherListItem, Int) -> Void
     ) {
-        self.state = state
+        self.presentationModel = presentationModel
         self.layoutSize = layoutSize
         self.layoutMetrics = layoutMetrics
         self.gridColumns = gridColumns
@@ -50,7 +50,7 @@ struct SwitcherOverlayRootView: View {
 
     @ViewBuilder
     private var rows: some View {
-        if let session = state.session {
+        if let session = presentationModel.state.session {
             SwitcherIconStripView(
                 items: session.items,
                 selectedIndex: session.selectedIndex,
