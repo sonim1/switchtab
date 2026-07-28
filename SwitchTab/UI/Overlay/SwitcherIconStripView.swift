@@ -216,6 +216,8 @@ private struct SwitcherWindowTile: View {
                 .font(.system(size: layoutMetrics.titleFontSize, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                // Keep the title clear of the close button in the top corner.
+                .padding(.trailing, layoutMetrics.closeButtonSize)
         }
         .frame(width: layoutMetrics.thumbnailSize.width, alignment: .leading)
     }
