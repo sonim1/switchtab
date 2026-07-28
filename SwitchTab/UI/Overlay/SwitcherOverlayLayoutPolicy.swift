@@ -13,6 +13,7 @@ public struct SwitcherOverlayPresentationLayout: Equatable {
 
 public struct SwitcherOverlayLayoutMetrics: Equatable {
     public let tileSize: CGSize
+    public let tileContentPadding: CGFloat
     public let thumbnailSize: CGSize
     public let fallbackIconSize: CGSize
     public let headerIconSize: CGSize
@@ -26,7 +27,7 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
     // slider stays continuous instead of snapping to hand-tuned presets.
     private static let baseThumbnailSize = CGSize(width: 160, height: 110)
     private static let baseHeaderIconExtent: CGFloat = 18
-    private static let baseTileHorizontalInset: CGFloat = 8
+    private static let baseTileContentPadding: CGFloat = 4
     private static let baseTileVerticalChrome: CGFloat = 30
     private static let baseTitleFontSize: CGFloat = 13
     private static let baseCloseButtonSize: CGFloat = 16
@@ -39,13 +40,15 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
         let thumbnailWidth = scaled(baseThumbnailSize.width, by: factor)
         let thumbnailHeight = scaled(baseThumbnailSize.height, by: factor)
         let headerIconExtent = scaled(baseHeaderIconExtent, by: factor)
+        let tileContentPadding = scaled(baseTileContentPadding, by: factor)
         let fallbackIconExtent = (thumbnailHeight * fallbackIconThumbnailRatio).rounded()
 
         return SwitcherOverlayLayoutMetrics(
             tileSize: CGSize(
-                width: thumbnailWidth + scaled(baseTileHorizontalInset, by: factor),
+                width: thumbnailWidth + (tileContentPadding * 2),
                 height: thumbnailHeight + headerIconExtent + scaled(baseTileVerticalChrome, by: factor)
             ),
+            tileContentPadding: tileContentPadding,
             thumbnailSize: CGSize(width: thumbnailWidth, height: thumbnailHeight),
             fallbackIconSize: CGSize(width: fallbackIconExtent, height: fallbackIconExtent),
             headerIconSize: CGSize(width: headerIconExtent, height: headerIconExtent),

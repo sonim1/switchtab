@@ -129,7 +129,7 @@ private struct SwitcherWindowTile: View {
                 titleHeader(for: item)
                 icon(for: item)
             }
-            .padding(4)
+            .padding(layoutMetrics.tileContentPadding)
             .frame(
                 width: layoutMetrics.tileSize.width,
                 height: layoutMetrics.tileSize.height
