@@ -29,6 +29,12 @@ public enum ShortcutModifierResolver {
         return SwitcherShortcutModifiers(rawValue: shortcutModifierRawValue)
     }
 
+    /// CGEvent taps hand back raw `CGEventFlags`, which use the same bit layout
+    /// as `NSEvent.ModifierFlags` for the four shortcut modifiers.
+    public static func shortcutModifiers(from eventFlags: CGEventFlags) -> SwitcherShortcutModifiers {
+        shortcutModifiers(from: NSEvent.ModifierFlags(rawValue: UInt(eventFlags.rawValue)))
+    }
+
     public static func modifierNames(from modifierFlags: NSEvent.ModifierFlags) -> [String] {
         let shortcutModifiers = shortcutModifiers(from: modifierFlags)
 

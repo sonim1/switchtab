@@ -16,39 +16,49 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
     public let thumbnailSize: CGSize
     public let fallbackIconSize: CGSize
     public let headerIconSize: CGSize
+    public let titleFontSize: CGFloat
+    public let symbolFontSize: CGFloat
+    public let closeButtonSize: CGFloat
     public let gridSpacing: CGFloat
     public let gridPadding: CGFloat
 
-    public static func metrics(for overlaySize: OverlaySizePreference) -> SwitcherOverlayLayoutMetrics {
-        switch overlaySize {
-        case .compact:
-            return SwitcherOverlayLayoutMetrics(
-                tileSize: CGSize(width: 112, height: 112),
-                thumbnailSize: CGSize(width: 104, height: 72),
-                fallbackIconSize: CGSize(width: 76, height: 76),
-                headerIconSize: CGSize(width: 14, height: 14),
-                gridSpacing: 10,
-                gridPadding: 20
-            )
-        case .standard:
-            return SwitcherOverlayLayoutMetrics(
-                tileSize: CGSize(width: 128, height: 124),
-                thumbnailSize: CGSize(width: 120, height: 84),
-                fallbackIconSize: CGSize(width: 88, height: 88),
-                headerIconSize: CGSize(width: 16, height: 16),
-                gridSpacing: 12,
-                gridPadding: 24
-            )
-        case .large:
-            return SwitcherOverlayLayoutMetrics(
-                tileSize: CGSize(width: 152, height: 148),
-                thumbnailSize: CGSize(width: 144, height: 100),
-                fallbackIconSize: CGSize(width: 104, height: 104),
-                headerIconSize: CGSize(width: 18, height: 18),
-                gridSpacing: 14,
-                gridPadding: 28
-            )
-        }
+    // Base geometry at scale 1. Every other size is derived from these so the
+    // slider stays continuous instead of snapping to hand-tuned presets.
+    private static let baseThumbnailSize = CGSize(width: 160, height: 110)
+    private static let baseHeaderIconExtent: CGFloat = 18
+    private static let baseTileHorizontalInset: CGFloat = 8
+    private static let baseTileVerticalChrome: CGFloat = 30
+    private static let baseTitleFontSize: CGFloat = 13
+    private static let baseCloseButtonSize: CGFloat = 16
+    private static let baseGridSpacing: CGFloat = 14
+    private static let baseGridPadding: CGFloat = 28
+    private static let fallbackIconThumbnailRatio: CGFloat = 0.92
+
+    public static func metrics(for scale: OverlaySizeScale) -> SwitcherOverlayLayoutMetrics {
+        let factor = CGFloat(scale.value)
+        let thumbnailWidth = scaled(baseThumbnailSize.width, by: factor)
+        let thumbnailHeight = scaled(baseThumbnailSize.height, by: factor)
+        let headerIconExtent = scaled(baseHeaderIconExtent, by: factor)
+        let fallbackIconExtent = (thumbnailHeight * fallbackIconThumbnailRatio).rounded()
+
+        return SwitcherOverlayLayoutMetrics(
+            tileSize: CGSize(
+                width: thumbnailWidth + scaled(baseTileHorizontalInset, by: factor),
+                height: thumbnailHeight + headerIconExtent + scaled(baseTileVerticalChrome, by: factor)
+            ),
+            thumbnailSize: CGSize(width: thumbnailWidth, height: thumbnailHeight),
+            fallbackIconSize: CGSize(width: fallbackIconExtent, height: fallbackIconExtent),
+            headerIconSize: CGSize(width: headerIconExtent, height: headerIconExtent),
+            titleFontSize: scaled(baseTitleFontSize, by: factor),
+            symbolFontSize: (fallbackIconExtent * 0.62).rounded(),
+            closeButtonSize: scaled(baseCloseButtonSize, by: factor),
+            gridSpacing: scaled(baseGridSpacing, by: factor),
+            gridPadding: scaled(baseGridPadding, by: factor)
+        )
+    }
+
+    private static func scaled(_ value: CGFloat, by factor: CGFloat) -> CGFloat {
+        max(1, (value * factor).rounded())
     }
 }
 
@@ -61,9 +71,9 @@ public enum SwitcherOverlayLayoutPolicy {
     public static func presentationLayout(
         itemCount: Int,
         screenSize: CGSize,
-        overlaySize: OverlaySizePreference = .standard
+        scale: OverlaySizeScale = .default
     ) -> SwitcherOverlayPresentationLayout {
-        let metrics = SwitcherOverlayLayoutMetrics.metrics(for: overlaySize)
+        let metrics = SwitcherOverlayLayoutMetrics.metrics(for: scale)
         guard itemCount > 2 else {
             let columnCount = itemCount == 2 ? 2 : 1
             return SwitcherOverlayPresentationLayout(

@@ -19,6 +19,14 @@
 - Next step after resolution: Run `scripts/release-local.sh` locally or push an approved protected version tag, then verify the DMG signature, checksum, notarization, stapling, and Gatekeeper results.
 - Why no temporary workaround was used: Ad hoc signing or a dummy notary profile cannot validate real distribution security.
 
+## Xcode `SwitchTabTests` scheme fails to compile (pre-existing)
+
+- Blocked item: Running the Xcode-side `SwitchTabTests` scheme. It fails to build with `error: call to main actor-isolated initializer 'init(processIdentifier:isActive:bundleIdentifier:bundleURL:)' in a synchronous nonisolated context` at `SwitchTabTests/Services/PermissionRecoveryCopyTests.swift:892` and `:897`.
+- Why it is out of scope here: Verified stash-proof — the same failure reproduces on a clean `HEAD` worktree with no local changes, so it predates the current work and is unrelated to it. The Xcode test target applies stricter actor-isolation inference than the SwiftPM target, which compiles the same file cleanly.
+- Current gate: `swift test` (the supported SwiftPM gate) passes, and the Xcode Debug build of the `SwitchTab` app scheme succeeds.
+- What the user must decide: Whether to fix the isolation annotations in `PermissionRecoveryCopyTests` (for example by making the affected helpers `@MainActor`) so the Xcode test scheme builds again.
+- Next step after resolution: Rerun the `SwitchTabTests` scheme in Xcode alongside `swift test`.
+
 ## Live Sparkle update-channel validation
 
 - Blocked item: Credential-backed validation of the implemented Sparkle appcast, Cloudflare R2 hosting, and GitHub tag-release automation against the live services.

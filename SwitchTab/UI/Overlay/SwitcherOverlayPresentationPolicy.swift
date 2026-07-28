@@ -44,18 +44,22 @@ public enum SwitcherOverlayPresentationPolicy {
 }
 
 public enum SwitcherOverlayEventMonitorPolicy {
-    public static let localMask: NSEvent.EventTypeMask = [.keyDown, .flagsChanged]
+    public static let localMask: NSEvent.EventTypeMask = [.keyDown, .flagsChanged, .mouseMoved]
     public static let globalMask: NSEvent.EventTypeMask = [
         .leftMouseDown,
         .rightMouseDown,
         .otherMouseDown,
-        .flagsChanged
+        .flagsChanged,
+        .mouseMoved
     ]
 }
 
 enum SwitcherOverlayEventTapDecision: Equatable, Sendable {
     case passThrough
     case consume(SwitcherCommand)
+    /// Swallow the key without acting on it, so a held key cannot repeat a
+    /// destructive command while the overlay still owns the keyboard.
+    case consumeWithoutCommand
     case reenable
 }
 
@@ -63,14 +67,18 @@ enum SwitcherOverlayEventTapPolicy {
     static func decision(
         eventType: CGEventType,
         keyCode: UInt16,
-        isAutorepeat _: Bool
+        isAutorepeat: Bool,
+        modifiers: SwitcherShortcutModifiers = []
     ) -> SwitcherOverlayEventTapDecision {
         switch eventType {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             return .reenable
         case .keyDown:
-            guard let command = SwitcherCommand(keyCode: keyCode) else {
+            guard let command = SwitcherCommand(keyCode: keyCode, modifiers: modifiers) else {
                 return .passThrough
+            }
+            guard !(isAutorepeat && command.repeatsAreDestructive) else {
+                return .consumeWithoutCommand
             }
             return .consume(command)
         default:

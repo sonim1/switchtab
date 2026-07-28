@@ -1,3 +1,4 @@
+import Foundation
 import SwitchTab
 
 enum SwitcherOverlayStateTests {
@@ -10,6 +11,9 @@ enum SwitcherOverlayStateTests {
         try testConfirmAndCancelProduceExplicitResults()
         try testArrowThenShortcutReleaseConfirmsChangedSelection()
         try testShiftReleaseThenArrowThenCommandReleaseConfirmsSelection()
+        try testHoverSelectionMovesHighlightWithoutConfirming()
+        try testHoverSelectionIgnoresNoOpAndOutOfRangeIndices()
+        try testHoverDoesNotAutoScrollTheGrid()
     }
 
     static func testArrowKeysMoveSelection() throws {
@@ -168,5 +172,50 @@ enum SwitcherOverlayStateTests {
                 index: 2
             )
         )
+    }
+
+    static func testHoverSelectionMovesHighlightWithoutConfirming() throws {
+        var state = SwitcherOverlayState()
+        state.present(mode: .currentAppWindowSwitching, items: hoverItems(), selectedIndex: 1)
+
+        let result = state.selectItem(at: 2)
+
+        try expectEqual(result, .updated)
+        try expectEqual(state.session?.selectedIndex, 2)
+        try expectTrue(state.isPresented)
+    }
+
+    static func testHoverSelectionIgnoresNoOpAndOutOfRangeIndices() throws {
+        var state = SwitcherOverlayState()
+        state.present(mode: .currentAppWindowSwitching, items: hoverItems(), selectedIndex: 1)
+
+        try expectEqual(state.selectItem(at: 1), SwitcherInteractionResult.none)
+        try expectEqual(state.selectItem(at: 9), SwitcherInteractionResult.none)
+        try expectEqual(state.selectItem(at: -1), SwitcherInteractionResult.none)
+        try expectEqual(state.session?.selectedIndex, 1)
+    }
+
+    static func testHoverDoesNotAutoScrollTheGrid() throws {
+        let projectRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: projectRoot.appendingPathComponent("SwitchTab/UI/Overlay/SwitcherIconStripView.swift"),
+            encoding: .utf8
+        )
+
+        // Scrolling is driven by the keyboard-only token, never by hover.
+        try expectTrue(source.contains(".onChange(of: scrollToken)"))
+        try expectFalse(source.contains(".onChange(of: selectedIndex)"))
+        try expectTrue(source.contains("guard hoverEnabled, hovering else"))
+    }
+
+    private static func hoverItems() -> [SwitcherListItem] {
+        [
+            SwitcherListItem(id: "one", title: "One", subtitle: nil),
+            SwitcherListItem(id: "two", title: "Two", subtitle: nil),
+            SwitcherListItem(id: "three", title: "Three", subtitle: nil)
+        ]
     }
 }

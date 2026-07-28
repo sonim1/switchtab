@@ -1,20 +1,18 @@
-public enum OverlaySizePreference: String, CaseIterable, Identifiable, Sendable {
+/// Legacy three-step overlay size. Kept only so previously stored preferences
+/// migrate onto the continuous `OverlaySizeScale`.
+public enum OverlaySizePreference: String, Sendable {
     case compact
     case standard
     case large
 
-    public var id: String {
-        rawValue
-    }
-
-    public var displayName: String {
+    public var scale: OverlaySizeScale {
         switch self {
         case .compact:
-            return "Compact"
+            return OverlaySizeScale(0.8)
         case .standard:
-            return "Default"
+            return OverlaySizeScale(1)
         case .large:
-            return "Large"
+            return OverlaySizeScale(1.2)
         }
     }
 }

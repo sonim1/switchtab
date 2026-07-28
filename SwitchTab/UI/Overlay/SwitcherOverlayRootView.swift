@@ -6,6 +6,8 @@ struct SwitcherOverlayRootView: View {
     private let layoutSize: CGSize
     private let layoutMetrics: SwitcherOverlayLayoutMetrics
     private let onItemClicked: (SwitcherListItem, Int) -> Void
+    private let onItemCloseClicked: (SwitcherListItem, Int) -> Void
+    private let onItemHovered: (Int) -> Void
     private let gridColumns: [GridItem]
     private let thumbnailStore: WindowThumbnailStore
     private let applicationIconStore: ApplicationIconStore
@@ -17,13 +19,17 @@ struct SwitcherOverlayRootView: View {
         gridColumns: [GridItem],
         thumbnailStore: WindowThumbnailStore,
         applicationIconStore: ApplicationIconStore,
-        onItemClicked: @escaping (SwitcherListItem, Int) -> Void
+        onItemClicked: @escaping (SwitcherListItem, Int) -> Void,
+        onItemCloseClicked: @escaping (SwitcherListItem, Int) -> Void,
+        onItemHovered: @escaping (Int) -> Void
     ) {
         self.presentationModel = presentationModel
         self.layoutSize = layoutSize
         self.layoutMetrics = layoutMetrics
         self.gridColumns = gridColumns
         self.onItemClicked = onItemClicked
+        self.onItemCloseClicked = onItemCloseClicked
+        self.onItemHovered = onItemHovered
         self.thumbnailStore = thumbnailStore
         self.applicationIconStore = applicationIconStore
     }
@@ -57,9 +63,13 @@ struct SwitcherOverlayRootView: View {
                 gridColumns: gridColumns,
                 layoutMetrics: layoutMetrics,
                 showsThumbnails: SwitcherOverlayThumbnailPolicy.showsThumbnails(for: session.mode),
+                hoverEnabled: presentationModel.isHoverSelectionEnabled,
+                scrollToken: presentationModel.scrollToken,
                 thumbnailStore: thumbnailStore,
                 applicationIconStore: applicationIconStore,
-                onConfirm: onItemClicked
+                onConfirm: onItemClicked,
+                onClose: onItemCloseClicked,
+                onHover: onItemHovered
             )
         }
     }

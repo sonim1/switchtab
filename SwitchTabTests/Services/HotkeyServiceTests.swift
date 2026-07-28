@@ -257,12 +257,14 @@ private final class OrderedChainEventTapConnection: SwitcherOverlayEventTapConne
     func emit(
         eventType: CGEventType = .keyDown,
         keyCode: UInt16,
-        isAutorepeat: Bool = false
+        isAutorepeat: Bool = false,
+        modifiers: SwitcherShortcutModifiers = []
     ) -> Bool {
         handler(SwitcherOverlayEventTapInput(
             eventType: eventType,
             keyCode: keyCode,
-            isAutorepeat: isAutorepeat
+            isAutorepeat: isAutorepeat,
+            modifiers: modifiers
         ))
     }
 

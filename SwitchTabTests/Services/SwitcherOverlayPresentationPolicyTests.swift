@@ -15,6 +15,11 @@ enum SwitcherOverlayPresentationPolicyTests {
         try testEventTapOwnerInstallFailureAndReplacementAreSafe()
         try testControllerWiresDiagnosticsReplacementAndInstallFailure()
         try testOverlayControllerBuildsApplicationIconStoreInsideMainActorInitializer()
+        try testCommandWClosesSelectedWindowAndKeepsOverlayUp()
+        try testClosingTheLastWindowDismissesOverlay()
+        try testFailedCloseLeavesOverlayUnchanged()
+        try testHoverIsIgnoredUntilThePointerActuallyMoves()
+        try testHoverMovesSelectionOncePointerHasMoved()
         try testActiveScreenFramePrefersScreenContainingPointer()
         try testActiveScreenFrameFallsBackWhenPointerOutsideAllScreens()
     }
@@ -273,6 +278,171 @@ enum SwitcherOverlayPresentationPolicyTests {
         fallbackController.dismiss()
     }
 
+    static func testCommandWClosesSelectedWindowAndKeepsOverlayUp() throws {
+        let backend = RecordingSwitcherOverlayEventTapBackend()
+        let controller = SwitcherOverlayController(
+            thumbnailStore: WindowThumbnailStore(),
+            eventTapBackend: backend,
+            eventSink: RecordingSwitcherOverlayEventSink()
+        )
+        var closedIDs: [String] = []
+        var confirmedIDs: [String] = []
+
+        controller.present(
+            mode: .currentAppWindowSwitching,
+            items: closeTestItems(count: 3),
+            selectedIndex: 1,
+            onClose: { item, _ in
+                closedIDs.append(item.id)
+                return true
+            },
+            onConfirm: { item, _ in
+                confirmedIDs.append(item.id)
+            }
+        )
+        guard let connection = backend.connections.last else {
+            throw TestFailure.failed("Expected controller event-tap connection")
+        }
+
+        try expectFalse(connection.emit(keyCode: SwitcherCommand.closeSelectedKeyCode))
+        try expectEqual(closedIDs, [])
+
+        try expectTrue(connection.emit(
+            keyCode: SwitcherCommand.closeSelectedKeyCode,
+            modifiers: .command
+        ))
+
+        try expectEqual(closedIDs, ["window-1"])
+        try expectTrue(controller.isPresented)
+
+        // Highlight lands on the next window, and confirming resolves to it.
+        try expectTrue(connection.emit(keyCode: 36))
+        try expectEqual(confirmedIDs, ["window-2"])
+        controller.dismiss()
+    }
+
+    static func testClosingTheLastWindowDismissesOverlay() throws {
+        let backend = RecordingSwitcherOverlayEventTapBackend()
+        let controller = SwitcherOverlayController(
+            thumbnailStore: WindowThumbnailStore(),
+            eventTapBackend: backend,
+            eventSink: RecordingSwitcherOverlayEventSink()
+        )
+        var dismissCount = 0
+        controller.onDismiss = {
+            dismissCount += 1
+        }
+
+        controller.present(
+            mode: .currentAppWindowSwitching,
+            items: closeTestItems(count: 1),
+            onClose: { _, _ in true }
+        )
+        guard let connection = backend.connections.last else {
+            throw TestFailure.failed("Expected controller event-tap connection")
+        }
+
+        try expectTrue(connection.emit(
+            keyCode: SwitcherCommand.closeSelectedKeyCode,
+            modifiers: .command
+        ))
+
+        try expectFalse(controller.isPresented)
+        try expectEqual(dismissCount, 1)
+    }
+
+    static func testFailedCloseLeavesOverlayUnchanged() throws {
+        let backend = RecordingSwitcherOverlayEventTapBackend()
+        let controller = SwitcherOverlayController(
+            thumbnailStore: WindowThumbnailStore(),
+            eventTapBackend: backend,
+            eventSink: RecordingSwitcherOverlayEventSink()
+        )
+        var confirmedIDs: [String] = []
+
+        controller.present(
+            mode: .currentAppWindowSwitching,
+            items: closeTestItems(count: 2),
+            selectedIndex: 1,
+            onClose: { _, _ in false },
+            onConfirm: { item, _ in
+                confirmedIDs.append(item.id)
+            }
+        )
+        guard let connection = backend.connections.last else {
+            throw TestFailure.failed("Expected controller event-tap connection")
+        }
+
+        try expectTrue(connection.emit(
+            keyCode: SwitcherCommand.closeSelectedKeyCode,
+            modifiers: .command
+        ))
+
+        try expectTrue(controller.isPresented)
+        try expectTrue(connection.emit(keyCode: 36))
+        try expectEqual(confirmedIDs, ["window-1"])
+    }
+
+    static func testHoverIsIgnoredUntilThePointerActuallyMoves() throws {
+        let controller = SwitcherOverlayController(
+            thumbnailStore: WindowThumbnailStore(),
+            eventTapBackend: RecordingSwitcherOverlayEventTapBackend(),
+            eventSink: RecordingSwitcherOverlayEventSink()
+        )
+        var confirmedIDs: [String] = []
+
+        controller.present(
+            mode: .currentAppWindowSwitching,
+            items: closeTestItems(count: 3),
+            selectedIndex: 1,
+            onConfirm: { item, _ in
+                confirmedIDs.append(item.id)
+            }
+        )
+
+        // The overlay opens under whatever the pointer was already on.
+        controller.hoverItem(at: 2)
+        controller.enableHoverSelectionIfPointerMoved(to: NSEvent.mouseLocation)
+        controller.hoverItem(at: 2)
+
+        _ = controller.handle(.confirm)
+        try expectEqual(confirmedIDs, ["window-1"])
+    }
+
+    static func testHoverMovesSelectionOncePointerHasMoved() throws {
+        let controller = SwitcherOverlayController(
+            thumbnailStore: WindowThumbnailStore(),
+            eventTapBackend: RecordingSwitcherOverlayEventTapBackend(),
+            eventSink: RecordingSwitcherOverlayEventSink()
+        )
+        var confirmedIDs: [String] = []
+
+        controller.present(
+            mode: .currentAppWindowSwitching,
+            items: closeTestItems(count: 3),
+            selectedIndex: 1,
+            onConfirm: { item, _ in
+                confirmedIDs.append(item.id)
+            }
+        )
+
+        let movedPointer = CGPoint(
+            x: NSEvent.mouseLocation.x + 400,
+            y: NSEvent.mouseLocation.y + 400
+        )
+        controller.enableHoverSelectionIfPointerMoved(to: movedPointer)
+        controller.hoverItem(at: 2)
+
+        _ = controller.handle(.confirm)
+        try expectEqual(confirmedIDs, ["window-2"])
+    }
+
+    private static func closeTestItems(count: Int) -> [SwitcherListItem] {
+        (0..<count).map { index in
+            SwitcherListItem(id: "window-\(index)", title: "Window \(index)", subtitle: "App")
+        }
+    }
+
     static func testOverlayControllerBuildsApplicationIconStoreInsideMainActorInitializer() throws {
         let projectRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -347,12 +517,14 @@ private final class RecordingSwitcherOverlayEventTapConnection: SwitcherOverlayE
     func emit(
         eventType: CGEventType = .keyDown,
         keyCode: UInt16,
-        isAutorepeat: Bool = false
+        isAutorepeat: Bool = false,
+        modifiers: SwitcherShortcutModifiers = []
     ) -> Bool {
         handler(SwitcherOverlayEventTapInput(
             eventType: eventType,
             keyCode: keyCode,
-            isAutorepeat: isAutorepeat
+            isAutorepeat: isAutorepeat,
+            modifiers: modifiers
         ))
     }
 

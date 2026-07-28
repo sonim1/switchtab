@@ -15,6 +15,7 @@ public struct WindowItem: Identifiable, Equatable, Sendable {
     public let ownerProcessIdentifier: Int
     public let screenCaptureIdentifier: UInt32?
     public let isMinimized: Bool
+    public let isFocused: Bool
     public let canFocus: Bool
     public let switcherListItem: SwitcherListItem
 
@@ -25,7 +26,8 @@ public struct WindowItem: Identifiable, Equatable, Sendable {
         title: String,
         screenCaptureIdentifier: UInt32? = nil,
         isMinimized: Bool,
-        availability: WindowAvailability
+        availability: WindowAvailability,
+        isFocused: Bool = false
     ) {
         let id = "\(ownerProcessIdentifier)-\(windowIdentifier)"
         let readableTitle = title.switcherReadableText(fallback: "Untitled Window")
@@ -34,6 +36,7 @@ public struct WindowItem: Identifiable, Equatable, Sendable {
         self.ownerProcessIdentifier = ownerProcessIdentifier
         self.screenCaptureIdentifier = screenCaptureIdentifier
         self.isMinimized = isMinimized
+        self.isFocused = isFocused
         // Minimized windows stay focusable: focusing restores them first.
         self.canFocus = availability == .available || availability == .minimized
         self.switcherListItem = SwitcherListItem(

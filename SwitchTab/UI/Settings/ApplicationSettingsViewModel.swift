@@ -5,7 +5,7 @@ import Foundation
 public final class ApplicationSettingsViewModel: ObservableObject {
     @Published public private(set) var startsAtLogin: Bool
     @Published public private(set) var menuBarIconVisible: Bool
-    @Published public private(set) var overlaySize: OverlaySizePreference
+    @Published public private(set) var overlaySizeScale: OverlaySizeScale
     @Published public private(set) var updateCheckingAvailable: Bool
     @Published public private(set) var currentVersionDisplay: String
     @Published public private(set) var automaticallyChecksForUpdates: Bool
@@ -28,7 +28,7 @@ public final class ApplicationSettingsViewModel: ObservableObject {
         self.updateChecker = resolvedUpdateChecker
         self.startsAtLogin = resolvedLaunchAtLoginService.startsAtLogin
         self.menuBarIconVisible = store.menuBarIconVisible
-        self.overlaySize = store.overlaySize
+        self.overlaySizeScale = store.overlaySizeScale
         self.updateCheckingAvailable = resolvedUpdateChecker.isUpdateCheckingAvailable
         self.currentVersionDisplay = resolvedUpdateChecker.currentVersionDisplay
         self.automaticallyChecksForUpdates = resolvedUpdateChecker.automaticallyChecksForUpdates
@@ -59,13 +59,13 @@ public final class ApplicationSettingsViewModel: ObservableObject {
         menuBarIconVisible = visible
     }
 
-    public func setOverlaySize(_ size: OverlaySizePreference) {
-        guard overlaySize != size else {
+    public func setOverlaySizeScale(_ scale: OverlaySizeScale) {
+        guard overlaySizeScale != scale else {
             return
         }
 
-        store.saveOverlaySize(size)
-        overlaySize = size
+        store.saveOverlaySizeScale(scale)
+        overlaySizeScale = scale
     }
 
     public func checkForUpdates() {

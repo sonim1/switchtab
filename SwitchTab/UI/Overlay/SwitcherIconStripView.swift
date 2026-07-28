@@ -6,6 +6,10 @@ struct SwitcherIconStripView: View {
     private let selectedIndex: Int
     private let showsThumbnails: Bool
     private let onConfirm: (SwitcherListItem, Int) -> Void
+    private let onClose: (SwitcherListItem, Int) -> Void
+    private let onHover: (Int) -> Void
+    private let hoverEnabled: Bool
+    private let scrollToken: Int
     private let thumbnailStore: WindowThumbnailStore
     private let applicationIconStore: ApplicationIconStore
     private let gridColumns: [GridItem]
@@ -17,18 +21,26 @@ struct SwitcherIconStripView: View {
         gridColumns: [GridItem],
         layoutMetrics: SwitcherOverlayLayoutMetrics,
         showsThumbnails: Bool,
+        hoverEnabled: Bool,
+        scrollToken: Int,
         thumbnailStore: WindowThumbnailStore,
         applicationIconStore: ApplicationIconStore,
-        onConfirm: @escaping (SwitcherListItem, Int) -> Void
+        onConfirm: @escaping (SwitcherListItem, Int) -> Void,
+        onClose: @escaping (SwitcherListItem, Int) -> Void,
+        onHover: @escaping (Int) -> Void
     ) {
         self.items = items
         self.selectedIndex = selectedIndex
         self.gridColumns = gridColumns
         self.layoutMetrics = layoutMetrics
         self.showsThumbnails = showsThumbnails
+        self.hoverEnabled = hoverEnabled
+        self.scrollToken = scrollToken
         self.thumbnailStore = thumbnailStore
         self.applicationIconStore = applicationIconStore
         self.onConfirm = onConfirm
+        self.onClose = onClose
+        self.onHover = onHover
     }
 
     var body: some View {
@@ -38,8 +50,20 @@ struct SwitcherIconStripView: View {
                     LazyVGrid(columns: gridColumns, spacing: layoutMetrics.gridSpacing) {
                         ForEach(items.indices, id: \.self) { index in
                             let item = items[index]
-                            iconButton(item: item, index: index, isSelected: index == selectedIndex)
-                                .id(item.id)
+                            SwitcherWindowTile(
+                                item: item,
+                                index: index,
+                                isSelected: index == selectedIndex,
+                                showsThumbnails: showsThumbnails,
+                                hoverEnabled: hoverEnabled,
+                                layoutMetrics: layoutMetrics,
+                                thumbnailStore: thumbnailStore,
+                                applicationIconStore: applicationIconStore,
+                                onConfirm: onConfirm,
+                                onClose: onClose,
+                                onHover: onHover
+                            )
+                            .id(item.id)
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -47,14 +71,57 @@ struct SwitcherIconStripView: View {
                 .onAppear {
                     scrollToSelected(using: proxy)
                 }
-                .onChange(of: selectedIndex) {
+                .onChange(of: scrollToken) {
                     scrollToSelected(using: proxy)
                 }
             }
         }
     }
 
-    private func iconButton(item: SwitcherListItem, index: Int, isSelected: Bool) -> some View {
+    static func gridColumns(
+        columnCount: Int,
+        metrics: SwitcherOverlayLayoutMetrics
+    ) -> [GridItem] {
+        guard columnCount > 0 else {
+            return []
+        }
+
+        return Array(
+            repeating: GridItem(.fixed(metrics.tileSize.width), spacing: metrics.gridSpacing),
+            count: columnCount
+        )
+    }
+
+    private func scrollToSelected(using proxy: ScrollViewProxy) {
+        guard items.count > 1 else {
+            return
+        }
+
+        guard selectedIndex >= 0 && selectedIndex < items.count else {
+            return
+        }
+
+        proxy.scrollTo(items[selectedIndex].id, anchor: .center)
+    }
+}
+
+private struct SwitcherWindowTile: View {
+    let item: SwitcherListItem
+    let index: Int
+    let isSelected: Bool
+    let showsThumbnails: Bool
+    let hoverEnabled: Bool
+    let layoutMetrics: SwitcherOverlayLayoutMetrics
+    let thumbnailStore: WindowThumbnailStore
+    let applicationIconStore: ApplicationIconStore
+    let onConfirm: (SwitcherListItem, Int) -> Void
+    let onClose: (SwitcherListItem, Int) -> Void
+    let onHover: (Int) -> Void
+
+    @State private var isCloseButtonHovered = false
+    @State private var isHovered = false
+
+    var body: some View {
         Button {
             onConfirm(item, index)
         } label: {
@@ -80,6 +147,49 @@ struct SwitcherIconStripView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(Text(item.title))
         .accessibilityHint(Text("Switch to this window."))
+        .overlay(alignment: .topTrailing) {
+            if isSelected || isHovered {
+                closeButton
+            }
+        }
+        .onHover { hovering in
+            isHovered = hovering
+            reportHoverIfActive(hovering)
+        }
+        .onChange(of: hoverEnabled) {
+            // The overlay can appear under a stationary pointer; the tile only
+            // claims the selection once hovering has been unlocked by a move.
+            reportHoverIfActive(isHovered)
+        }
+    }
+
+    private func reportHoverIfActive(_ hovering: Bool) {
+        guard hoverEnabled, hovering else {
+            return
+        }
+
+        onHover(index)
+    }
+
+    private var closeButton: some View {
+        Button {
+            onClose(item, index)
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: layoutMetrics.closeButtonSize, weight: .semibold))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(
+                    Color.white.opacity(isCloseButtonHovered ? 1 : 0.85),
+                    Color.black.opacity(isCloseButtonHovered ? 0.85 : 0.55)
+                )
+        }
+        .buttonStyle(.plain)
+        .padding(4)
+        .onHover { hovering in
+            isCloseButtonHovered = hovering
+        }
+        .accessibilityLabel(Text("Close window"))
+        .accessibilityHint(Text("Close \(item.title)."))
     }
 
     private func titleHeader(for item: SwitcherListItem) -> some View {
@@ -103,7 +213,7 @@ struct SwitcherIconStripView: View {
             }
 
             Text(item.title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: layoutMetrics.titleFontSize, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
@@ -137,7 +247,7 @@ struct SwitcherIconStripView: View {
                 )
         } else {
             Image(systemName: item.symbolName ?? "app")
-                .font(.system(size: 46))
+                .font(.system(size: layoutMetrics.symbolFontSize))
                 .frame(
                     width: layoutMetrics.fallbackIconSize.width,
                     height: layoutMetrics.fallbackIconSize.height
@@ -147,32 +257,6 @@ struct SwitcherIconStripView: View {
                     height: layoutMetrics.thumbnailSize.height
                 )
         }
-    }
-
-    static func gridColumns(
-        columnCount: Int,
-        metrics: SwitcherOverlayLayoutMetrics
-    ) -> [GridItem] {
-        guard columnCount > 0 else {
-            return []
-        }
-
-        return Array(
-            repeating: GridItem(.fixed(metrics.tileSize.width), spacing: metrics.gridSpacing),
-            count: columnCount
-        )
-    }
-
-    private func scrollToSelected(using proxy: ScrollViewProxy) {
-        guard items.count > 1 else {
-            return
-        }
-
-        guard selectedIndex >= 0 && selectedIndex < items.count else {
-            return
-        }
-
-        proxy.scrollTo(items[selectedIndex].id, anchor: .center)
     }
 }
 
@@ -223,7 +307,7 @@ private struct WindowThumbnailIconView: View {
                 )
         } else {
             Image(systemName: fallbackSymbolName ?? "macwindow")
-                .font(.system(size: 46))
+                .font(.system(size: layoutMetrics.symbolFontSize))
                 .frame(
                     width: layoutMetrics.fallbackIconSize.width,
                     height: layoutMetrics.fallbackIconSize.height

@@ -47,6 +47,13 @@ public struct SwitcherOverlayState: Equatable, Sendable {
             return moveSelection(by: -1)
         case .moveDown:
             return moveSelection(by: 1)
+        case .closeSelected:
+            guard let activeSession = session,
+                  let selectedItem = activeSession.selectedItem else {
+                return .none
+            }
+
+            return .closeRequested(item: selectedItem, index: activeSession.selectedIndex)
         case .confirm:
             guard let activeSession = session else {
                 return .none
@@ -74,6 +81,29 @@ public struct SwitcherOverlayState: Equatable, Sendable {
         }
     }
 
+    /// Applies a pointer hover to the highlight without confirming anything.
+    public mutating func selectItem(at index: Int) -> SwitcherInteractionResult {
+        guard session?.selectItem(at: index) == true else {
+            return .none
+        }
+
+        return .updated
+    }
+
+    /// Drops a window that has just been closed. Dismisses when nothing is left.
+    public mutating func removeItem(at index: Int) -> SwitcherInteractionResult {
+        guard session?.removeItem(at: index) == true else {
+            return .none
+        }
+
+        guard session?.items.isEmpty == false else {
+            dismiss()
+            return .cancelled
+        }
+
+        return .updated
+    }
+
     private mutating func moveSelection(by delta: Int) -> SwitcherInteractionResult {
         guard session?.moveSelection(by: delta) == true else {
             return .none
@@ -98,10 +128,20 @@ public enum SwitcherCommand: Equatable, Sendable {
     case confirm
     case releaseShortcut
     case cancel
+    case closeSelected
 }
 
 public extension SwitcherCommand {
-    init?(keyCode: UInt16) {
+    /// Holding the key must not fire this command repeatedly.
+    var repeatsAreDestructive: Bool {
+        self == .closeSelected
+    }
+
+    /// Key code 13 is `W`; it only closes while a modifier is held so the
+    /// switcher never swallows a bare keystroke.
+    static let closeSelectedKeyCode: UInt16 = 13
+
+    init?(keyCode: UInt16, modifiers: SwitcherShortcutModifiers = []) {
         switch keyCode {
         case 36:
             self = .confirm
@@ -111,6 +151,8 @@ public extension SwitcherCommand {
             self = .moveUp
         case 124, 125:
             self = .moveDown
+        case Self.closeSelectedKeyCode where modifiers.contains(.command):
+            self = .closeSelected
         default:
             return nil
         }
@@ -122,6 +164,7 @@ public enum SwitcherInteractionResult: Equatable, Sendable {
     case updated
     case confirmed(item: SwitcherListItem, index: Int)
     case cancelled
+    case closeRequested(item: SwitcherListItem, index: Int)
 }
 
 public struct SwitcherShortcutModifiers: OptionSet, Equatable, Sendable {

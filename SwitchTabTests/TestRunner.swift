@@ -14,6 +14,7 @@ final class SwitchTabTests: XCTestCase {
         try AccessibilityWindowProviderTests.run()
         try await WindowThumbnailTests.run()
         try WindowFocusServiceTests.run()
+        try WindowCloseServiceTests.run()
         try SwitchTabSessionTests.run()
         try WindowEdgeCaseTests.run()
         try ShortcutCaptureTests.run()

@@ -20,6 +20,7 @@ public struct AccessibilityWindowSnapshot: Equatable, Sendable {
     public let screenCaptureIdentifier: UInt32?
     public let isMinimized: Bool
     public let availability: WindowAvailability
+    public let isFocused: Bool
 
     public init(
         windowIdentifier: Int,
@@ -28,7 +29,8 @@ public struct AccessibilityWindowSnapshot: Equatable, Sendable {
         title: String,
         screenCaptureIdentifier: UInt32? = nil,
         isMinimized: Bool,
-        availability: WindowAvailability
+        availability: WindowAvailability,
+        isFocused: Bool = false
     ) {
         self.windowIdentifier = windowIdentifier
         self.ownerProcessIdentifier = ownerProcessIdentifier
@@ -37,6 +39,7 @@ public struct AccessibilityWindowSnapshot: Equatable, Sendable {
         self.screenCaptureIdentifier = screenCaptureIdentifier
         self.isMinimized = isMinimized
         self.availability = availability
+        self.isFocused = isFocused
     }
 }
 
@@ -185,7 +188,8 @@ public struct AccessibilityWindowProvider {
             title: snapshot.title,
             screenCaptureIdentifier: snapshot.screenCaptureIdentifier,
             isMinimized: snapshot.isMinimized,
-            availability: snapshot.availability
+            availability: snapshot.availability,
+            isFocused: snapshot.isFocused
         )
     }
 }
@@ -289,6 +293,7 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
             ownerProcessIdentifier: ownerProcessIdentifier,
             candidates: candidates
         )
+        let focusedWindowElement = focusedWindowElement(of: appElement)
 
         // Title-matching heuristic remains only for windows whose CGWindowID
         // the resolver could not produce.
@@ -312,6 +317,7 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
                     ownerProcessIdentifier: ownerProcessIdentifier,
                     ownerName: resolvedOwnerName,
                     resolvedScreenCaptureIdentifier: includeScreenCaptureIdentifiers ? mapping.screenCaptureIdentifier : nil,
+                    isFocused: focusedWindowElement.map { CFEqual($0, windowElement) } ?? false,
                     screenCaptureWindowIndex: &screenCaptureWindowIndex
                 )
             )
@@ -327,6 +333,7 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
         ownerProcessIdentifier: Int,
         ownerName: String,
         resolvedScreenCaptureIdentifier: UInt32?,
+        isFocused: Bool,
         screenCaptureWindowIndex: inout ScreenCaptureWindowIndex?
     ) -> AccessibilityWindowSnapshot {
         let isMinimized = boolAttribute(windowElement, kAXMinimizedAttribute as CFString)
@@ -339,8 +346,24 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
             screenCaptureIdentifier: resolvedScreenCaptureIdentifier
                 ?? screenCaptureWindowIndex?.nextIdentifier(titled: title),
             isMinimized: isMinimized,
-            availability: isMinimized ? .minimized : .available
+            availability: isMinimized ? .minimized : .available,
+            isFocused: isFocused
         )
+    }
+
+    private func focusedWindowElement(of appElement: AXUIElement) -> AXUIElement? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            appElement,
+            kAXFocusedWindowAttribute as CFString,
+            &value
+        ) == .success,
+            let focusedValue = value,
+            CFGetTypeID(focusedValue) == AXUIElementGetTypeID() else {
+            return nil
+        }
+
+        return unsafeDowncast(focusedValue as AnyObject, to: AXUIElement.self)
     }
 
     private func stringAttribute(_ element: AXUIElement, _ attribute: CFString) -> String? {
