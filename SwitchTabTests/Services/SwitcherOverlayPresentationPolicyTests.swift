@@ -21,6 +21,8 @@ enum SwitcherOverlayPresentationPolicyTests {
         try testStaleCloseConfirmationDoesNotMutateNewPresentation()
         try testHoverIsIgnoredUntilThePointerActuallyMoves()
         try testHoverMovesSelectionOncePointerHasMoved()
+        try testHoverSelectionDoesNotAdvanceScrollToken()
+        try testHoverRemainsCorrectAfterConfirmedCloseRerender()
         try testActiveScreenFramePrefersScreenContainingPointer()
         try testActiveScreenFrameFallsBackWhenPointerOutsideAllScreens()
     }
@@ -538,6 +540,69 @@ enum SwitcherOverlayPresentationPolicyTests {
 
         _ = controller.handle(.confirm)
         try expectEqual(confirmedIDs, ["window-2"])
+    }
+
+    static func testHoverSelectionDoesNotAdvanceScrollToken() throws {
+        let controller = SwitcherOverlayController(
+            thumbnailStore: WindowThumbnailStore(),
+            eventTapBackend: RecordingSwitcherOverlayEventTapBackend(),
+            eventSink: RecordingSwitcherOverlayEventSink()
+        )
+        controller.present(
+            mode: .currentAppWindowSwitching,
+            items: closeTestItems(count: 3),
+            selectedIndex: 1
+        )
+        let presentationToken = controller.presentationScrollToken
+
+        controller.enableHoverSelectionIfPointerMoved(to: CGPoint(
+            x: NSEvent.mouseLocation.x + 400,
+            y: NSEvent.mouseLocation.y + 400
+        ))
+        controller.hoverItem(at: 2)
+
+        try expectEqual(controller.presentationScrollToken, presentationToken)
+        _ = controller.handle(.moveUp)
+        try expectEqual(controller.presentationScrollToken, presentationToken + 1)
+        controller.dismiss()
+    }
+
+    static func testHoverRemainsCorrectAfterConfirmedCloseRerender() throws {
+        let controller = SwitcherOverlayController(
+            thumbnailStore: WindowThumbnailStore(),
+            eventTapBackend: RecordingSwitcherOverlayEventTapBackend(),
+            eventSink: RecordingSwitcherOverlayEventSink()
+        )
+        var closeConfirmation: (id: String, presentationID: UInt64)?
+        var confirmedIDs: [String] = []
+        controller.present(
+            mode: .currentAppWindowSwitching,
+            items: closeTestItems(count: 3),
+            onClose: { item, presentationID in
+                closeConfirmation = (item.id, presentationID)
+            },
+            onConfirm: { item, _ in
+                confirmedIDs.append(item.id)
+            }
+        )
+        controller.enableHoverSelectionIfPointerMoved(to: CGPoint(
+            x: NSEvent.mouseLocation.x + 400,
+            y: NSEvent.mouseLocation.y + 400
+        ))
+        controller.hoverItem(at: 1)
+        _ = controller.handle(.closeSelected)
+
+        guard let closeConfirmation else {
+            throw TestFailure.failed("Expected hovered window close confirmation")
+        }
+        controller.confirmWindowDisappeared(
+            id: closeConfirmation.id,
+            presentationID: closeConfirmation.presentationID
+        )
+        controller.hoverItem(at: 0)
+        _ = controller.handle(.confirm)
+
+        try expectEqual(confirmedIDs, ["window-0"])
     }
 
     private static func closeTestItems(count: Int) -> [SwitcherListItem] {

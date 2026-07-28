@@ -52,6 +52,10 @@ final class SwitcherOverlayController {
         state.session?.mode
     }
 
+    var presentationScrollToken: Int {
+        presentationModel.scrollToken
+    }
+
     func present(
         mode: SwitcherMode,
         items: [SwitcherListItem],
