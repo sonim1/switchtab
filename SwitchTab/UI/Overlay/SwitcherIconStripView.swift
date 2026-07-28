@@ -48,8 +48,9 @@ struct SwitcherIconStripView: View {
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVGrid(columns: gridColumns, spacing: layoutMetrics.gridSpacing) {
-                        ForEach(items.indices, id: \.self) { index in
-                            let item = items[index]
+                        ForEach(Array(items.enumerated()), id: \.element.id) { indexedItem in
+                            let index = indexedItem.offset
+                            let item = indexedItem.element
                             SwitcherWindowTile(
                                 item: item,
                                 index: index,
