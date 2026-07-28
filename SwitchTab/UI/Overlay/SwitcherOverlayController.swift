@@ -16,7 +16,8 @@ final class SwitcherOverlayController {
     private var eventTapOwner: SwitcherOverlayEventTapOwner?
     private var activationObserver: NSObjectProtocol?
     private var onConfirm: ((SwitcherListItem, Int) -> Void)?
-    private var onClose: ((SwitcherListItem, Int) -> Bool)?
+    private var onClose: ((SwitcherListItem, UInt64) -> Void)?
+    private var presentationID: UInt64 = 0
     private var triggerReleaseModifiers: SwitcherShortcutModifiers?
     var onDismiss: (() -> Void)?
     private var presentationLayoutSize = SwitcherOverlayLayoutPolicy.defaultSize
@@ -56,7 +57,7 @@ final class SwitcherOverlayController {
         items: [SwitcherListItem],
         selectedIndex: Int = 0,
         triggerShortcut: ShortcutSetting? = nil,
-        onClose: ((SwitcherListItem, Int) -> Bool)? = nil,
+        onClose: ((SwitcherListItem, UInt64) -> Void)? = nil,
         onConfirm: ((SwitcherListItem, Int) -> Void)? = nil
     ) {
         guard !items.isEmpty else {
@@ -64,6 +65,7 @@ final class SwitcherOverlayController {
             return
         }
 
+        presentationID &+= 1
         applicationIconStore.retainOnlyCachedIcons(for: items)
         // The overlay often opens under a resting pointer; hovering only takes
         // over the selection after the pointer actually moves.
@@ -163,12 +165,20 @@ final class SwitcherOverlayController {
 
     // Closing keeps the overlay up so the user can keep cycling; the grid is
     // re-laid out because one fewer window can change rows and columns.
-    private func closeItem(_ item: SwitcherListItem, at index: Int) {
-        guard let onClose, onClose(item, index) else {
+    private func closeItem(_ item: SwitcherListItem, at _: Int) {
+        guard let onClose else {
             return
         }
 
-        switch state.removeItem(at: index) {
+        onClose(item, presentationID)
+    }
+
+    func confirmWindowDisappeared(id: String, presentationID: UInt64) {
+        guard presentationID == self.presentationID, state.isPresented else {
+            return
+        }
+
+        switch state.removeItem(withID: id) {
         case .updated:
             guard let session = state.session, let panel else {
                 return

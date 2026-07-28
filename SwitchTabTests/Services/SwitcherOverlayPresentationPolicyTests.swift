@@ -17,7 +17,8 @@ enum SwitcherOverlayPresentationPolicyTests {
         try testOverlayControllerBuildsApplicationIconStoreInsideMainActorInitializer()
         try testCommandWClosesSelectedWindowAndKeepsOverlayUp()
         try testClosingTheLastWindowDismissesOverlay()
-        try testFailedCloseLeavesOverlayUnchanged()
+        try testConfirmedCloseRemovesByStableIdentityAfterSelectionMoves()
+        try testStaleCloseConfirmationDoesNotMutateNewPresentation()
         try testHoverIsIgnoredUntilThePointerActuallyMoves()
         try testHoverMovesSelectionOncePointerHasMoved()
         try testActiveScreenFramePrefersScreenContainingPointer()
@@ -287,14 +288,15 @@ enum SwitcherOverlayPresentationPolicyTests {
         )
         var closedIDs: [String] = []
         var confirmedIDs: [String] = []
+        var closeConfirmation: (id: String, presentationID: UInt64)?
 
         controller.present(
             mode: .currentAppWindowSwitching,
             items: closeTestItems(count: 3),
             selectedIndex: 1,
-            onClose: { item, _ in
+            onClose: { item, presentationID in
                 closedIDs.append(item.id)
-                return true
+                closeConfirmation = (item.id, presentationID)
             },
             onConfirm: { item, _ in
                 confirmedIDs.append(item.id)
@@ -315,8 +317,39 @@ enum SwitcherOverlayPresentationPolicyTests {
         try expectEqual(closedIDs, ["window-1"])
         try expectTrue(controller.isPresented)
 
-        // Highlight lands on the next window, and confirming resolves to it.
+        // A successful AX press may only have opened the app's save prompt.
+        // The selected tile remains until destruction is confirmed.
         try expectTrue(connection.emit(keyCode: 36))
+        try expectEqual(confirmedIDs, ["window-1"])
+
+        confirmedIDs.removeAll()
+        closeConfirmation = nil
+        controller.present(
+            mode: .currentAppWindowSwitching,
+            items: closeTestItems(count: 3),
+            selectedIndex: 1,
+            onClose: { item, presentationID in
+                closeConfirmation = (item.id, presentationID)
+            },
+            onConfirm: { item, _ in confirmedIDs.append(item.id) }
+        )
+        guard let secondConnection = backend.connections.last else {
+            throw TestFailure.failed("Expected replacement event-tap connection")
+        }
+        try expectTrue(secondConnection.emit(
+            keyCode: SwitcherCommand.closeSelectedKeyCode,
+            modifiers: .command
+        ))
+        guard let closeConfirmation else {
+            throw TestFailure.failed("Expected close confirmation token")
+        }
+        controller.confirmWindowDisappeared(
+            id: closeConfirmation.id,
+            presentationID: closeConfirmation.presentationID
+        )
+
+        // Highlight lands on the next window, and confirming resolves to it.
+        try expectTrue(secondConnection.emit(keyCode: 36))
         try expectEqual(confirmedIDs, ["window-2"])
         controller.dismiss()
     }
@@ -329,6 +362,7 @@ enum SwitcherOverlayPresentationPolicyTests {
             eventSink: RecordingSwitcherOverlayEventSink()
         )
         var dismissCount = 0
+        var closeConfirmation: (id: String, presentationID: UInt64)?
         controller.onDismiss = {
             dismissCount += 1
         }
@@ -336,37 +370,8 @@ enum SwitcherOverlayPresentationPolicyTests {
         controller.present(
             mode: .currentAppWindowSwitching,
             items: closeTestItems(count: 1),
-            onClose: { _, _ in true }
-        )
-        guard let connection = backend.connections.last else {
-            throw TestFailure.failed("Expected controller event-tap connection")
-        }
-
-        try expectTrue(connection.emit(
-            keyCode: SwitcherCommand.closeSelectedKeyCode,
-            modifiers: .command
-        ))
-
-        try expectFalse(controller.isPresented)
-        try expectEqual(dismissCount, 1)
-    }
-
-    static func testFailedCloseLeavesOverlayUnchanged() throws {
-        let backend = RecordingSwitcherOverlayEventTapBackend()
-        let controller = SwitcherOverlayController(
-            thumbnailStore: WindowThumbnailStore(),
-            eventTapBackend: backend,
-            eventSink: RecordingSwitcherOverlayEventSink()
-        )
-        var confirmedIDs: [String] = []
-
-        controller.present(
-            mode: .currentAppWindowSwitching,
-            items: closeTestItems(count: 2),
-            selectedIndex: 1,
-            onClose: { _, _ in false },
-            onConfirm: { item, _ in
-                confirmedIDs.append(item.id)
+            onClose: { item, presentationID in
+                closeConfirmation = (item.id, presentationID)
             }
         )
         guard let connection = backend.connections.last else {
@@ -379,7 +384,105 @@ enum SwitcherOverlayPresentationPolicyTests {
         ))
 
         try expectTrue(controller.isPresented)
+        try expectEqual(dismissCount, 0)
+
+        guard let closeConfirmation else {
+            throw TestFailure.failed("Expected last-window confirmation token")
+        }
+        controller.confirmWindowDisappeared(
+            id: closeConfirmation.id,
+            presentationID: closeConfirmation.presentationID
+        )
+
+        try expectFalse(controller.isPresented)
+        try expectEqual(dismissCount, 1)
+    }
+
+    static func testConfirmedCloseRemovesByStableIdentityAfterSelectionMoves() throws {
+        let backend = RecordingSwitcherOverlayEventTapBackend()
+        let controller = SwitcherOverlayController(
+            thumbnailStore: WindowThumbnailStore(),
+            eventTapBackend: backend,
+            eventSink: RecordingSwitcherOverlayEventSink()
+        )
+        var confirmedIDs: [String] = []
+        var closeConfirmation: (id: String, presentationID: UInt64)?
+
+        controller.present(
+            mode: .currentAppWindowSwitching,
+            items: closeTestItems(count: 3),
+            selectedIndex: 1,
+            onClose: { item, presentationID in
+                closeConfirmation = (item.id, presentationID)
+            },
+            onConfirm: { item, _ in
+                confirmedIDs.append(item.id)
+            }
+        )
+        guard let connection = backend.connections.last else {
+            throw TestFailure.failed("Expected controller event-tap connection")
+        }
+
+        try expectTrue(connection.emit(
+            keyCode: SwitcherCommand.closeSelectedKeyCode,
+            modifiers: .command
+        ))
+        try expectTrue(connection.emit(keyCode: 125))
+
+        guard let closeConfirmation else {
+            throw TestFailure.failed("Expected stable close confirmation token")
+        }
+        controller.confirmWindowDisappeared(
+            id: closeConfirmation.id,
+            presentationID: closeConfirmation.presentationID
+        )
+
+        try expectTrue(controller.isPresented)
         try expectTrue(connection.emit(keyCode: 36))
+        try expectEqual(confirmedIDs, ["window-2"])
+    }
+
+    static func testStaleCloseConfirmationDoesNotMutateNewPresentation() throws {
+        let backend = RecordingSwitcherOverlayEventTapBackend()
+        let controller = SwitcherOverlayController(
+            thumbnailStore: WindowThumbnailStore(),
+            eventTapBackend: backend,
+            eventSink: RecordingSwitcherOverlayEventSink()
+        )
+        var staleConfirmation: (id: String, presentationID: UInt64)?
+        var confirmedIDs: [String] = []
+
+        controller.present(
+            mode: .currentAppWindowSwitching,
+            items: closeTestItems(count: 2),
+            onClose: { item, presentationID in
+                staleConfirmation = (item.id, presentationID)
+            }
+        )
+        guard let firstConnection = backend.connections.last else {
+            throw TestFailure.failed("Expected initial event-tap connection")
+        }
+        try expectTrue(firstConnection.emit(
+            keyCode: SwitcherCommand.closeSelectedKeyCode,
+            modifiers: .command
+        ))
+
+        controller.present(
+            mode: .currentAppWindowSwitching,
+            items: closeTestItems(count: 2),
+            selectedIndex: 1,
+            onConfirm: { item, _ in confirmedIDs.append(item.id) }
+        )
+        guard let staleConfirmation,
+              let secondConnection = backend.connections.last else {
+            throw TestFailure.failed("Expected stale confirmation and replacement connection")
+        }
+        controller.confirmWindowDisappeared(
+            id: staleConfirmation.id,
+            presentationID: staleConfirmation.presentationID
+        )
+
+        try expectTrue(secondConnection.emit(keyCode: 36))
         try expectEqual(confirmedIDs, ["window-1"])
     }
 

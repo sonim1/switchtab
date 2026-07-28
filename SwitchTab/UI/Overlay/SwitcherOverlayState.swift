@@ -104,6 +104,21 @@ public struct SwitcherOverlayState: Equatable, Sendable {
         return .updated
     }
 
+    /// Drops a confirmed-closed window by identity so selection changes cannot
+    /// make a delayed Accessibility callback remove the wrong tile.
+    public mutating func removeItem(withID id: String) -> SwitcherInteractionResult {
+        guard session?.removeItem(withID: id) == true else {
+            return .none
+        }
+
+        guard session?.items.isEmpty == false else {
+            dismiss()
+            return .cancelled
+        }
+
+        return .updated
+    }
+
     private mutating func moveSelection(by delta: Int) -> SwitcherInteractionResult {
         guard session?.moveSelection(by: delta) == true else {
             return .none

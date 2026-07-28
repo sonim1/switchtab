@@ -20,6 +20,7 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
     public let titleFontSize: CGFloat
     public let symbolFontSize: CGFloat
     public let closeButtonSize: CGFloat
+    public let closeButtonHitTargetSize: CGSize
     public let gridSpacing: CGFloat
     public let gridPadding: CGFloat
 
@@ -42,6 +43,8 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
         let headerIconExtent = scaled(baseHeaderIconExtent, by: factor)
         let tileContentPadding = scaled(baseTileContentPadding, by: factor)
         let fallbackIconExtent = (thumbnailHeight * fallbackIconThumbnailRatio).rounded()
+        let closeButtonSize = scaled(baseCloseButtonSize, by: factor)
+        let closeButtonHitTargetExtent = max(24, closeButtonSize + 8)
 
         return SwitcherOverlayLayoutMetrics(
             tileSize: CGSize(
@@ -54,7 +57,11 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
             headerIconSize: CGSize(width: headerIconExtent, height: headerIconExtent),
             titleFontSize: scaled(baseTitleFontSize, by: factor),
             symbolFontSize: (fallbackIconExtent * 0.62).rounded(),
-            closeButtonSize: scaled(baseCloseButtonSize, by: factor),
+            closeButtonSize: closeButtonSize,
+            closeButtonHitTargetSize: CGSize(
+                width: closeButtonHitTargetExtent,
+                height: closeButtonHitTargetExtent
+            ),
             gridSpacing: scaled(baseGridSpacing, by: factor),
             gridPadding: scaled(baseGridPadding, by: factor)
         )
