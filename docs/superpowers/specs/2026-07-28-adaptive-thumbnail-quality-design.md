@@ -30,9 +30,9 @@ Use a fixed balanced quality factor of `1.5` pixels per rendered thumbnail point
 
 The calculated image will never exceed the source window's native size and will keep its longest edge at or below 480 pixels. The long-edge limit bounds ScreenCaptureKit work, PNG encoding, memory, and cache size for unusual aspect ratios. Typical 16:9 windows will request approximately:
 
-- minimum slider size: about `205×116` pixels;
-- default size: about `293×165` pixels;
-- maximum slider size: about `440×248` pixels.
+- minimum slider size: about `207×116` pixels;
+- default size: about `294×165` pixels;
+- maximum slider size: about `441×248` pixels.
 
 The loader remains single-pass and asynchronous. The store continues to cache one PNG and one decoded `NSImage` per window. There is no progressive reload, new setting, quality selector, or cache variant.
 
@@ -80,7 +80,7 @@ For close selection:
 - Verify loader cancellation, stale-refresh rejection, fallback behavior, and cache reuse remain passing.
 - Add session tests for closing the first, middle, and last selected item.
 - Add controller tests for delayed destruction after additional navigation, repeated close-and-cycle commands, stable selected identity, scroll-token advancement after confirmed removal, and ignored stationary hover after reflow.
-- Add a hosted strip regression that removes an item and verifies the selected surviving tile remains visibly and interactively selected by stable ID.
+- Add a controller/render regression that removes an item and verifies the selected surviving tile remains bound to its stable ID after reflow.
 - Update About content and view tests to require separate `Version` and `Build Number` lines sourced from bundle values.
 - Run all Swift tests, all release contract tests, and the unsigned Debug app build.
 - Compare current and new requested pixel counts for representative 16:9 windows. The expected default increase is roughly 2.6× pixels and the expected maximum is roughly 6× the old fixed capture, while remaining below about 110,000 pixels for common wide windows.
