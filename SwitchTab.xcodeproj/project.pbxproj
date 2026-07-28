@@ -79,6 +79,10 @@
 		A00000000000000000000090 /* UpdateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000094 /* UpdateController.swift */; };
 		A00000000000000000000091 /* UpdateControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000095 /* UpdateControllerTests.swift */; };
 		A00000000000000000000092 /* SparkleUpdateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000096 /* SparkleUpdateController.swift */; };
+		A00000000000000000000094 /* OverlaySizeScale.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000102 /* OverlaySizeScale.swift */; };
+		A00000000000000000000095 /* WindowCloseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000099 /* WindowCloseService.swift */; };
+		A00000000000000000000096 /* WindowCloseServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000100 /* WindowCloseServiceTests.swift */; };
+		A00000000000000000000097 /* SwitcherWindowOrdering.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000101 /* SwitcherWindowOrdering.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -168,6 +172,10 @@
 		B00000000000000000000094 /* UpdateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateController.swift; sourceTree = "<group>"; };
 		B00000000000000000000095 /* UpdateControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateControllerTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000096 /* SparkleUpdateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleUpdateController.swift; sourceTree = "<group>"; };
+		B00000000000000000000102 /* OverlaySizeScale.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlaySizeScale.swift; sourceTree = "<group>"; };
+		B00000000000000000000099 /* WindowCloseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowCloseService.swift; sourceTree = "<group>"; };
+		B00000000000000000000100 /* WindowCloseServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowCloseServiceTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000101 /* SwitcherWindowOrdering.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherWindowOrdering.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -221,6 +229,8 @@
 					B00000000000000000000009 /* SwitcherSession.swift */,
 					B00000000000000000000092 /* SwitcherReadableText.swift */,
 					B00000000000000000000093 /* OverlaySizePreference.swift */,
+				B00000000000000000000102 /* OverlaySizeScale.swift */,
+				B00000000000000000000101 /* SwitcherWindowOrdering.swift */,
 				);
 			path = Models;
 			sourceTree = "<group>";
@@ -244,6 +254,7 @@
 				B00000000000000000000035 /* AccessibilityWindowProvider.swift */,
 				B00000000000000000000036 /* WindowThumbnailService.swift */,
 				B00000000000000000000037 /* WindowFocusService.swift */,
+				B00000000000000000000099 /* WindowCloseService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -340,6 +351,7 @@
 				B00000000000000000000087 /* SettingsActivationPolicyTests.swift */,
 				B00000000000000000000091 /* ApplicationSettingsStoreTests.swift */,
 				B00000000000000000000095 /* UpdateControllerTests.swift */,
+				B00000000000000000000100 /* WindowCloseServiceTests.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -531,6 +543,9 @@
 				A00000000000000000000041 /* ShortcutSettingsView.swift in Sources */,
 				A00000000000000000000046 /* SwitcherOverlayRootView.swift in Sources */,
 				A00000000000000000000048 /* SettingsWindowController.swift in Sources */,
+				A00000000000000000000094 /* OverlaySizeScale.swift in Sources */,
+				A00000000000000000000095 /* WindowCloseService.swift in Sources */,
+				A00000000000000000000097 /* SwitcherWindowOrdering.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -567,6 +582,7 @@
 				A00000000000000000000083 /* SettingsActivationPolicyTests.swift in Sources */,
 				A00000000000000000000087 /* ApplicationSettingsStoreTests.swift in Sources */,
 				A00000000000000000000091 /* UpdateControllerTests.swift in Sources */,
+				A00000000000000000000096 /* WindowCloseServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -671,7 +687,7 @@
 				CODE_SIGN_ENTITLEMENTS = SwitchTab/Resources/SwitchTab.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -680,7 +696,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.0.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.royjen.switchtab;
 				PRODUCT_NAME = SwitchTab;
 				SWIFT_VERSION = 5.0;
@@ -695,7 +711,7 @@
 				CODE_SIGN_ENTITLEMENTS = SwitchTab/Resources/SwitchTab.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -704,7 +720,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.0.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.royjen.switchtab;
 				PRODUCT_NAME = SwitchTab;
 				SWIFT_VERSION = 5.0;

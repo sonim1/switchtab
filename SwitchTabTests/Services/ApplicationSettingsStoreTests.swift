@@ -8,11 +8,13 @@ enum ApplicationSettingsStoreTests {
         try testMenuBarIconVisibilityPersists()
         try testMenuBarIconVisibilityChangePostsNotification()
         try testMenuBarIconVisibilityNoOpDoesNotPostNotification()
-        try testOverlaySizeDefaultsToStandard()
-        try testOverlaySizePersists()
-        try testOverlaySizeNoOpDoesNotPostNotification()
+        try testOverlaySizeScaleDefaultsToOne()
+        try testOverlaySizeScalePersists()
+        try testOverlaySizeScaleNoOpDoesNotPostNotification()
+        try testOverlaySizeScaleMigratesLegacyPreference()
+        try testStoredScaleWinsOverLegacyPreference()
         try testViewModelTogglesMenuBarIconVisibility()
-        try testViewModelUpdatesOverlaySize()
+        try testViewModelUpdatesOverlaySizeScale()
         try testViewModelHidesUpdateControlsWhenUnavailable()
         try testViewModelForwardsManualUpdateChecks()
         try testViewModelUpdatesAutomaticCheckPreference()
@@ -75,22 +77,46 @@ enum ApplicationSettingsStoreTests {
         try expectEqual(recorder.postCount, 0)
     }
 
-    static func testOverlaySizeDefaultsToStandard() throws {
+    static func testOverlaySizeScaleDefaultsToOne() throws {
         let store = ApplicationSettingsStore(userDefaults: makeDefaults())
 
-        try expectEqual(store.overlaySize, .standard)
+        try expectEqual(store.overlaySizeScale, .default)
     }
 
-    static func testOverlaySizePersists() throws {
+    static func testOverlaySizeScalePersists() throws {
         let defaults = makeDefaults()
         let store = ApplicationSettingsStore(userDefaults: defaults)
 
-        store.saveOverlaySize(.compact)
+        store.saveOverlaySizeScale(OverlaySizeScale(1.35))
 
-        try expectEqual(ApplicationSettingsStore(userDefaults: defaults).overlaySize, .compact)
+        try expectEqual(
+            ApplicationSettingsStore(userDefaults: defaults).overlaySizeScale,
+            OverlaySizeScale(1.35)
+        )
     }
 
-    static func testOverlaySizeNoOpDoesNotPostNotification() throws {
+    static func testOverlaySizeScaleMigratesLegacyPreference() throws {
+        let defaults = makeDefaults()
+        defaults.set(OverlaySizePreference.large.rawValue, forKey: ApplicationSettingsStore.overlaySizeKey)
+
+        try expectEqual(
+            ApplicationSettingsStore(userDefaults: defaults).overlaySizeScale,
+            OverlaySizePreference.large.scale
+        )
+    }
+
+    static func testStoredScaleWinsOverLegacyPreference() throws {
+        let defaults = makeDefaults()
+        defaults.set(OverlaySizePreference.compact.rawValue, forKey: ApplicationSettingsStore.overlaySizeKey)
+        defaults.set(1.4, forKey: ApplicationSettingsStore.overlaySizeScaleKey)
+
+        try expectEqual(
+            ApplicationSettingsStore(userDefaults: defaults).overlaySizeScale,
+            OverlaySizeScale(1.4)
+        )
+    }
+
+    static func testOverlaySizeScaleNoOpDoesNotPostNotification() throws {
         let store = ApplicationSettingsStore(userDefaults: makeDefaults())
         let recorder = NotificationRecorder()
         let observer = NotificationCenter.default.addObserver(
@@ -104,7 +130,7 @@ enum ApplicationSettingsStoreTests {
             NotificationCenter.default.removeObserver(observer)
         }
 
-        store.saveOverlaySize(.standard)
+        store.saveOverlaySizeScale(.default)
 
         try expectEqual(recorder.postCount, 0)
     }
@@ -124,17 +150,20 @@ enum ApplicationSettingsStoreTests {
     }
 
     @MainActor
-    static func testViewModelUpdatesOverlaySize() throws {
+    static func testViewModelUpdatesOverlaySizeScale() throws {
         let defaults = makeDefaults()
         let viewModel = ApplicationSettingsViewModel(
             store: ApplicationSettingsStore(userDefaults: defaults),
             launchAtLoginService: FakeLaunchAtLoginService()
         )
 
-        viewModel.setOverlaySize(.large)
+        viewModel.setOverlaySizeScale(OverlaySizeScale(1.25))
 
-        try expectEqual(viewModel.overlaySize, .large)
-        try expectEqual(ApplicationSettingsStore(userDefaults: defaults).overlaySize, .large)
+        try expectEqual(viewModel.overlaySizeScale, OverlaySizeScale(1.25))
+        try expectEqual(
+            ApplicationSettingsStore(userDefaults: defaults).overlaySizeScale,
+            OverlaySizeScale(1.25)
+        )
     }
 
     @MainActor

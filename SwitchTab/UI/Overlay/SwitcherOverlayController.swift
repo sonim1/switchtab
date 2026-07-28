@@ -5,6 +5,8 @@ import SwiftUI
 
 @MainActor
 final class SwitcherOverlayController {
+    private static let hoverActivationDistance: CGFloat = 3
+
     private var state = SwitcherOverlayState()
     private let presentationModel = SwitcherOverlayPresentationModel()
     private var panel: SwitcherOverlayPanel?
@@ -14,11 +16,13 @@ final class SwitcherOverlayController {
     private var eventTapOwner: SwitcherOverlayEventTapOwner?
     private var activationObserver: NSObjectProtocol?
     private var onConfirm: ((SwitcherListItem, Int) -> Void)?
+    private var onClose: ((SwitcherListItem, Int) -> Bool)?
     private var triggerReleaseModifiers: SwitcherShortcutModifiers?
     var onDismiss: (() -> Void)?
     private var presentationLayoutSize = SwitcherOverlayLayoutPolicy.defaultSize
-    private var presentationLayoutMetrics = SwitcherOverlayLayoutMetrics.metrics(for: .standard)
+    private var presentationLayoutMetrics = SwitcherOverlayLayoutMetrics.metrics(for: .default)
     private var presentationGridColumns: [GridItem] = []
+    private var presentationPointerLocation: CGPoint = .zero
     private let thumbnailStore: WindowThumbnailStore
     private let applicationIconStore: ApplicationIconStore
     private let applicationSettingsStore: ApplicationSettingsStore
@@ -52,6 +56,7 @@ final class SwitcherOverlayController {
         items: [SwitcherListItem],
         selectedIndex: Int = 0,
         triggerShortcut: ShortcutSetting? = nil,
+        onClose: ((SwitcherListItem, Int) -> Bool)? = nil,
         onConfirm: ((SwitcherListItem, Int) -> Void)? = nil
     ) {
         guard !items.isEmpty else {
@@ -60,12 +65,20 @@ final class SwitcherOverlayController {
         }
 
         applicationIconStore.retainOnlyCachedIcons(for: items)
+        // The overlay often opens under a resting pointer; hovering only takes
+        // over the selection after the pointer actually moves.
+        presentationModel.setHoverSelectionEnabled(false)
+        presentationPointerLocation = NSEvent.mouseLocation
+        // Advancing the token re-scrolls to the selection when a reused hosting
+        // view is presented again and `onAppear` no longer fires.
+        presentationModel.advanceScrollToken()
         state.present(
             mode: mode,
             items: items,
             selectedIndex: selectedIndex
         )
         self.onConfirm = onConfirm
+        self.onClose = onClose
         if let triggerShortcut {
             self.triggerReleaseModifiers = SwitcherShortcutModifiers.releaseRelevantModifiers(triggerShortcut)
         } else {
@@ -105,9 +118,12 @@ final class SwitcherOverlayController {
         }
         switch result {
         case .updated:
+            presentationModel.advanceScrollToken()
             presentationModel.update(state)
         case .confirmed, .cancelled:
             apply(result)
+        case .closeRequested(let item, let index):
+            closeItem(item, at: index)
         case .none:
             break
         }
@@ -121,6 +137,18 @@ final class SwitcherOverlayController {
 
         let panel = panel ?? makePanel()
         self.panel = panel
+        updatePresentationLayout(session: session, panel: panel)
+        panel.makeKeyAndOrderFront(nil)
+        let tapInstalled = installEventTap()
+        installEventMonitor()
+        eventSink.record(.presented(
+            itemCount: session.items.count,
+            selectedIndex: session.selectedIndex,
+            tapInstalled: tapInstalled
+        ))
+    }
+
+    private func updatePresentationLayout(session: SwitcherSession, panel: NSPanel) {
         let screenFrame = activeScreenVisibleFrame()
         let presentationLayout = currentPresentationLayout(session: session, screenSize: screenFrame?.size)
         presentationLayoutSize = presentationLayout.size
@@ -131,14 +159,27 @@ final class SwitcherOverlayController {
         )
         render()
         center(panel: panel, screenFrame: screenFrame)
-        panel.makeKeyAndOrderFront(nil)
-        let tapInstalled = installEventTap()
-        installEventMonitor()
-        eventSink.record(.presented(
-            itemCount: session.items.count,
-            selectedIndex: session.selectedIndex,
-            tapInstalled: tapInstalled
-        ))
+    }
+
+    // Closing keeps the overlay up so the user can keep cycling; the grid is
+    // re-laid out because one fewer window can change rows and columns.
+    private func closeItem(_ item: SwitcherListItem, at index: Int) {
+        guard let onClose, onClose(item, index) else {
+            return
+        }
+
+        switch state.removeItem(at: index) {
+        case .updated:
+            guard let session = state.session, let panel else {
+                return
+            }
+
+            updatePresentationLayout(session: session, panel: panel)
+        case .cancelled:
+            apply(.cancelled)
+        case .none, .confirmed, .closeRequested:
+            break
+        }
     }
 
     @discardableResult
@@ -187,6 +228,7 @@ final class SwitcherOverlayController {
         panel.isMovableByWindowBackground = false
         panel.isOpaque = false
         panel.level = .floating
+        panel.acceptsMouseMovedEvents = true
         return panel
     }
 
@@ -209,7 +251,9 @@ final class SwitcherOverlayController {
             gridColumns: presentationGridColumns,
             thumbnailStore: thumbnailStore,
             applicationIconStore: applicationIconStore,
-            onItemClicked: confirmClickedItem
+            onItemClicked: confirmClickedItem,
+            onItemCloseClicked: closeItem,
+            onItemHovered: hoverItem
         )
 
         if let hostingController {
@@ -233,7 +277,7 @@ final class SwitcherOverlayController {
         SwitcherOverlayLayoutPolicy.presentationLayout(
             itemCount: session.items.count,
             screenSize: screenSize ?? SwitcherOverlayLayoutPolicy.defaultSize,
-            overlaySize: applicationSettingsStore.overlaySize
+            scale: applicationSettingsStore.overlaySizeScale
         )
     }
 
@@ -270,6 +314,13 @@ final class SwitcherOverlayController {
         globalEventMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: SwitcherOverlayEventMonitorPolicy.globalMask
         ) { [weak self] event in
+            guard event.type != .mouseMoved else {
+                Self.onMainActor { [weak self] in
+                    self?.enableHoverSelectionIfPointerMoved(to: NSEvent.mouseLocation)
+                }
+                return
+            }
+
             guard let externalEvent = Self.externalEvent(from: event) else {
                 return
             }
@@ -324,6 +375,9 @@ final class SwitcherOverlayController {
 
     private func handle(event: NSEvent) -> Bool {
         switch event.type {
+        case .mouseMoved:
+            enableHoverSelectionIfPointerMoved(to: NSEvent.mouseLocation)
+            return false
         case .flagsChanged:
             guard state.session != nil else {
                 return false
@@ -339,7 +393,11 @@ final class SwitcherOverlayController {
             _ = handle(.releaseShortcut)
             return true
         case .keyDown:
-            if let command = SwitcherCommand(keyCode: event.keyCode) {
+            if let command = SwitcherCommand(keyCode: event.keyCode, modifiers: event.shortcutModifiers) {
+                guard !(event.isARepeat && command.repeatsAreDestructive) else {
+                    return true
+                }
+
                 _ = handle(command)
                 return true
             }
@@ -351,6 +409,21 @@ final class SwitcherOverlayController {
             return event.charactersIgnoringModifiers?.isEmpty == false
         default:
             return false
+        }
+    }
+
+    nonisolated private static func onMainActor(_ work: @escaping @MainActor () -> Void) {
+        guard !Thread.isMainThread else {
+            MainActor.assumeIsolated {
+                work()
+            }
+            return
+        }
+
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                work()
+            }
         }
     }
 
@@ -392,6 +465,32 @@ final class SwitcherOverlayController {
         }
     }
 
+    // Pointer hover moves the highlight without scrolling: the tile is already
+    // under the pointer, so re-centring it would drag the grid out from under it.
+    func hoverItem(at index: Int) {
+        guard presentationModel.isHoverSelectionEnabled,
+              state.selectItem(at: index) == .updated else {
+            return
+        }
+
+        presentationModel.update(state)
+    }
+
+    func enableHoverSelectionIfPointerMoved(to pointerLocation: CGPoint) {
+        guard state.isPresented, !presentationModel.isHoverSelectionEnabled else {
+            return
+        }
+
+        let horizontalDelta = pointerLocation.x - presentationPointerLocation.x
+        let verticalDelta = pointerLocation.y - presentationPointerLocation.y
+        let squaredDistance = horizontalDelta * horizontalDelta + verticalDelta * verticalDelta
+        guard squaredDistance > Self.hoverActivationDistance * Self.hoverActivationDistance else {
+            return
+        }
+
+        presentationModel.setHoverSelectionEnabled(true)
+    }
+
     private func confirmClickedItem(_ item: SwitcherListItem, index: Int) {
         state.dismiss()
         apply(.confirmed(item: item, index: index))
@@ -407,13 +506,14 @@ final class SwitcherOverlayController {
         case .cancelled:
             endPresentation()
             clearPresentationCallbacks()
-        case .none, .updated:
+        case .none, .updated, .closeRequested:
             break
         }
     }
 
     private func clearPresentationCallbacks() {
         onConfirm = nil
+        onClose = nil
         triggerReleaseModifiers = nil
     }
 
@@ -435,6 +535,19 @@ struct SwitcherOverlayEventTapInput: Equatable, Sendable {
     let eventType: CGEventType
     let keyCode: UInt16
     let isAutorepeat: Bool
+    let modifiers: SwitcherShortcutModifiers
+
+    init(
+        eventType: CGEventType,
+        keyCode: UInt16,
+        isAutorepeat: Bool,
+        modifiers: SwitcherShortcutModifiers = []
+    ) {
+        self.eventType = eventType
+        self.keyCode = keyCode
+        self.isAutorepeat = isAutorepeat
+        self.modifiers = modifiers
+    }
 }
 
 @MainActor
@@ -519,12 +632,15 @@ final class SwitcherOverlayEventTapOwner {
         switch SwitcherOverlayEventTapPolicy.decision(
             eventType: input.eventType,
             keyCode: input.keyCode,
-            isAutorepeat: input.isAutorepeat
+            isAutorepeat: input.isAutorepeat,
+            modifiers: input.modifiers
         ) {
         case .passThrough:
             return false
         case .consume(let command):
             commandHandler(command)
+            return true
+        case .consumeWithoutCommand:
             return true
         case .reenable:
             connection?.reenable()
@@ -564,7 +680,8 @@ final class SystemSwitcherOverlayEventTapBackend: SwitcherOverlayEventTapBackend
                 let input = SwitcherOverlayEventTapInput(
                     eventType: type,
                     keyCode: UInt16(event.getIntegerValueField(.keyboardEventKeycode)),
-                    isAutorepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+                    isAutorepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
+                    modifiers: ShortcutModifierResolver.shortcutModifiers(from: event.flags)
                 )
                 return handler(input)
             }
@@ -692,6 +809,7 @@ private extension SwitcherCommand {
         case .confirm: 3
         case .releaseShortcut: 4
         case .cancel: 5
+        case .closeSelected: 6
         }
     }
 }
@@ -703,6 +821,7 @@ private extension SwitcherInteractionResult {
         case .updated: 1
         case .confirmed: 2
         case .cancelled: 3
+        case .closeRequested: 4
         }
     }
 }

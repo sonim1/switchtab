@@ -15,8 +15,12 @@ enum SwitcherOverlayPresentationTests {
         try testIconGridCapsAtThreeVisibleRows()
         try testSingleItemLayoutFitsContentInsteadOfUsingWideMinimum()
         try testTwoItemLayoutFitsTwoColumns()
-        try testOverlaySizePreferenceScalesLayout()
-        try testOverlaySizePreferenceScalesMultiRowLayout()
+        try testOverlaySizeScaleScalesLayout()
+        try testOverlaySizeScaleScalesMultiRowLayout()
+        try testOverlaySizeScaleClampsOutOfRangeValues()
+        try testLegacyOverlaySizePreferenceMapsOntoScale()
+        try testDefaultThumbnailIsLargerThanRetiredLargePreset()
+        try testOverlaySizeIsChosenWithASliderNotFixedOptions()
         try testWindowTileButtonsExposeExplicitAccessibilityText()
     }
 
@@ -51,8 +55,8 @@ enum SwitcherOverlayPresentationTests {
         )
 
         try expectEqual(layout.gridColumnCount, 5)
-        try expectEqual(layout.size.width, 712)
-        try expectEqual(layout.size.height, 148)
+        try expectEqual(layout.size.width, expectedWidth(columnCount: 5))
+        try expectEqual(layout.size.height, expectedHeight(rowCount: 1))
     }
 
     static func testWindowModeUsesIconGridLayout() throws {
@@ -61,8 +65,8 @@ enum SwitcherOverlayPresentationTests {
             screenSize: CGSize(width: 1440, height: 900)
         ).size
 
-        try expectEqual(size.width, 572)
-        try expectEqual(size.height, 148)
+        try expectEqual(size.width, expectedWidth(columnCount: 4))
+        try expectEqual(size.height, expectedHeight(rowCount: 1))
     }
 
     static func testPresentationLayoutCarriesGridColumnCount() throws {
@@ -71,20 +75,19 @@ enum SwitcherOverlayPresentationTests {
             screenSize: CGSize(width: 1000, height: 700)
         )
 
-        try expectEqual(presentationLayout.size.width, 712)
-        try expectEqual(presentationLayout.size.height, 284)
-        try expectEqual(presentationLayout.gridColumnCount, 5)
+        try expectEqual(presentationLayout.gridColumnCount, 3)
+        try expectEqual(presentationLayout.size.width, expectedWidth(columnCount: 3))
+        try expectEqual(presentationLayout.size.height, expectedHeight(rowCount: 3))
     }
 
     static func testIconGridWrapsToTwoRowsWhenWidthWouldOverflow() throws {
         let layout = SwitcherOverlayLayoutPolicy.presentationLayout(
-            itemCount: 9,
+            itemCount: 6,
             screenSize: CGSize(width: 1000, height: 700)
         )
 
-        try expectEqual(layout.gridColumnCount, 5)
-        try expectEqual(layout.size.width, 712)
-        try expectEqual(layout.size.height, 284)
+        try expectEqual(layout.gridColumnCount, 3)
+        try expectEqual(layout.size.height, expectedHeight(rowCount: 2))
     }
 
     static func testIconGridCapsAtThreeVisibleRows() throws {
@@ -93,95 +96,162 @@ enum SwitcherOverlayPresentationTests {
             screenSize: CGSize(width: 1000, height: 700)
         )
 
-        try expectEqual(layout.gridColumnCount, 6)
-        try expectEqual(layout.size.width, 852)
-        try expectEqual(layout.size.height, 420)
+        try expectEqual(layout.size.height, expectedHeight(rowCount: 3))
     }
 
     static func testSingleItemLayoutFitsContentInsteadOfUsingWideMinimum() throws {
         let layout = SwitcherOverlayLayoutPolicy.presentationLayout(
             itemCount: 1,
             screenSize: CGSize(width: 1440, height: 900),
-            overlaySize: .standard
+            scale: .default
         )
+        let metrics = SwitcherOverlayLayoutMetrics.metrics(for: .default)
 
         try expectEqual(layout.gridColumnCount, 1)
-        try expectEqual(layout.size.width, 152)
-        try expectEqual(layout.size.height, 148)
+        try expectEqual(layout.size.width, metrics.tileSize.width + metrics.gridPadding)
+        try expectEqual(layout.size.height, metrics.tileSize.height + metrics.gridPadding)
     }
 
     static func testTwoItemLayoutFitsTwoColumns() throws {
         let layout = SwitcherOverlayLayoutPolicy.presentationLayout(
             itemCount: 2,
             screenSize: CGSize(width: 1440, height: 900),
-            overlaySize: .standard
+            scale: .default
         )
+        let metrics = SwitcherOverlayLayoutMetrics.metrics(for: .default)
 
         try expectEqual(layout.gridColumnCount, 2)
-        try expectEqual(layout.size.width, 292)
-        try expectEqual(layout.size.height, 148)
+        try expectEqual(
+            layout.size.width,
+            metrics.tileSize.width * 2 + metrics.gridSpacing + metrics.gridPadding
+        )
+        try expectEqual(layout.size.height, metrics.tileSize.height + metrics.gridPadding)
     }
 
-    static func testOverlaySizePreferenceScalesLayout() throws {
-        let compact = SwitcherOverlayLayoutPolicy.presentationLayout(
+    static func testOverlaySizeScaleScalesLayout() throws {
+        let small = SwitcherOverlayLayoutPolicy.presentationLayout(
             itemCount: 1,
             screenSize: CGSize(width: 1440, height: 900),
-            overlaySize: .compact
+            scale: OverlaySizeScale(OverlaySizeScale.minimum)
         )
         let standard = SwitcherOverlayLayoutPolicy.presentationLayout(
             itemCount: 1,
             screenSize: CGSize(width: 1440, height: 900),
-            overlaySize: .standard
+            scale: .default
         )
         let large = SwitcherOverlayLayoutPolicy.presentationLayout(
             itemCount: 1,
             screenSize: CGSize(width: 1440, height: 900),
-            overlaySize: .large
+            scale: OverlaySizeScale(OverlaySizeScale.maximum)
         )
 
-        try expectEqual(compact.size.width, 132)
-        try expectEqual(compact.size.height, 132)
-        try expectEqual(standard.size.width, 152)
-        try expectEqual(standard.size.height, 148)
-        try expectEqual(large.size.width, 180)
-        try expectEqual(large.size.height, 176)
-    }
-
-    static func testOverlaySizePreferenceScalesMultiRowLayout() throws {
-        let compact = SwitcherOverlayLayoutPolicy.presentationLayout(
-            itemCount: 9,
-            screenSize: CGSize(width: 1000, height: 700),
-            overlaySize: .compact
-        )
-        let standard = SwitcherOverlayLayoutPolicy.presentationLayout(
-            itemCount: 9,
-            screenSize: CGSize(width: 1000, height: 700),
-            overlaySize: .standard
-        )
-        let large = SwitcherOverlayLayoutPolicy.presentationLayout(
-            itemCount: 9,
-            screenSize: CGSize(width: 1000, height: 700),
-            overlaySize: .large
-        )
-
-        try expectTrue(compact.size.width < standard.size.width)
+        try expectTrue(small.size.width < standard.size.width)
         try expectTrue(standard.size.width < large.size.width)
-        try expectTrue(compact.size.height < standard.size.height)
+        try expectTrue(small.size.height < standard.size.height)
         try expectTrue(standard.size.height < large.size.height)
-        try expectEqual(standard.gridColumnCount, 5)
+    }
+
+    static func testOverlaySizeScaleScalesMultiRowLayout() throws {
+        let small = SwitcherOverlayLayoutPolicy.presentationLayout(
+            itemCount: 9,
+            screenSize: CGSize(width: 1000, height: 700),
+            scale: OverlaySizeScale(OverlaySizeScale.minimum)
+        )
+        let standard = SwitcherOverlayLayoutPolicy.presentationLayout(
+            itemCount: 9,
+            screenSize: CGSize(width: 1000, height: 700),
+            scale: .default
+        )
+        let large = SwitcherOverlayLayoutPolicy.presentationLayout(
+            itemCount: 9,
+            screenSize: CGSize(width: 1000, height: 700),
+            scale: OverlaySizeScale(OverlaySizeScale.maximum)
+        )
+
+        // A bigger scale fits fewer columns in the same screen width; total
+        // overlay width is not monotonic because the column count changes.
+        try expectTrue(small.gridColumnCount > standard.gridColumnCount)
+        try expectTrue(standard.gridColumnCount >= large.gridColumnCount)
+        try expectEqual(standard.gridColumnCount, 3)
+
+        let smallMetrics = SwitcherOverlayLayoutMetrics.metrics(for: OverlaySizeScale(OverlaySizeScale.minimum))
+        let standardMetrics = SwitcherOverlayLayoutMetrics.metrics(for: .default)
+        let largeMetrics = SwitcherOverlayLayoutMetrics.metrics(for: OverlaySizeScale(OverlaySizeScale.maximum))
+
+        try expectTrue(smallMetrics.thumbnailSize.width < standardMetrics.thumbnailSize.width)
+        try expectTrue(standardMetrics.thumbnailSize.width < largeMetrics.thumbnailSize.width)
+    }
+
+    static func testOverlaySizeScaleClampsOutOfRangeValues() throws {
+        try expectEqual(OverlaySizeScale(0).value, OverlaySizeScale.minimum)
+        try expectEqual(OverlaySizeScale(99).value, OverlaySizeScale.maximum)
+        try expectEqual(OverlaySizeScale(.nan).value, 1)
+        try expectEqual(OverlaySizeScale.default.value, 1)
+        try expectEqual(OverlaySizeScale(1.2).percentageText, "120%")
+    }
+
+    static func testLegacyOverlaySizePreferenceMapsOntoScale() throws {
+        try expectTrue(OverlaySizePreference.compact.scale.value < OverlaySizePreference.standard.scale.value)
+        try expectTrue(OverlaySizePreference.standard.scale.value < OverlaySizePreference.large.scale.value)
+        try expectEqual(OverlaySizePreference.standard.scale, .default)
+    }
+
+    static func testDefaultThumbnailIsLargerThanRetiredLargePreset() throws {
+        let metrics = SwitcherOverlayLayoutMetrics.metrics(for: .default)
+
+        // The retired `.large` preset used a 144x100 thumbnail; the new default
+        // must be roomier than that, per the bigger-by-default requirement.
+        try expectTrue(metrics.thumbnailSize.width > 144)
+        try expectTrue(metrics.thumbnailSize.height > 100)
+        try expectEqual(metrics.tileSize.width, metrics.thumbnailSize.width + 8)
+        try expectTrue(metrics.fallbackIconSize.height <= metrics.thumbnailSize.height)
+        try expectTrue(metrics.titleFontSize > 0)
+        try expectTrue(metrics.symbolFontSize > 0)
+    }
+
+    static func testOverlaySizeIsChosenWithASliderNotFixedOptions() throws {
+        let source = try projectSource("SwitchTab/UI/Settings/ShortcutSettingsView.swift")
+
+        try expectTrue(source.contains("Slider("))
+        try expectTrue(source.contains("viewModel.setOverlaySizeScale(OverlaySizeScale($0))"))
+        try expectFalse(source.contains("OverlaySizePreference.allCases"))
     }
 
     static func testWindowTileButtonsExposeExplicitAccessibilityText() throws {
-        let projectRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let sourceURL = projectRoot
-            .appendingPathComponent("SwitchTab/UI/Overlay/SwitcherIconStripView.swift")
-        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+        let source = try projectSource("SwitchTab/UI/Overlay/SwitcherIconStripView.swift")
 
         try expectTrue(source.contains(".accessibilityLabel(Text(item.title))"))
         try expectTrue(source.contains(".accessibilityHint(Text(\"Switch to this window.\"))"))
     }
 
+    private static func projectSource(_ relativePath: String) throws -> String {
+        let projectRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        return try String(
+            contentsOf: projectRoot.appendingPathComponent(relativePath),
+            encoding: .utf8
+        )
+    }
+
+    private static func expectedWidth(
+        columnCount: Int,
+        scale: OverlaySizeScale = .default
+    ) -> CGFloat {
+        let metrics = SwitcherOverlayLayoutMetrics.metrics(for: scale)
+        return CGFloat(columnCount) * metrics.tileSize.width
+            + CGFloat(columnCount - 1) * metrics.gridSpacing
+            + metrics.gridPadding
+    }
+
+    private static func expectedHeight(
+        rowCount: Int,
+        scale: OverlaySizeScale = .default
+    ) -> CGFloat {
+        let metrics = SwitcherOverlayLayoutMetrics.metrics(for: scale)
+        return CGFloat(rowCount) * metrics.tileSize.height
+            + CGFloat(rowCount - 1) * metrics.gridSpacing
+            + metrics.gridPadding
+    }
 }

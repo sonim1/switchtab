@@ -233,22 +233,27 @@ private struct GeneralSettingsPanel: View {
                 SettingsRow(
                     symbolName: "rectangle.resize",
                     title: "Overlay size",
-                    detail: "Choose how much presence the switcher uses."
+                    detail: "Drag to resize the switcher thumbnails."
                 ) {
-                    Picker(
-                        "Overlay size",
-                        selection: Binding(
-                            get: { viewModel.overlaySize },
-                            set: { viewModel.setOverlaySize($0) }
+                    HStack(spacing: 10) {
+                        Slider(
+                            value: Binding(
+                                get: { viewModel.overlaySizeScale.value },
+                                set: { viewModel.setOverlaySizeScale(OverlaySizeScale($0)) }
+                            ),
+                            in: OverlaySizeScale.minimum...OverlaySizeScale.maximum,
+                            step: OverlaySizeScale.step
                         )
-                    ) {
-                        ForEach(OverlaySizePreference.allCases) { size in
-                            Text(size.displayName).tag(size)
-                        }
+                        .labelsHidden()
+                        .frame(width: 180)
+                        .accessibilityLabel(Text("Overlay size"))
+                        .accessibilityValue(Text(viewModel.overlaySizeScale.percentageText))
+
+                        Text(viewModel.overlaySizeScale.percentageText)
+                            .font(.system(size: 12, weight: .medium).monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 40, alignment: .trailing)
                     }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
-                    .frame(width: 230)
                 }
             }
 

@@ -5,6 +5,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayController: SwitcherOverlayController?
     private let windowProvider = AccessibilityWindowProvider()
     private let windowFocusService = WindowFocusService()
+    private let windowCloseService = WindowCloseService()
     private let permissionService = PermissionService()
     private let shortcutStore = ShortcutSettingsStore()
     private let applicationSettingsStore = ApplicationSettingsStore()
@@ -98,12 +99,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             debugLog("frontmost app missing")
         }
-        let windows = recencyStore.order(
+        let recentlyOrderedWindows = recencyStore.order(
             windowProvider.currentApplicationWindows(
                 includeScreenCaptureIdentifiers: !permissionState.blocksWindowPreviews
             )
         ) { window in
             window.id
+        }
+        let windows = SwitcherWindowOrderPolicy.pinningFocusedWindowFirst(recentlyOrderedWindows) { window in
+            window.isFocused
         }
         debugLog("window count=\(windows.count)")
         guard !windows.isEmpty else {
@@ -122,20 +126,32 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             mode: .currentAppWindowSwitching,
             items: snapshot.listItems,
             selectedIndex: snapshot.selectedIndex,
-            triggerShortcut: windowTriggerShortcut()
-        ) { [weak self] _, selectedIndex in
-            guard let self,
-                  let selectedWindow = snapshot.element(at: selectedIndex) else {
-                return
-            }
+            triggerShortcut: windowTriggerShortcut(),
+            onClose: { [weak self] item, _ in
+                guard let self,
+                      let window = snapshot.element(withID: item.id) else {
+                    return false
+                }
 
-            let selectionCoordinator = WindowSelectionCoordinator(
-                focusService: self.windowFocusService,
-                recencyStore: self.recencyStore
-            )
-            selectionCoordinator.confirm(selectedWindow, permissionState: permissionState)
-            self.usageMetricsStore.flush()
-        }
+                return self.windowCloseService.close(
+                    window,
+                    permissionState: permissionState
+                ) == .closed
+            },
+            onConfirm: { [weak self] item, _ in
+                guard let self,
+                      let selectedWindow = snapshot.element(withID: item.id) else {
+                    return
+                }
+
+                let selectionCoordinator = WindowSelectionCoordinator(
+                    focusService: self.windowFocusService,
+                    recencyStore: self.recencyStore
+                )
+                selectionCoordinator.confirm(selectedWindow, permissionState: permissionState)
+                self.usageMetricsStore.flush()
+            }
+        )
         thumbnailLoaderForRefresh().refresh(windows: windows, permissionState: permissionState)
     }
 

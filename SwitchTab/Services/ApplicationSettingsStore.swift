@@ -7,6 +7,8 @@ public extension Notification.Name {
 
 public struct ApplicationSettingsStore {
     public static let menuBarIconVisibleKey = "ApplicationSettings.menuBarIconVisible"
+    public static let overlaySizeScaleKey = "ApplicationSettings.overlaySizeScale"
+    /// Legacy three-step preference, read once to migrate onto the scale.
     public static let overlaySizeKey = "ApplicationSettings.overlaySize"
 
     private let userDefaults: UserDefaults
@@ -28,21 +30,25 @@ public struct ApplicationSettingsStore {
         NotificationCenter.default.post(name: .applicationSettingsDidChange, object: nil)
     }
 
-    public var overlaySize: OverlaySizePreference {
-        guard let rawValue = userDefaults.string(forKey: Self.overlaySizeKey),
-              let preference = OverlaySizePreference(rawValue: rawValue) else {
-            return .standard
+    public var overlaySizeScale: OverlaySizeScale {
+        if let storedValue = userDefaults.object(forKey: Self.overlaySizeScaleKey) as? Double {
+            return OverlaySizeScale(storedValue)
         }
 
-        return preference
+        guard let legacyRawValue = userDefaults.string(forKey: Self.overlaySizeKey),
+              let legacyPreference = OverlaySizePreference(rawValue: legacyRawValue) else {
+            return .default
+        }
+
+        return legacyPreference.scale
     }
 
-    public func saveOverlaySize(_ size: OverlaySizePreference) {
-        guard overlaySize != size else {
+    public func saveOverlaySizeScale(_ scale: OverlaySizeScale) {
+        guard overlaySizeScale != scale else {
             return
         }
 
-        userDefaults.set(size.rawValue, forKey: Self.overlaySizeKey)
+        userDefaults.set(scale.value, forKey: Self.overlaySizeScaleKey)
         NotificationCenter.default.post(name: .applicationSettingsDidChange, object: nil)
     }
 }

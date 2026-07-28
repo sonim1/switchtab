@@ -23,6 +23,10 @@ enum SwitcherRecencyStoreTests {
         try testZeroHistoryCapacitySkipsRecencyReadsAndWrites()
         try testForwardInitialSelectionSkipsMostRecentItem()
         try testReverseInitialSelectionStartsAtLastItem()
+        try testFocusedWindowIsPinnedToTheFrontOfTheList()
+        try testPinningIsANoOpWhenTheFocusedWindowAlreadyLeads()
+        try testExternalFocusChangeStillHighlightsTheSecondSlot()
+        try testTogglingBetweenTwoWindowsAlwaysHighlightsTheOtherOne()
     }
 
     static func testOrderingFallsBackToIncomingOrderWithoutHistory() throws {
@@ -277,6 +281,72 @@ enum SwitcherRecencyStoreTests {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
+    }
+    static func testFocusedWindowIsPinnedToTheFrontOfTheList() throws {
+        let ordered = SwitcherWindowOrderPolicy.pinningFocusedWindowFirst(
+            ["a", "b", "c"]
+        ) { $0 == "c" }
+
+        try expectEqual(ordered, ["c", "a", "b"])
+    }
+
+    static func testPinningIsANoOpWhenTheFocusedWindowAlreadyLeads() throws {
+        try expectEqual(
+            SwitcherWindowOrderPolicy.pinningFocusedWindowFirst(["a", "b"]) { $0 == "a" },
+            ["a", "b"]
+        )
+        try expectEqual(
+            SwitcherWindowOrderPolicy.pinningFocusedWindowFirst(["a", "b"]) { _ in false },
+            ["a", "b"]
+        )
+        try expectEqual(
+            SwitcherWindowOrderPolicy.pinningFocusedWindowFirst(["a"]) { _ in true },
+            ["a"]
+        )
+        try expectEqual(
+            SwitcherWindowOrderPolicy.pinningFocusedWindowFirst([String]()) { _ in true },
+            []
+        )
+    }
+
+    static func testExternalFocusChangeStillHighlightsTheSecondSlot() throws {
+        // History only knows about switches made through SwitchTab. The user
+        // then clicked window "c" directly, so "c" is frontmost.
+        let store = SwitcherRecencyStore(userDefaults: makeDefaults())
+        store.recordSelection(id: "b")
+        store.recordSelection(id: "a")
+
+        let ordered = SwitcherWindowOrderPolicy.pinningFocusedWindowFirst(
+            store.order(["c", "a", "b"]) { $0 }
+        ) { $0 == "c" }
+
+        try expectEqual(ordered, ["c", "a", "b"])
+        try expectEqual(
+            SwitcherRecencyStore.initialSelectedIndex(itemCount: ordered.count, reverse: false),
+            1
+        )
+        try expectEqual(ordered[1], "a")
+    }
+
+    static func testTogglingBetweenTwoWindowsAlwaysHighlightsTheOtherOne() throws {
+        let store = SwitcherRecencyStore(userDefaults: makeDefaults())
+
+        // A is frontmost: the highlight must land on B.
+        var focusedID = "a"
+        var ordered = SwitcherWindowOrderPolicy.pinningFocusedWindowFirst(
+            store.order(["a", "b"]) { $0 }
+        ) { $0 == focusedID }
+        try expectEqual(ordered, ["a", "b"])
+        try expectEqual(ordered[1], "b")
+
+        // Confirming B makes it frontmost: the highlight must flip back to A.
+        store.recordSelection(id: "b")
+        focusedID = "b"
+        ordered = SwitcherWindowOrderPolicy.pinningFocusedWindowFirst(
+            store.order(["b", "a"]) { $0 }
+        ) { $0 == focusedID }
+        try expectEqual(ordered, ["b", "a"])
+        try expectEqual(ordered[1], "a")
     }
 }
 

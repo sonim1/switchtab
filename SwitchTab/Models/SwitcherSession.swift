@@ -74,6 +74,32 @@ public struct SwitcherSession: Equatable, Sendable {
         return true
     }
 
+    /// Drops a window that is no longer switchable (it was just closed) while
+    /// keeping the highlight on a sensible neighbour.
+    @discardableResult
+    public mutating func removeItem(at index: Int) -> Bool {
+        guard index >= 0, index < items.count else {
+            return false
+        }
+
+        items.remove(at: index)
+        if index < selectedIndex {
+            selectedIndex -= 1
+        }
+        selectedIndex = SwitcherSession.clamped(selectedIndex, itemCount: items.count)
+        return true
+    }
+
+    @discardableResult
+    public mutating func selectItem(at index: Int) -> Bool {
+        guard index >= 0, index < items.count, index != selectedIndex else {
+            return false
+        }
+
+        selectedIndex = index
+        return true
+    }
+
     private static func clamped(_ index: Int, itemCount: Int) -> Int {
         guard itemCount > 0 else {
             return 0
