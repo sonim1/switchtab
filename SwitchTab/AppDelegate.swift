@@ -159,7 +159,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.usageMetricsStore.flush()
             }
         )
-        thumbnailLoaderForRefresh().refresh(windows: windows, permissionState: permissionState)
+        let thumbnailPointSize = SwitcherOverlayLayoutMetrics.metrics(
+            for: applicationSettingsStore.overlaySizeScale
+        ).thumbnailSize
+        let viewportPixelSize = WindowThumbnailCaptureSizing.viewportPixelSize(for: thumbnailPointSize)
+        thumbnailLoaderForRefresh().refresh(
+            windows: windows,
+            permissionState: permissionState,
+            viewportPixelSize: viewportPixelSize
+        )
     }
 
     private func thumbnailLoaderForRefresh() -> WindowThumbnailLoader {

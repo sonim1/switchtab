@@ -33,9 +33,16 @@ public struct AboutSwitchTabView: View {
                         Text("SwitchTab")
                             .font(.system(size: 34, weight: .bold))
                             .foregroundStyle(.white)
-                        Text(content.versionLine)
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.72))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(content.versionLine)
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.72))
+                            if let buildLine = content.buildLine {
+                                Text(buildLine)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.52))
+                            }
+                        }
                         Text("A keyboard-first macOS switcher for jumping between current-app windows with quick visual previews.")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.9))

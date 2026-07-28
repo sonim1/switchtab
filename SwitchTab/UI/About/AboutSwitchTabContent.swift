@@ -23,11 +23,15 @@ public struct AboutSwitchTabContent: Equatable, Sendable {
     }
 
     public var versionLine: String {
+        "Version \(version)"
+    }
+
+    public var buildLine: String? {
         guard !build.isEmpty else {
-            return "Version \(version)"
+            return nil
         }
 
-        return "Version \(version) (\(build))"
+        return "Build Number \(build)"
     }
 
     public var todaySummaryLine: String {

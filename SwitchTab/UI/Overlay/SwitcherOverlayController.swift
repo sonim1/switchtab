@@ -188,6 +188,9 @@ final class SwitcherOverlayController {
                 return
             }
 
+            presentationModel.setHoverSelectionEnabled(false)
+            presentationPointerLocation = NSEvent.mouseLocation
+            presentationModel.advanceScrollToken()
             updatePresentationLayout(session: session, panel: panel)
         case .cancelled:
             apply(.cancelled)

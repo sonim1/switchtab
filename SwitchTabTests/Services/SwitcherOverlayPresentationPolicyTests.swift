@@ -1,5 +1,6 @@
 import AppKit
 @testable import SwitchTab
+import XCTest
 
 @MainActor
 enum SwitcherOverlayPresentationPolicyTests {
@@ -22,6 +23,7 @@ enum SwitcherOverlayPresentationPolicyTests {
         try testHoverIsIgnoredUntilThePointerActuallyMoves()
         try testHoverMovesSelectionOncePointerHasMoved()
         try testHoverSelectionDoesNotAdvanceScrollToken()
+        try testConfirmedCloseRescrollsAndBlocksStationaryHover()
         try testHoverRemainsCorrectAfterConfirmedCloseRerender()
         try testActiveScreenFramePrefersScreenContainingPointer()
         try testActiveScreenFrameFallsBackWhenPointerOutsideAllScreens()
@@ -567,6 +569,73 @@ enum SwitcherOverlayPresentationPolicyTests {
         controller.dismiss()
     }
 
+    static func testConfirmedCloseRescrollsAndBlocksStationaryHover() throws {
+        let controller = SwitcherOverlayController(
+            thumbnailStore: WindowThumbnailStore(),
+            eventTapBackend: RecordingSwitcherOverlayEventTapBackend(),
+            eventSink: RecordingSwitcherOverlayEventSink()
+        )
+        var closeConfirmation: (id: String, presentationID: UInt64)?
+        var confirmedIDs: [String] = []
+        controller.present(
+            mode: .currentAppWindowSwitching,
+            items: closeTestItems(count: 3),
+            selectedIndex: 1,
+            onClose: { item, presentationID in
+                closeConfirmation = (item.id, presentationID)
+            },
+            onConfirm: { item, _ in
+                confirmedIDs.append(item.id)
+            }
+        )
+        controller.enableHoverSelectionIfPointerMoved(to: CGPoint(
+            x: NSEvent.mouseLocation.x + 400,
+            y: NSEvent.mouseLocation.y + 400
+        ))
+        let presentationToken = controller.presentationScrollToken
+
+        _ = controller.handle(.closeSelected)
+        guard let firstCloseConfirmation = closeConfirmation else {
+            throw TestFailure.failed("Expected close confirmation token")
+        }
+        controller.confirmWindowDisappeared(
+            id: firstCloseConfirmation.id,
+            presentationID: firstCloseConfirmation.presentationID
+        )
+
+        XCTAssertEqual(controller.presentationScrollToken, presentationToken + 1)
+        controller.hoverItem(at: 0)
+        _ = controller.handle(.confirm)
+        XCTAssertEqual(confirmedIDs, ["window-2"])
+
+        closeConfirmation = nil
+        confirmedIDs.removeAll()
+        controller.present(
+            mode: .currentAppWindowSwitching,
+            items: closeTestItems(count: 3),
+            selectedIndex: 1,
+            onClose: { item, presentationID in
+                closeConfirmation = (item.id, presentationID)
+            },
+            onConfirm: { item, _ in
+                confirmedIDs.append(item.id)
+            }
+        )
+
+        _ = controller.handle(.closeSelected)
+        guard let secondCloseConfirmation = closeConfirmation else {
+            throw TestFailure.failed("Expected fresh close confirmation token")
+        }
+        controller.confirmWindowDisappeared(
+            id: secondCloseConfirmation.id,
+            presentationID: secondCloseConfirmation.presentationID
+        )
+        _ = controller.handle(.moveDown)
+        _ = controller.handle(.confirm)
+
+        try expectEqual(confirmedIDs, ["window-0"])
+    }
+
     static func testHoverRemainsCorrectAfterConfirmedCloseRerender() throws {
         let controller = SwitcherOverlayController(
             thumbnailStore: WindowThumbnailStore(),
@@ -599,6 +668,10 @@ enum SwitcherOverlayPresentationPolicyTests {
             id: closeConfirmation.id,
             presentationID: closeConfirmation.presentationID
         )
+        controller.enableHoverSelectionIfPointerMoved(to: CGPoint(
+            x: NSEvent.mouseLocation.x + 400,
+            y: NSEvent.mouseLocation.y + 400
+        ))
         controller.hoverItem(at: 0)
         _ = controller.handle(.confirm)
 
