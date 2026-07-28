@@ -14,10 +14,56 @@ public struct WindowThumbnail: Equatable, Sendable {
     }
 }
 
+internal struct WindowThumbnailPixelSize: Equatable, Sendable {
+    let width: Int
+    let height: Int
+}
+
+internal enum WindowThumbnailCaptureSizing {
+    static let qualityScale: CGFloat = 1.5
+    static let maximumLongEdge: CGFloat = 480
+
+    static func viewportPixelSize(for thumbnailPointSize: CGSize) -> CGSize {
+        CGSize(
+            width: max(1, (thumbnailPointSize.width * qualityScale).rounded(.up)),
+            height: max(1, (thumbnailPointSize.height * qualityScale).rounded(.up))
+        )
+    }
+
+    static func targetPixelSize(
+        for sourceFrame: CGRect,
+        viewportPixelSize: CGSize
+    ) -> WindowThumbnailPixelSize {
+        let sourceSize = CGSize(
+            width: max(sourceFrame.width, 1),
+            height: max(sourceFrame.height, 1)
+        )
+        let viewportSize = CGSize(
+            width: max(viewportPixelSize.width, 1),
+            height: max(viewportPixelSize.height, 1)
+        )
+        let aspectFillScale = max(
+            viewportSize.width / sourceSize.width,
+            viewportSize.height / sourceSize.height
+        )
+        let scale = min(
+            aspectFillScale,
+            1,
+            maximumLongEdge / max(sourceSize.width, sourceSize.height)
+        )
+        let maximumPixelEdge = Int(maximumLongEdge)
+
+        return WindowThumbnailPixelSize(
+            width: min(maximumPixelEdge, max(1, Int((sourceSize.width * scale).rounded(.up)))),
+            height: min(maximumPixelEdge, max(1, Int((sourceSize.height * scale).rounded(.up))))
+        )
+    }
+}
+
 public protocol WindowThumbnailCapturing: Sendable {
     func prepareForRefresh(windowIdentifiers: [CGWindowID]) async
     func prepareForRefresh(windowIdentifier: CGWindowID) async
-    func captureThumbnail(for window: WindowItem, maxPixelSize: CGSize) async -> WindowThumbnail?
+    func captureThumbnail(for window: WindowItem, viewportPixelSize: CGSize) async -> WindowThumbnail?
 }
 
 @MainActor
@@ -104,7 +150,7 @@ public final class WindowThumbnailLoader {
     public func refresh(
         windows: [WindowItem],
         permissionState: PermissionState,
-        maxPixelSize: CGSize = CGSize(width: 180, height: 112)
+        viewportPixelSize: CGSize = CGSize(width: 240, height: 165)
     ) {
         cancel()
 
@@ -122,7 +168,7 @@ public final class WindowThumbnailLoader {
             refreshSingleCapturableWindow(
                 windows[firstCapturableWindow.index],
                 screenCaptureIdentifier: firstCapturableWindow.screenCaptureIdentifier,
-                maxPixelSize: maxPixelSize
+                viewportPixelSize: viewportPixelSize
             )
             return
         }
@@ -130,7 +176,7 @@ public final class WindowThumbnailLoader {
         let capturer = capturer
         let store = store
         let refreshGeneration = nextRefreshGeneration()
-        refreshTask = Task.detached { [weak self, windows, capturer, store, maxPixelSize, refreshGeneration] in
+        refreshTask = Task.detached { [weak self, windows, capturer, store, viewportPixelSize, refreshGeneration] in
             guard !Task.isCancelled else {
                 return
             }
@@ -170,7 +216,7 @@ public final class WindowThumbnailLoader {
                     continue
                 }
 
-                guard let thumbnail = await capturer.captureThumbnail(for: window, maxPixelSize: maxPixelSize) else {
+                guard let thumbnail = await capturer.captureThumbnail(for: window, viewportPixelSize: viewportPixelSize) else {
                     continue
                 }
 
@@ -200,12 +246,12 @@ public final class WindowThumbnailLoader {
     private func refreshSingleCapturableWindow(
         _ window: WindowItem,
         screenCaptureIdentifier: CGWindowID,
-        maxPixelSize: CGSize
+        viewportPixelSize: CGSize
     ) {
         let capturer = capturer
         let store = store
         let refreshGeneration = nextRefreshGeneration()
-        refreshTask = Task.detached { [weak self, capturer, store, maxPixelSize, window, screenCaptureIdentifier, refreshGeneration] in
+        refreshTask = Task.detached { [weak self, capturer, store, viewportPixelSize, window, screenCaptureIdentifier, refreshGeneration] in
             guard !Task.isCancelled else {
                 return
             }
@@ -215,7 +261,7 @@ public final class WindowThumbnailLoader {
                 return
             }
 
-            guard let thumbnail = await capturer.captureThumbnail(for: window, maxPixelSize: maxPixelSize) else {
+            guard let thumbnail = await capturer.captureThumbnail(for: window, viewportPixelSize: viewportPixelSize) else {
                 await MainActor.run { [weak self, store, refreshGeneration] in
                     guard !Task.isCancelled else {
                         return
@@ -374,7 +420,7 @@ public actor ScreenCaptureKitWindowThumbnailCapturer: WindowThumbnailCapturing {
         windowsByIdentifier.removeAll(keepingCapacity: true)
     }
 
-    public func captureThumbnail(for window: WindowItem, maxPixelSize: CGSize) async -> WindowThumbnail? {
+    public func captureThumbnail(for window: WindowItem, viewportPixelSize: CGSize) async -> WindowThumbnail? {
         guard let screenCaptureIdentifier = window.screenCaptureIdentifier else {
             return nil
         }
@@ -385,7 +431,10 @@ public actor ScreenCaptureKitWindowThumbnailCapturer: WindowThumbnailCapturing {
             }
 
             let configuration = SCStreamConfiguration()
-            let targetSize = Self.targetPixelSize(for: captureWindow.frame, maxPixelSize: maxPixelSize)
+            let targetSize = WindowThumbnailCaptureSizing.targetPixelSize(
+                for: captureWindow.frame,
+                viewportPixelSize: viewportPixelSize
+            )
             configuration.width = targetSize.width
             configuration.height = targetSize.height
             configuration.scalesToFit = true
@@ -403,26 +452,6 @@ public actor ScreenCaptureKitWindowThumbnailCapturer: WindowThumbnailCapturing {
         } catch {
             return nil
         }
-    }
-
-    nonisolated private static func targetPixelSize(
-        for sourceFrame: CGRect,
-        maxPixelSize: CGSize
-    ) -> (width: Int, height: Int) {
-        let sourceSize = CGSize(
-            width: max(sourceFrame.width, 1),
-            height: max(sourceFrame.height, 1)
-        )
-        let scale = min(
-            maxPixelSize.width / sourceSize.width,
-            maxPixelSize.height / sourceSize.height,
-            1
-        )
-
-        return (
-            width: max(1, Int(sourceSize.width * scale)),
-            height: max(1, Int(sourceSize.height * scale))
-        )
     }
 
     nonisolated private static func pngData(from image: CGImage) -> Data? {

@@ -1,10 +1,12 @@
 import AppKit
 import Combine
 import Foundation
-import SwitchTab
+@testable import SwitchTab
 
 enum WindowThumbnailTests {
     static func run() async throws {
+        try testCaptureViewportTracksOverlayScale()
+        try testAspectFillCaptureSizingIsBounded()
         try await testThumbnailStoreReplacesCachedImage()
         try await testThumbnailStoreCachesDecodedImage()
         try await testThumbnailStoreDoesNotInvalidateUnchangedBatch()
@@ -19,6 +21,53 @@ enum WindowThumbnailTests {
         try await testThumbnailLoaderSkipsPreparationWhenNoWindowsAreCapturable()
         try await testThumbnailStoreInvalidatesUndecodableMarkerWhenThumbnailChanges()
         try await testThumbnailStoreDoesNotCacheMissingThumbnailAsUndecodable()
+    }
+
+    static func testCaptureViewportTracksOverlayScale() throws {
+        let cases: [(OverlaySizeScale, CGSize)] = [
+            (OverlaySizeScale(0.7), CGSize(width: 168, height: 116)),
+            (.default, CGSize(width: 240, height: 165)),
+            (OverlaySizeScale(1.5), CGSize(width: 360, height: 248))
+        ]
+
+        for (scale, expected) in cases {
+            let thumbnailSize = SwitcherOverlayLayoutMetrics.metrics(for: scale).thumbnailSize
+            let actual = WindowThumbnailCaptureSizing.viewportPixelSize(for: thumbnailSize)
+            try expectEqual(actual, expected)
+        }
+    }
+
+    static func testAspectFillCaptureSizingIsBounded() throws {
+        let cases: [(CGRect, CGSize, WindowThumbnailPixelSize)] = [
+            (
+                CGRect(x: 0, y: 0, width: 1_600, height: 900),
+                CGSize(width: 240, height: 165),
+                WindowThumbnailPixelSize(width: 294, height: 165)
+            ),
+            (
+                CGRect(x: 0, y: 0, width: 900, height: 1_600),
+                CGSize(width: 240, height: 165),
+                WindowThumbnailPixelSize(width: 240, height: 427)
+            ),
+            (
+                CGRect(x: 0, y: 0, width: 5_000, height: 500),
+                CGSize(width: 240, height: 165),
+                WindowThumbnailPixelSize(width: 480, height: 48)
+            ),
+            (
+                CGRect(x: 0, y: 0, width: 100, height: 60),
+                CGSize(width: 240, height: 165),
+                WindowThumbnailPixelSize(width: 100, height: 60)
+            )
+        ]
+
+        for (sourceFrame, viewportPixelSize, expected) in cases {
+            let actual = WindowThumbnailCaptureSizing.targetPixelSize(
+                for: sourceFrame,
+                viewportPixelSize: viewportPixelSize
+            )
+            try expectEqual(actual, expected)
+        }
     }
 
     @MainActor
@@ -185,7 +234,8 @@ enum WindowThumbnailTests {
 
         loader.refresh(
             windows: [window],
-            permissionState: PermissionState(accessibility: .granted, screenRecording: .granted)
+            permissionState: PermissionState(accessibility: .granted, screenRecording: .granted),
+            viewportPixelSize: CGSize(width: 360, height: 248)
         )
         await loader.waitForCurrentRefresh()
 
@@ -194,6 +244,7 @@ enum WindowThumbnailTests {
         try expectEqual(capturer.preparedWindowIdentifiers, [])
         try expectEqual(capturer.singlePreparedWindowIdentifiers, [100])
         try expectEqual(capturer.requestedWindowIdentifiers, [7])
+        try expectEqual(capturer.requestedViewportPixelSizes, [CGSize(width: 360, height: 248)])
     }
 
     @MainActor
@@ -371,6 +422,7 @@ final class FakeWindowThumbnailCapturer: WindowThumbnailCapturing {
     private(set) var preparedWindowIdentifiers: [[UInt32]] = []
     private(set) var singlePreparedWindowIdentifiers: [UInt32] = []
     private(set) var requestedWindowIdentifiers: [Int] = []
+    private(set) var requestedViewportPixelSizes: [CGSize] = []
 
     init(thumbnails: [Int: WindowThumbnail]) {
         self.thumbnails = thumbnails
@@ -386,8 +438,9 @@ final class FakeWindowThumbnailCapturer: WindowThumbnailCapturing {
         singlePreparedWindowIdentifiers.append(windowIdentifier)
     }
 
-    func captureThumbnail(for window: WindowItem, maxPixelSize: CGSize) async -> WindowThumbnail? {
+    func captureThumbnail(for window: WindowItem, viewportPixelSize: CGSize) async -> WindowThumbnail? {
         requestedWindowIdentifiers.append(window.windowIdentifier)
+        requestedViewportPixelSizes.append(viewportPixelSize)
         return thumbnails[window.windowIdentifier]
     }
 }
