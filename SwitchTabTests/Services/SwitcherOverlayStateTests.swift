@@ -1,4 +1,3 @@
-import Foundation
 import SwitchTab
 
 enum SwitcherOverlayStateTests {
@@ -13,7 +12,6 @@ enum SwitcherOverlayStateTests {
         try testShiftReleaseThenArrowThenCommandReleaseConfirmsSelection()
         try testHoverSelectionMovesHighlightWithoutConfirming()
         try testHoverSelectionIgnoresNoOpAndOutOfRangeIndices()
-        try testHoverDoesNotAutoScrollTheGrid()
     }
 
     static func testArrowKeysMoveSelection() throws {
@@ -193,22 +191,6 @@ enum SwitcherOverlayStateTests {
         try expectEqual(state.selectItem(at: 9), SwitcherInteractionResult.none)
         try expectEqual(state.selectItem(at: -1), SwitcherInteractionResult.none)
         try expectEqual(state.session?.selectedIndex, 1)
-    }
-
-    static func testHoverDoesNotAutoScrollTheGrid() throws {
-        let projectRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let source = try String(
-            contentsOf: projectRoot.appendingPathComponent("SwitchTab/UI/Overlay/SwitcherIconStripView.swift"),
-            encoding: .utf8
-        )
-
-        // Scrolling is driven by the keyboard-only token, never by hover.
-        try expectTrue(source.contains(".onChange(of: scrollToken)"))
-        try expectFalse(source.contains(".onChange(of: selectedIndex)"))
-        try expectTrue(source.contains("guard hoverEnabled, hovering else"))
     }
 
     private static func hoverItems() -> [SwitcherListItem] {

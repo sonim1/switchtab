@@ -25,8 +25,11 @@ enum SwitcherRecencyStoreTests {
         try testReverseInitialSelectionStartsAtLastItem()
         try testFocusedWindowIsPinnedToTheFrontOfTheList()
         try testPinningIsANoOpWhenTheFocusedWindowAlreadyLeads()
+        try testFirstFocusedWindowWinsWhenMultipleAreMarkedFocused()
+        try testReverseSelectionUsesLastItemAfterFocusedWindowPinning()
         try testExternalFocusChangeStillHighlightsTheSecondSlot()
         try testTogglingBetweenTwoWindowsAlwaysHighlightsTheOtherOne()
+        try testRecencyKeepsRepeatedToggleStableWhenProviderOrderDoesNotChange()
     }
 
     static func testOrderingFallsBackToIncomingOrderWithoutHistory() throws {
@@ -309,6 +312,28 @@ enum SwitcherRecencyStoreTests {
         )
     }
 
+    static func testFirstFocusedWindowWinsWhenMultipleAreMarkedFocused() throws {
+        let ordered = SwitcherWindowOrderPolicy.pinningFocusedWindowFirst(
+            ["unfocused", "first-focused", "second-focused"]
+        ) { $0 != "unfocused" }
+
+        try expectEqual(ordered, ["first-focused", "unfocused", "second-focused"])
+    }
+
+    static func testReverseSelectionUsesLastItemAfterFocusedWindowPinning() throws {
+        let ordered = SwitcherWindowOrderPolicy.pinningFocusedWindowFirst(
+            ["a", "focused", "c"]
+        ) { $0 == "focused" }
+        let selectedIndex = SwitcherRecencyStore.initialSelectedIndex(
+            itemCount: ordered.count,
+            reverse: true
+        )
+
+        try expectEqual(ordered, ["focused", "a", "c"])
+        try expectEqual(selectedIndex, 2)
+        try expectEqual(ordered[selectedIndex], "c")
+    }
+
     static func testExternalFocusChangeStillHighlightsTheSecondSlot() throws {
         // History only knows about switches made through SwitchTab. The user
         // then clicked window "c" directly, so "c" is frontmost.
@@ -347,6 +372,26 @@ enum SwitcherRecencyStoreTests {
         ) { $0 == focusedID }
         try expectEqual(ordered, ["b", "a"])
         try expectEqual(ordered[1], "a")
+    }
+
+    static func testRecencyKeepsRepeatedToggleStableWhenProviderOrderDoesNotChange() throws {
+        let store = SwitcherRecencyStore(userDefaults: makeDefaults())
+        let providerOrder = ["a", "b"]
+        var focusedID = "a"
+
+        for expectedSelection in ["b", "a", "b", "a"] {
+            let ordered = SwitcherWindowOrderPolicy.pinningFocusedWindowFirst(
+                store.order(providerOrder) { $0 }
+            ) { $0 == focusedID }
+            let selectedIndex = SwitcherRecencyStore.initialSelectedIndex(
+                itemCount: ordered.count,
+                reverse: false
+            )
+
+            try expectEqual(ordered[selectedIndex], expectedSelection)
+            store.recordSelection(id: expectedSelection)
+            focusedID = expectedSelection
+        }
     }
 }
 

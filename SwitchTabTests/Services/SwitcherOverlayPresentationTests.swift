@@ -20,7 +20,7 @@ enum SwitcherOverlayPresentationTests {
         try testOverlaySizeScaleClampsOutOfRangeValues()
         try testLegacyOverlaySizePreferenceMapsOntoScale()
         try testDefaultThumbnailIsLargerThanRetiredLargePreset()
-        try testOverlaySizeIsChosenWithASliderNotFixedOptions()
+        try testMinimumScaleTileContentFitsWithinTile()
         try testWindowTileButtonsExposeExplicitAccessibilityText()
     }
 
@@ -209,12 +209,16 @@ enum SwitcherOverlayPresentationTests {
         try expectTrue(metrics.symbolFontSize > 0)
     }
 
-    static func testOverlaySizeIsChosenWithASliderNotFixedOptions() throws {
-        let source = try projectSource("SwitchTab/UI/Settings/ShortcutSettingsView.swift")
+    static func testMinimumScaleTileContentFitsWithinTile() throws {
+        let metrics = SwitcherOverlayLayoutMetrics.metrics(
+            for: OverlaySizeScale(OverlaySizeScale.minimum)
+        )
+        let contentWidth = metrics.thumbnailSize.width + (metrics.tileContentPadding * 2)
 
-        try expectTrue(source.contains("Slider("))
-        try expectTrue(source.contains("viewModel.setOverlaySizeScale(OverlaySizeScale($0))"))
-        try expectFalse(source.contains("OverlaySizePreference.allCases"))
+        try expectTrue(
+            metrics.tileSize.width >= contentWidth,
+            "Minimum-scale tile width must contain the thumbnail and its content padding."
+        )
     }
 
     static func testWindowTileButtonsExposeExplicitAccessibilityText() throws {

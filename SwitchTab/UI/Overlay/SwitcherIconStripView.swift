@@ -122,32 +122,33 @@ private struct SwitcherWindowTile: View {
     @State private var isHovered = false
 
     var body: some View {
-        Button {
-            onConfirm(item, index)
-        } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                titleHeader(for: item)
-                icon(for: item)
+        ZStack(alignment: .topTrailing) {
+            Button {
+                onConfirm(item, index)
+            } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    titleHeader(for: item)
+                    icon(for: item)
+                }
+                .padding(layoutMetrics.tileContentPadding)
+                .frame(
+                    width: layoutMetrics.tileSize.width,
+                    height: layoutMetrics.tileSize.height
+                )
+                .background(isSelected ? Color.accentColor.opacity(0.28) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7)
+                        .stroke(
+                            isSelected ? Color.accentColor.opacity(0.95) : Color.clear,
+                            lineWidth: 2
+                        )
+                }
             }
-            .padding(4)
-            .frame(
-                width: layoutMetrics.tileSize.width,
-                height: layoutMetrics.tileSize.height
-            )
-            .background(isSelected ? Color.accentColor.opacity(0.28) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 7))
-            .overlay {
-                RoundedRectangle(cornerRadius: 7)
-                    .stroke(
-                        isSelected ? Color.accentColor.opacity(0.95) : Color.clear,
-                        lineWidth: 2
-                    )
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(item.title))
-        .accessibilityHint(Text("Switch to this window."))
-        .overlay(alignment: .topTrailing) {
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(item.title))
+            .accessibilityHint(Text("Switch to this window."))
+
             if isSelected || isHovered {
                 closeButton
             }
@@ -184,7 +185,11 @@ private struct SwitcherWindowTile: View {
                 )
         }
         .buttonStyle(.plain)
-        .padding(4)
+        .frame(
+            width: layoutMetrics.closeButtonHitTargetSize.width,
+            height: layoutMetrics.closeButtonHitTargetSize.height
+        )
+        .contentShape(Rectangle())
         .onHover { hovering in
             isCloseButtonHovered = hovering
         }
@@ -217,7 +222,7 @@ private struct SwitcherWindowTile: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
                 // Keep the title clear of the close button in the top corner.
-                .padding(.trailing, layoutMetrics.closeButtonSize)
+                .padding(.trailing, layoutMetrics.closeButtonHitTargetSize.width)
         }
         .frame(width: layoutMetrics.thumbnailSize.width, alignment: .leading)
     }
