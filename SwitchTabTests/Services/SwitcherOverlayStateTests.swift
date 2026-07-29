@@ -1,3 +1,4 @@
+import AppKit
 import SwitchTab
 
 enum SwitcherOverlayStateTests {
@@ -10,6 +11,11 @@ enum SwitcherOverlayStateTests {
         try testConfirmAndCancelProduceExplicitResults()
         try testArrowThenShortcutReleaseConfirmsChangedSelection()
         try testShiftReleaseThenArrowThenCommandReleaseConfirmsSelection()
+        try testApplicationModeDoesNotShowThumbnails()
+        try testClosePolicyOnlyAllowsWindowMode()
+        try testApplicationModeIgnoresCloseSelected()
+        try testGlobalEventMonitorObservesModifierChanges()
+        try testApplicationCommandReleaseConfirmsSelection()
         try testHoverSelectionMovesHighlightWithoutConfirming()
         try testHoverSelectionIgnoresNoOpAndOutOfRangeIndices()
         try testRemovingSelectedMiddleChoosesNextItem()
@@ -173,6 +179,77 @@ enum SwitcherOverlayStateTests {
                 item: SwitcherListItem(id: "notes", title: "Notes", subtitle: nil),
                 index: 2
             )
+        )
+    }
+
+    static func testApplicationModeDoesNotShowThumbnails() throws {
+        try expectTrue(
+            SwitcherOverlayThumbnailPolicy.showsThumbnails(for: .currentAppWindowSwitching)
+        )
+        try expectFalse(
+            SwitcherOverlayThumbnailPolicy.showsThumbnails(for: .applicationSwitching)
+        )
+    }
+
+    static func testClosePolicyOnlyAllowsWindowMode() throws {
+        try expectTrue(
+            SwitcherOverlayClosePolicy.allowsClose(for: .currentAppWindowSwitching)
+        )
+        try expectFalse(
+            SwitcherOverlayClosePolicy.allowsClose(for: .applicationSwitching)
+        )
+    }
+
+    static func testApplicationModeIgnoresCloseSelected() throws {
+        let application = SwitcherListItem(
+            id: "com.apple.Safari",
+            title: "Safari",
+            subtitle: nil
+        )
+        var state = SwitcherOverlayState()
+        state.present(mode: .applicationSwitching, items: [application])
+
+        try expectEqual(state.handle(.closeSelected), .none)
+        try expectTrue(state.isPresented)
+        try expectEqual(state.session?.selectedItem, application)
+    }
+
+    static func testGlobalEventMonitorObservesModifierChanges() throws {
+        try expectTrue(
+            SwitcherOverlayEventMonitorPolicy.globalMask.contains(.flagsChanged)
+        )
+    }
+
+    static func testApplicationCommandReleaseConfirmsSelection() throws {
+        let finder = SwitcherListItem(id: "finder", title: "Finder", subtitle: nil)
+        let safari = SwitcherListItem(id: "safari", title: "Safari", subtitle: nil)
+        var state = SwitcherOverlayState()
+        state.present(
+            mode: .applicationSwitching,
+            items: [finder, safari],
+            selectedIndex: 1
+        )
+        let releaseModifiers = SwitcherShortcutModifiers.releaseRelevantModifiers(
+            .defaultApplicationSwitching
+        )
+
+        try expectEqual(
+            SwitcherOverlayExternalEventPolicy.decision(
+                for: .flagsChanged(activeModifiers: .command),
+                triggerReleaseModifiers: releaseModifiers
+            ),
+            .none
+        )
+        try expectEqual(
+            SwitcherOverlayExternalEventPolicy.decision(
+                for: .flagsChanged(activeModifiers: []),
+                triggerReleaseModifiers: releaseModifiers
+            ),
+            .releaseShortcut
+        )
+        try expectEqual(
+            state.handle(.releaseShortcut),
+            .confirmed(item: safari, index: 1)
         )
     }
 

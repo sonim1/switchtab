@@ -5,6 +5,7 @@ struct SwitcherIconStripView: View {
     private let items: [SwitcherListItem]
     private let selectedIndex: Int
     private let showsThumbnails: Bool
+    private let showsCloseControl: Bool
     private let onConfirm: (SwitcherListItem, Int) -> Void
     private let onClose: (SwitcherListItem, Int) -> Void
     private let onHover: (Int) -> Void
@@ -21,6 +22,7 @@ struct SwitcherIconStripView: View {
         gridColumns: [GridItem],
         layoutMetrics: SwitcherOverlayLayoutMetrics,
         showsThumbnails: Bool,
+        showsCloseControl: Bool = true,
         hoverEnabled: Bool,
         scrollToken: Int,
         thumbnailStore: WindowThumbnailStore,
@@ -34,6 +36,7 @@ struct SwitcherIconStripView: View {
         self.gridColumns = gridColumns
         self.layoutMetrics = layoutMetrics
         self.showsThumbnails = showsThumbnails
+        self.showsCloseControl = showsCloseControl
         self.hoverEnabled = hoverEnabled
         self.scrollToken = scrollToken
         self.thumbnailStore = thumbnailStore
@@ -56,6 +59,7 @@ struct SwitcherIconStripView: View {
                                 index: index,
                                 isSelected: index == selectedIndex,
                                 showsThumbnails: showsThumbnails,
+                                showsCloseControl: showsCloseControl,
                                 hoverEnabled: hoverEnabled,
                                 layoutMetrics: layoutMetrics,
                                 thumbnailStore: thumbnailStore,
@@ -111,6 +115,7 @@ private struct SwitcherWindowTile: View {
     let index: Int
     let isSelected: Bool
     let showsThumbnails: Bool
+    let showsCloseControl: Bool
     let hoverEnabled: Bool
     let layoutMetrics: SwitcherOverlayLayoutMetrics
     let thumbnailStore: WindowThumbnailStore
@@ -150,7 +155,7 @@ private struct SwitcherWindowTile: View {
             .accessibilityLabel(Text(item.title))
             .accessibilityHint(Text("Switch to this window."))
 
-            if isSelected || isHovered {
+            if showsCloseControl && (isSelected || isHovered) {
                 closeButton
             }
         }
@@ -222,8 +227,10 @@ private struct SwitcherWindowTile: View {
                 .font(.system(size: layoutMetrics.titleFontSize, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
-                // Keep the title clear of the close button in the top corner.
-                .padding(.trailing, layoutMetrics.closeButtonHitTargetSize.width)
+                .padding(
+                    .trailing,
+                    showsCloseControl ? layoutMetrics.closeButtonHitTargetSize.width : 0
+                )
         }
         .frame(width: layoutMetrics.thumbnailSize.width, alignment: .leading)
     }

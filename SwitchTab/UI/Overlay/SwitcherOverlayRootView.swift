@@ -63,6 +63,7 @@ struct SwitcherOverlayRootView: View {
                 gridColumns: gridColumns,
                 layoutMetrics: layoutMetrics,
                 showsThumbnails: SwitcherOverlayThumbnailPolicy.showsThumbnails(for: session.mode),
+                showsCloseControl: SwitcherOverlayClosePolicy.allowsClose(for: session.mode),
                 hoverEnabled: presentationModel.isHoverSelectionEnabled,
                 scrollToken: presentationModel.scrollToken,
                 thumbnailStore: thumbnailStore,

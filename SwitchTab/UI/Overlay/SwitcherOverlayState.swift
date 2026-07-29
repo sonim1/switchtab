@@ -11,6 +11,12 @@ public enum SwitcherOverlayThumbnailPolicy {
     }
 }
 
+public enum SwitcherOverlayClosePolicy {
+    public static func allowsClose(for mode: SwitcherMode) -> Bool {
+        mode == .currentAppWindowSwitching
+    }
+}
+
 public struct SwitcherOverlayState: Equatable, Sendable {
     public private(set) var isPresented: Bool
     public private(set) var session: SwitcherSession?
@@ -49,6 +55,7 @@ public struct SwitcherOverlayState: Equatable, Sendable {
             return moveSelection(by: 1)
         case .closeSelected:
             guard let activeSession = session,
+                  SwitcherOverlayClosePolicy.allowsClose(for: activeSession.mode),
                   let selectedItem = activeSession.selectedItem else {
                 return .none
             }

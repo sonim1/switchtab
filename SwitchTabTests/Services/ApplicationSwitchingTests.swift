@@ -1,3 +1,4 @@
+import Foundation
 @testable import SwitchTab
 
 enum ApplicationSwitchingTests {
@@ -8,6 +9,7 @@ enum ApplicationSwitchingTests {
         try testControllerDisableDoesNotRegisterAndUnregistersEnabledRegistrations()
         try testControllerReverseFailureRollsBackForwardRegistration()
         try testControllerTeardownLeavesIndependentWindowServiceRegistered()
+        try testApplicationPresentationAppliesMRUThenPinsActiveApplication()
         try testProviderFiltersNonRegularTerminatedAndOwnBundleApplications()
         try testProviderUsesUnknownApplicationForMissingOrBlankNames()
         try testProviderDeduplicatesBundleIdentifiersUsingActiveRepresentative()
@@ -138,6 +140,7 @@ enum ApplicationSwitchingTests {
     static func testControllerTeardownLeavesIndependentWindowServiceRegistered() throws {
         let windowRegistrar = ApplicationSwitchingRecordingRegistrar()
         let windowService = HotkeyService(registrar: windowRegistrar)
+        let applicationRegistrar = ApplicationSwitchingRecordingRegistrar()
         var invocationCount = 0
         _ = windowService.register(
             setting: .defaultCurrentAppWindowSwitching,
@@ -148,14 +151,53 @@ enum ApplicationSwitchingTests {
         }
 
         var controller: ApplicationSwitchingHotkeyController? = ApplicationSwitchingHotkeyController(
-            hotkeyService: HotkeyService(registrar: ApplicationSwitchingRecordingRegistrar())
+            hotkeyService: HotkeyService(registrar: applicationRegistrar)
         )
         _ = controller?.updateRegistration(enabled: true, forwardHandler: {}, reverseHandler: {})
+        controller?.unregisterAll()
         controller = nil
 
+        try expectEqual(applicationRegistrar.unregisterAllCallCount, 1)
         windowRegistrar.invoke(settingID: ShortcutSetting.defaultCurrentAppWindowSwitching.id)
         try expectEqual(invocationCount, 1)
         try expectEqual(windowRegistrar.unregisterAllCallCount, 0)
+    }
+
+    static func testApplicationPresentationAppliesMRUThenPinsActiveApplication() throws {
+        let suiteName = "ApplicationSwitchingTests.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            throw TestFailure.failed("Could not create isolated UserDefaults")
+        }
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let recencyStore = SwitcherRecencyStore(
+            userDefaults: defaults,
+            mode: .applicationSwitching
+        )
+        recencyStore.recordSelection(id: "safari")
+        recencyStore.recordSelection(id: "notes")
+        let applications = [
+            makeApplication(id: "finder", processIdentifier: 1, isActive: true),
+            makeApplication(id: "safari", processIdentifier: 2),
+            makeApplication(id: "notes", processIdentifier: 3)
+        ]
+
+        let recentlyOrdered = recencyStore.order(applications) { $0.id }
+        let ordered = SwitcherWindowOrderPolicy.pinningFocusedWindowFirst(recentlyOrdered) {
+            $0.isActive
+        }
+        let forward = SwitcherPresentationSnapshot(
+            elements: ordered,
+            reverse: false
+        ) { $0.switcherListItem }
+        let reverse = SwitcherPresentationSnapshot(
+            elements: ordered,
+            reverse: true
+        ) { $0.switcherListItem }
+
+        try expectEqual(ordered.map(\.id), ["finder", "notes", "safari"])
+        try expectEqual(forward.element(at: forward.selectedIndex)?.id, "notes")
+        try expectEqual(reverse.element(at: reverse.selectedIndex)?.id, "safari")
     }
 
     static func testProviderFiltersNonRegularTerminatedAndOwnBundleApplications() throws {
@@ -509,12 +551,16 @@ enum ApplicationSwitchingTests {
         try expectEqual(sequence.events, ["record:pid:307", "flush"])
     }
 
-    private static func makeApplication(id: String, processIdentifier: Int) -> ApplicationItem {
+    private static func makeApplication(
+        id: String,
+        processIdentifier: Int,
+        isActive: Bool = false
+    ) -> ApplicationItem {
         ApplicationItem(
             id: id,
             processIdentifier: processIdentifier,
             bundleIdentifier: id,
-            isActive: false,
+            isActive: isActive,
             switcherListItem: SwitcherListItem(
                 id: id,
                 title: id,
