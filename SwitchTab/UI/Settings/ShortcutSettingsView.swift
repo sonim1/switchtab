@@ -340,6 +340,12 @@ private struct ShortcutSettingsPanel: View {
                 .labelsHidden()
                 .toggleStyle(.switch)
             }
+
+            if let message = viewModel.applicationSwitchingRegistrationMessage() {
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.yellow)
+            }
         }
     }
 }

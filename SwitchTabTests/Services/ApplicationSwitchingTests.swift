@@ -2,6 +2,12 @@
 
 enum ApplicationSwitchingTests {
     static func run() throws {
+        try testDefaultApplicationSwitchingShortcutsAreFixed()
+        try testControllerEnablesForwardAndReverseHandlersInOrder()
+        try testControllerReenableUnregistersBeforeRegisteringAgain()
+        try testControllerDisableDoesNotRegisterAndUnregistersEnabledRegistrations()
+        try testControllerReverseFailureRollsBackForwardRegistration()
+        try testControllerTeardownLeavesIndependentWindowServiceRegistered()
         try testProviderFiltersNonRegularTerminatedAndOwnBundleApplications()
         try testProviderUsesUnknownApplicationForMissingOrBlankNames()
         try testProviderDeduplicatesBundleIdentifiersUsingActiveRepresentative()
@@ -13,6 +19,140 @@ enum ApplicationSwitchingTests {
         try testWorkspaceActivationObserverRecordsExternalRegularActivation()
         try testWorkspaceActivationObserverRejectsOwnTerminatedAndNonRegularSnapshots()
         try testWorkspaceActivationObserverUsesProcessIdentifierFallback()
+    }
+
+    static func testDefaultApplicationSwitchingShortcutsAreFixed() throws {
+        let forward = ShortcutSetting.defaultApplicationSwitching
+        let reverse = ShortcutSetting.defaultApplicationSwitchingReverse
+
+        try expectEqual(forward.id, "application-switching")
+        try expectEqual(forward.mode, .applicationSwitching)
+        try expectEqual(forward.keyEquivalent, "Tab")
+        try expectEqual(forward.keyCode, 48)
+        try expectEqual(forward.modifiers, ["command"])
+        try expectTrue(forward.isUsable)
+        try expectEqual(forward.displayText, "Cmd + Tab")
+
+        try expectEqual(reverse.id, "application-switching-reverse")
+        try expectEqual(reverse.mode, .applicationSwitching)
+        try expectEqual(reverse.keyEquivalent, "Tab")
+        try expectEqual(reverse.keyCode, 48)
+        try expectEqual(reverse.modifiers, ["command", "shift"])
+        try expectTrue(reverse.isUsable)
+        try expectEqual(reverse.displayText, "Cmd + Shift + Tab")
+        try expectTrue(forward.id != reverse.id)
+    }
+
+    static func testControllerEnablesForwardAndReverseHandlersInOrder() throws {
+        let registrar = ApplicationSwitchingRecordingRegistrar()
+        let controller = ApplicationSwitchingHotkeyController(
+            hotkeyService: HotkeyService(registrar: registrar)
+        )
+        var forwardCount = 0
+        var reverseCount = 0
+
+        let didRegister = controller.updateRegistration(
+            enabled: true,
+            forwardHandler: { forwardCount += 1 },
+            reverseHandler: { reverseCount += 1 }
+        )
+
+        try expectTrue(didRegister)
+        try expectEqual(registrar.events, ["register-forward", "register-reverse"])
+        try expectEqual(
+            registrar.attemptedSettings,
+            [.defaultApplicationSwitching, .defaultApplicationSwitchingReverse]
+        )
+        registrar.invoke(settingID: ShortcutSetting.defaultApplicationSwitching.id)
+        registrar.invoke(settingID: ShortcutSetting.defaultApplicationSwitchingReverse.id)
+        try expectEqual(forwardCount, 1)
+        try expectEqual(reverseCount, 1)
+        try expectEqual(controller.registrationMessageSnapshot(), [])
+    }
+
+    static func testControllerReenableUnregistersBeforeRegisteringAgain() throws {
+        let registrar = ApplicationSwitchingRecordingRegistrar()
+        let controller = ApplicationSwitchingHotkeyController(
+            hotkeyService: HotkeyService(registrar: registrar)
+        )
+
+        try expectTrue(controller.updateRegistration(enabled: true, forwardHandler: {}, reverseHandler: {}))
+        registrar.events.removeAll()
+
+        try expectTrue(controller.updateRegistration(enabled: true, forwardHandler: {}, reverseHandler: {}))
+
+        try expectEqual(registrar.events, ["unregister", "register-forward", "register-reverse"])
+    }
+
+    static func testControllerDisableDoesNotRegisterAndUnregistersEnabledRegistrations() throws {
+        let registrar = ApplicationSwitchingRecordingRegistrar()
+        let controller = ApplicationSwitchingHotkeyController(
+            hotkeyService: HotkeyService(registrar: registrar)
+        )
+
+        try expectTrue(controller.updateRegistration(enabled: false, forwardHandler: {}, reverseHandler: {}))
+        try expectEqual(registrar.events, [])
+
+        try expectTrue(controller.updateRegistration(enabled: true, forwardHandler: {}, reverseHandler: {}))
+        registrar.events.removeAll()
+
+        try expectTrue(controller.updateRegistration(enabled: false, forwardHandler: {}, reverseHandler: {}))
+
+        try expectEqual(registrar.events, ["unregister"])
+        try expectEqual(controller.registrationMessageSnapshot(), [])
+    }
+
+    static func testControllerReverseFailureRollsBackForwardRegistration() throws {
+        let registrar = ApplicationSwitchingRecordingRegistrar { setting in
+            setting.id == ShortcutSetting.defaultApplicationSwitching.id
+        }
+        let controller = ApplicationSwitchingHotkeyController(
+            hotkeyService: HotkeyService(registrar: registrar)
+        )
+        var forwardCount = 0
+
+        let didRegister = controller.updateRegistration(
+            enabled: true,
+            forwardHandler: { forwardCount += 1 },
+            reverseHandler: {}
+        )
+
+        try expectFalse(didRegister)
+        try expectEqual(registrar.events, ["register-forward", "register-reverse", "unregister"])
+        registrar.invoke(settingID: ShortcutSetting.defaultApplicationSwitching.id)
+        try expectEqual(forwardCount, 0)
+        try expectEqual(
+            controller.registrationMessageSnapshot(),
+            [
+                ShortcutRegistrationMessage(
+                    mode: .applicationSwitching,
+                    message: ApplicationSwitchingHotkeyController.registrationFailureMessage
+                )
+            ]
+        )
+    }
+
+    static func testControllerTeardownLeavesIndependentWindowServiceRegistered() throws {
+        let windowRegistrar = ApplicationSwitchingRecordingRegistrar()
+        let windowService = HotkeyService(registrar: windowRegistrar)
+        var invocationCount = 0
+        _ = windowService.register(
+            setting: .defaultCurrentAppWindowSwitching,
+            existing: [] as [ShortcutSetting],
+            mode: .currentAppWindowSwitching
+        ) {
+            invocationCount += 1
+        }
+
+        var controller: ApplicationSwitchingHotkeyController? = ApplicationSwitchingHotkeyController(
+            hotkeyService: HotkeyService(registrar: ApplicationSwitchingRecordingRegistrar())
+        )
+        _ = controller?.updateRegistration(enabled: true, forwardHandler: {}, reverseHandler: {})
+        controller = nil
+
+        windowRegistrar.invoke(settingID: ShortcutSetting.defaultCurrentAppWindowSwitching.id)
+        try expectEqual(invocationCount, 1)
+        try expectEqual(windowRegistrar.unregisterAllCallCount, 0)
     }
 
     static func testProviderFiltersNonRegularTerminatedAndOwnBundleApplications() throws {
@@ -437,5 +577,42 @@ private final class RecordingApplicationSelectionRecencyStore: ApplicationSelect
     func flush() {
         flushCount += 1
         sequence.append("flush")
+    }
+}
+
+private final class ApplicationSwitchingRecordingRegistrar: HotkeyRegistering {
+    private let shouldRegister: (ShortcutSetting) -> Bool
+    private(set) var attemptedSettings: [ShortcutSetting] = []
+    var events: [String] = []
+    private(set) var unregisterAllCallCount = 0
+    private var handlers: [String: () -> Void] = [:]
+
+    init(shouldRegister: @escaping (ShortcutSetting) -> Bool = { _ in true }) {
+        self.shouldRegister = shouldRegister
+    }
+
+    func register(setting: ShortcutSetting, handler: @escaping () -> Void) -> Bool {
+        attemptedSettings.append(setting)
+        events.append(
+            setting.id == ShortcutSetting.defaultApplicationSwitching.id
+                ? "register-forward"
+                : "register-reverse"
+        )
+        guard shouldRegister(setting) else {
+            return false
+        }
+
+        handlers[setting.id] = handler
+        return true
+    }
+
+    func unregisterAll() {
+        unregisterAllCallCount += 1
+        events.append("unregister")
+        handlers.removeAll(keepingCapacity: true)
+    }
+
+    func invoke(settingID: String) {
+        handlers[settingID]?()
     }
 }

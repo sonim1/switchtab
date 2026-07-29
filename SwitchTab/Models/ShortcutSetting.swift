@@ -322,6 +322,30 @@ public struct ShortcutSetting: Identifiable, Codable, Equatable, Sendable {
         normalizedLastValidValue: ShortcutValue(keyEquivalent: "`", modifiers: ["command"], keyCode: 50)
     )
 
+    public static let defaultApplicationSwitching = ShortcutSetting(
+        id: "application-switching",
+        mode: .applicationSwitching,
+        normalizedKey: "Tab",
+        normalizedKeyCode: 48,
+        normalizedModifiers: ["command"],
+        isUsable: true,
+        normalizedLastValidValue: ShortcutValue(keyEquivalent: "Tab", modifiers: ["command"], keyCode: 48)
+    )
+
+    public static let defaultApplicationSwitchingReverse = ShortcutSetting(
+        id: "application-switching-reverse",
+        mode: .applicationSwitching,
+        normalizedKey: "Tab",
+        normalizedKeyCode: 48,
+        normalizedModifiers: ["command", "shift"],
+        isUsable: true,
+        normalizedLastValidValue: ShortcutValue(
+            keyEquivalent: "Tab",
+            modifiers: ["command", "shift"],
+            keyCode: 48
+        )
+    )
+
     public static let fallbackCurrentAppWindowSwitching = ShortcutSetting(
         id: "current-app-window-switching-fallback",
         mode: .currentAppWindowSwitching,
