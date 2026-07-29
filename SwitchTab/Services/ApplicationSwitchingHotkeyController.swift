@@ -1,5 +1,3 @@
-import Foundation
-
 public final class ApplicationSwitchingHotkeyController {
     public static let registrationFailureMessage =
         "Cmd-Tab replacement needs Accessibility permission. Grant access in Permissions, then return to SwitchTab."
@@ -61,11 +59,13 @@ public final class ApplicationSwitchingHotkeyController {
     }
 
     private func handleRegistrationFailure() -> Bool {
-        _ = hotkeyService.registrationMessageSnapshot()
+        let serviceMessages = hotkeyService.registrationMessageSnapshot()
+        let failureMode = serviceMessages.first(where: { $0.mode == .applicationSwitching })?.mode
+            ?? .applicationSwitching
         hotkeyService.unregisterAll()
         registrationMessages = [
             ShortcutRegistrationMessage(
-                mode: .applicationSwitching,
+                mode: failureMode,
                 message: Self.registrationFailureMessage
             )
         ]
