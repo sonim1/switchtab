@@ -143,13 +143,17 @@ enum ApplicationSwitchingTests {
                     localizedName: "Duplicate PID",
                     isRegular: true,
                     isTerminated: false,
-                    isActive: false
+                    isActive: true
                 )
             ]),
             ownBundleIdentifier: "com.royjen.switchtab"
         )
 
-        try expectEqual(provider.runningApplications().map(\.id), ["pid:40", "pid:41"])
+        let applications = provider.runningApplications()
+        try expectEqual(applications.map(\.id), ["pid:40", "pid:41"])
+        try expectEqual(applications.map(\.processIdentifier), [40, 41])
+        try expectEqual(applications.map(\.switcherListItem.title), ["First", "Second"])
+        try expectEqual(applications.map(\.isActive), [false, false])
     }
 
     static func testProviderPreservesIncomingSnapshotOrder() throws {
@@ -183,10 +187,13 @@ enum ApplicationSwitchingTests {
             ownBundleIdentifier: "com.royjen.switchtab"
         )
 
+        let applications = provider.runningApplications()
+        try expectEqual(applications.map(\.switcherListItem.title), ["Safari", "Finder", "Notes"])
         try expectEqual(
-            provider.runningApplications().map(\.switcherListItem.title),
-            ["Safari", "Finder", "Notes"]
+            applications.map(\.bundleIdentifier),
+            ["com.example.safari", "com.example.finder", "com.example.notes"]
         )
+        try expectEqual(applications.map(\.isActive), [false, true, false])
     }
 
     static func testProviderMapsApplicationIconsToProcessIdentifiers() throws {
