@@ -4,7 +4,7 @@ enum ApplicationSwitchingTests {
     static func run() throws {
         try testProviderFiltersNonRegularTerminatedAndOwnBundleApplications()
         try testProviderUsesUnknownApplicationForMissingOrBlankNames()
-        try testProviderDeduplicatesBundleIdentifiersUsingTheFirstSnapshot()
+        try testProviderDeduplicatesBundleIdentifiersUsingActiveRepresentative()
         try testProviderUsesDeterministicProcessScopedFallbackIdentifiers()
         try testProviderPreservesIncomingSnapshotOrder()
         try testProviderMapsApplicationIconsToProcessIdentifiers()
@@ -81,7 +81,7 @@ enum ApplicationSwitchingTests {
         )
     }
 
-    static func testProviderDeduplicatesBundleIdentifiersUsingTheFirstSnapshot() throws {
+    static func testProviderDeduplicatesBundleIdentifiersUsingActiveRepresentative() throws {
         let provider = RunningApplicationProvider(
             snapshotProvider: FakeRunningApplicationSnapshotProvider(snapshots: [
                 RunningApplicationSnapshot(
@@ -93,20 +93,20 @@ enum ApplicationSwitchingTests {
                     isActive: false
                 ),
                 RunningApplicationSnapshot(
-                    processIdentifier: 31,
-                    bundleIdentifier: "com.example.shared",
-                    localizedName: "Duplicate",
-                    isRegular: true,
-                    isTerminated: false,
-                    isActive: true
-                ),
-                RunningApplicationSnapshot(
                     processIdentifier: 32,
                     bundleIdentifier: "com.example.other",
                     localizedName: "Other",
                     isRegular: true,
                     isTerminated: false,
                     isActive: false
+                ),
+                RunningApplicationSnapshot(
+                    processIdentifier: 31,
+                    bundleIdentifier: "com.example.shared",
+                    localizedName: "Active Duplicate",
+                    isRegular: true,
+                    isTerminated: false,
+                    isActive: true
                 )
             ]),
             ownBundleIdentifier: "com.royjen.switchtab"
@@ -114,8 +114,10 @@ enum ApplicationSwitchingTests {
 
         let applications = provider.runningApplications()
         try expectEqual(applications.map(\.id), ["com.example.shared", "com.example.other"])
-        try expectEqual(applications.map(\.processIdentifier), [30, 32])
-        try expectEqual(applications.map(\.switcherListItem.title), ["First", "Other"])
+        try expectEqual(applications.map(\.processIdentifier), [31, 32])
+        try expectEqual(applications.map(\.switcherListItem.title), ["Active Duplicate", "Other"])
+        try expectEqual(applications.map(\.bundleIdentifier), ["com.example.shared", "com.example.other"])
+        try expectEqual(applications.map(\.isActive), [true, false])
     }
 
     static func testProviderUsesDeterministicProcessScopedFallbackIdentifiers() throws {
@@ -143,7 +145,7 @@ enum ApplicationSwitchingTests {
                     localizedName: "Duplicate PID",
                     isRegular: true,
                     isTerminated: false,
-                    isActive: true
+                    isActive: false
                 )
             ]),
             ownBundleIdentifier: "com.royjen.switchtab"

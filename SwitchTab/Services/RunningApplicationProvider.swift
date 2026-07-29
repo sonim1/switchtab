@@ -47,7 +47,7 @@ public struct RunningApplicationProvider {
         var applications: [ApplicationItem] = []
         applications.reserveCapacity(snapshots.count)
 
-        var seenIdentifiers = Set<String>()
+        var indexByIdentifier: [String: Int] = [:]
         for snapshot in snapshots {
             guard snapshot.isRegular, !snapshot.isTerminated else {
                 continue
@@ -60,10 +60,6 @@ public struct RunningApplicationProvider {
             }
 
             let id = bundleIdentifier ?? "pid:\(snapshot.processIdentifier)"
-            guard seenIdentifiers.insert(id).inserted else {
-                continue
-            }
-
             let title = (snapshot.localizedName ?? "")
                 .switcherReadableText(fallback: "Unknown Application")
             let listItem = SwitcherListItem(
@@ -74,15 +70,23 @@ public struct RunningApplicationProvider {
                 thumbnailKey: nil,
                 appIconProcessIdentifier: snapshot.processIdentifier
             )
-            applications.append(
-                ApplicationItem(
-                    id: id,
-                    processIdentifier: snapshot.processIdentifier,
-                    bundleIdentifier: bundleIdentifier,
-                    isActive: snapshot.isActive,
-                    switcherListItem: listItem
-                )
+            let application = ApplicationItem(
+                id: id,
+                processIdentifier: snapshot.processIdentifier,
+                bundleIdentifier: bundleIdentifier,
+                isActive: snapshot.isActive,
+                switcherListItem: listItem
             )
+
+            if let existingIndex = indexByIdentifier[id] {
+                if application.isActive, !applications[existingIndex].isActive {
+                    applications[existingIndex] = application
+                }
+                continue
+            }
+
+            indexByIdentifier[id] = applications.count
+            applications.append(application)
         }
 
         return applications
