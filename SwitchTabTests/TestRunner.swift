@@ -4,6 +4,7 @@ final class SwitchTabTests: XCTestCase {
     @MainActor
     func testAllSuites() async throws {
         try CoreModelsTests.run()
+        try ApplicationSwitchingTests.run()
         try SwitcherItemTests.run()
         try PermissionServiceTests.run()
         try ShortcutValidationTests.run()

@@ -10,6 +10,7 @@ enum CoreModelsTests {
 
     static func testSwitcherModeNamesAreStable() throws {
         try expectEqual(SwitcherMode.currentAppWindowSwitching.displayName, "Current App Windows")
+        try expectEqual(SwitcherMode.applicationSwitching.displayName, "Applications")
         try expectEqual(SwitcherMode.currentAppWindowSwitching.displayName, "Current App Windows")
     }
 
