@@ -8,6 +8,8 @@ enum ApplicationSwitchingTests {
         try testProviderUsesDeterministicProcessScopedFallbackIdentifiers()
         try testProviderPreservesIncomingSnapshotOrder()
         try testProviderMapsApplicationIconsToProcessIdentifiers()
+        try testActivationSuccessRecordsAndFlushesRecencyOnce()
+        try testActivationFailureDoesNotRecordOrFlushRecency()
     }
 
     static func testProviderFiltersNonRegularTerminatedAndOwnBundleApplications() throws {
@@ -228,6 +230,58 @@ enum ApplicationSwitchingTests {
         )
         try expectEqual(applications.map { $0.switcherListItem.id }, applications.map(\.id))
     }
+
+    static func testActivationSuccessRecordsAndFlushesRecencyOnce() throws {
+        let activator = FakeApplicationActivator(result: true)
+        let activationService = ApplicationActivationService(activator: activator)
+        let recencyStore = RecordingApplicationSelectionRecencyStore()
+        let coordinator = ApplicationSelectionCoordinator(
+            activationService: activationService,
+            recencyStore: recencyStore
+        )
+        let application = makeApplication(id: "com.example.notes", processIdentifier: 101)
+
+        let result = coordinator.confirm(application)
+
+        try expectEqual(result, .activated)
+        try expectEqual(activator.processIdentifiers, [101])
+        try expectEqual(recencyStore.recordedIDs, [application.id])
+        try expectEqual(recencyStore.flushCount, 1)
+    }
+
+    static func testActivationFailureDoesNotRecordOrFlushRecency() throws {
+        let activator = FakeApplicationActivator(result: false)
+        let activationService = ApplicationActivationService(activator: activator)
+        let recencyStore = RecordingApplicationSelectionRecencyStore()
+        let coordinator = ApplicationSelectionCoordinator(
+            activationService: activationService,
+            recencyStore: recencyStore
+        )
+        let application = makeApplication(id: "com.example.safari", processIdentifier: 202)
+
+        let result = coordinator.confirm(application)
+
+        try expectEqual(result, .unavailableTarget)
+        try expectEqual(activator.processIdentifiers, [202])
+        try expectEqual(recencyStore.recordedIDs, [])
+        try expectEqual(recencyStore.flushCount, 0)
+    }
+
+    private static func makeApplication(id: String, processIdentifier: Int) -> ApplicationItem {
+        ApplicationItem(
+            id: id,
+            processIdentifier: processIdentifier,
+            bundleIdentifier: id,
+            isActive: false,
+            switcherListItem: SwitcherListItem(
+                id: id,
+                title: id,
+                subtitle: nil,
+                symbolName: "app",
+                appIconProcessIdentifier: processIdentifier
+            )
+        )
+    }
 }
 
 private struct FakeRunningApplicationSnapshotProvider: RunningApplicationSnapshotProviding {
@@ -239,5 +293,32 @@ private struct FakeRunningApplicationSnapshotProvider: RunningApplicationSnapsho
 
     func snapshots() -> [RunningApplicationSnapshot] {
         snapshotValues
+    }
+}
+
+private final class FakeApplicationActivator: ApplicationActivating {
+    let result: Bool
+    private(set) var processIdentifiers: [Int] = []
+
+    init(result: Bool) {
+        self.result = result
+    }
+
+    func activate(processIdentifier: Int) -> Bool {
+        processIdentifiers.append(processIdentifier)
+        return result
+    }
+}
+
+private final class RecordingApplicationSelectionRecencyStore: ApplicationSelectionRecencyRecording {
+    private(set) var recordedIDs: [String] = []
+    private(set) var flushCount = 0
+
+    func recordSelection(id: String) {
+        recordedIDs.append(id)
+    }
+
+    func flush() {
+        flushCount += 1
     }
 }

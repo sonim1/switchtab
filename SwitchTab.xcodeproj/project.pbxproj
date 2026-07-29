@@ -86,6 +86,7 @@
 		A00000000000000000000103 /* ApplicationItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000103 /* ApplicationItem.swift */; };
 		A00000000000000000000104 /* RunningApplicationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000104 /* RunningApplicationProvider.swift */; };
 		A00000000000000000000105 /* ApplicationSwitchingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000105 /* ApplicationSwitchingTests.swift */; };
+		A00000000000000000000106 /* ApplicationActivationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000106 /* ApplicationActivationService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -182,6 +183,7 @@
 		B00000000000000000000103 /* ApplicationItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationItem.swift; sourceTree = "<group>"; };
 		B00000000000000000000104 /* RunningApplicationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunningApplicationProvider.swift; sourceTree = "<group>"; };
 		B00000000000000000000105 /* ApplicationSwitchingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationSwitchingTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000106 /* ApplicationActivationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationActivationService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -260,6 +262,7 @@
 				B00000000000000000000029 /* HotkeyService.swift */,
 				B00000000000000000000035 /* AccessibilityWindowProvider.swift */,
 				B00000000000000000000104 /* RunningApplicationProvider.swift */,
+				B00000000000000000000106 /* ApplicationActivationService.swift */,
 				B00000000000000000000036 /* WindowThumbnailService.swift */,
 				B00000000000000000000037 /* WindowFocusService.swift */,
 				B00000000000000000000099 /* WindowCloseService.swift */,
@@ -547,6 +550,7 @@
 				A00000000000000000000027 /* PermissionStatusView.swift in Sources */,
 				A00000000000000000000031 /* AccessibilityWindowProvider.swift in Sources */,
 				A00000000000000000000104 /* RunningApplicationProvider.swift in Sources */,
+				A00000000000000000000106 /* ApplicationActivationService.swift in Sources */,
 				A00000000000000000000032 /* WindowThumbnailService.swift in Sources */,
 				A00000000000000000000033 /* WindowFocusService.swift in Sources */,
 				A00000000000000000000040 /* ShortcutSettingsViewModel.swift in Sources */,
