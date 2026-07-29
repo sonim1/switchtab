@@ -64,6 +64,9 @@ enum ApplicationSwitchingTests {
             [.defaultApplicationSwitching, .defaultApplicationSwitchingReverse]
         )
         registrar.invoke(settingID: ShortcutSetting.defaultApplicationSwitching.id)
+        try expectEqual(forwardCount, 1)
+        try expectEqual(reverseCount, 0)
+
         registrar.invoke(settingID: ShortcutSetting.defaultApplicationSwitchingReverse.id)
         try expectEqual(forwardCount, 1)
         try expectEqual(reverseCount, 1)
