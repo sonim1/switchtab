@@ -33,7 +33,9 @@ not register, observe, or consume Cmd-Tab.
 
 `ApplicationItem` is a Sendable value containing a stable switcher ID, process
 identifier, name, active state, and its `SwitcherListItem`. The stable ID uses
-the bundle identifier when present and a process-scoped fallback otherwise.
+the bundle identifier when present and a process-scoped fallback otherwise. The
+PID fallback is intentionally session-scoped: a persisted bundleless entry may
+not match after that process relaunches and simply falls back to provider order.
 
 `RunningApplicationProvider` reads `NSWorkspace.shared.runningApplications` and
 filters out terminated processes, non-regular activation-policy processes, and
@@ -90,7 +92,7 @@ is released.
 
 ## Persistence and Notifications
 
-`ApplicationSettingsStore.replaceCommandTab` uses a new Boolean UserDefaults
+`ApplicationSettingsStore.replacesCommandTab` uses a new Boolean UserDefaults
 key and defaults to false. Saving a changed value posts
 `.applicationSettingsDidChange`. `ApplicationSettingsViewModel` publishes the
 value and writes through the store.
@@ -127,9 +129,9 @@ Automated XCTest coverage will prove:
   selection, and activation where OS boundaries are injected.
 
 Full verification also runs `swift test`, an Xcode Debug build, direct-release
-workspace preparation, and manual signed-app checks for native Cmd-Tab fallback,
-forward/reverse cycling, Command-release activation, toggle teardown, and
-permission recovery.
+workspace preparation, manual direct-build checks, and signed public-artifact
+checks for native Cmd-Tab fallback, forward/reverse cycling, Command-release
+activation, toggle teardown, and permission recovery.
 
 ## Documentation and Release
 
