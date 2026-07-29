@@ -1,4 +1,5 @@
 import AppKit
+import Foundation
 
 public enum ApplicationActivationResult: Equatable, Sendable {
     case activated
@@ -62,6 +63,42 @@ public struct ApplicationSelectionCoordinator {
 }
 
 extension SwitcherRecencyStore: ApplicationSelectionRecencyRecording {}
+
+public struct WorkspaceActivationRecencyObserver {
+    private let recencyStore: any ApplicationSelectionRecencyRecording
+    private let ownBundleIdentifier: String?
+
+    public init(
+        recencyStore: any ApplicationSelectionRecencyRecording,
+        ownBundleIdentifier: String? = Bundle.main.bundleIdentifier
+    ) {
+        self.recencyStore = recencyStore
+        self.ownBundleIdentifier = RunningApplicationProvider.normalizedBundleIdentifier(
+            ownBundleIdentifier
+        )
+    }
+
+    public func recordActivation(_ snapshot: RunningApplicationSnapshot) {
+        guard snapshot.isRegular, !snapshot.isTerminated else {
+            return
+        }
+
+        let bundleIdentifier = RunningApplicationProvider.normalizedBundleIdentifier(
+            snapshot.bundleIdentifier
+        )
+        if let ownBundleIdentifier,
+           bundleIdentifier == ownBundleIdentifier {
+            return
+        }
+
+        let id = RunningApplicationProvider.stableApplicationIdentifier(
+            bundleIdentifier: bundleIdentifier,
+            processIdentifier: snapshot.processIdentifier
+        )
+        recencyStore.recordSelection(id: id)
+        recencyStore.flush()
+    }
+}
 
 private struct NSRunningApplicationActivator: ApplicationActivating {
     func activate(processIdentifier: Int) -> Bool {

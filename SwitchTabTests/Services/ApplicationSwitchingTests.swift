@@ -10,6 +10,9 @@ enum ApplicationSwitchingTests {
         try testProviderMapsApplicationIconsToProcessIdentifiers()
         try testActivationSuccessRecordsAndFlushesRecencyOnce()
         try testActivationFailureDoesNotRecordOrFlushRecency()
+        try testWorkspaceActivationObserverRecordsExternalRegularActivation()
+        try testWorkspaceActivationObserverRejectsOwnTerminatedAndNonRegularSnapshots()
+        try testWorkspaceActivationObserverUsesProcessIdentifierFallback()
     }
 
     static func testProviderFiltersNonRegularTerminatedAndOwnBundleApplications() throws {
@@ -232,9 +235,10 @@ enum ApplicationSwitchingTests {
     }
 
     static func testActivationSuccessRecordsAndFlushesRecencyOnce() throws {
-        let activator = FakeApplicationActivator(result: true)
+        let sequence = RecordingApplicationSequence()
+        let activator = FakeApplicationActivator(result: true, sequence: sequence)
         let activationService = ApplicationActivationService(activator: activator)
-        let recencyStore = RecordingApplicationSelectionRecencyStore()
+        let recencyStore = RecordingApplicationSelectionRecencyStore(sequence: sequence)
         let coordinator = ApplicationSelectionCoordinator(
             activationService: activationService,
             recencyStore: recencyStore
@@ -247,12 +251,17 @@ enum ApplicationSwitchingTests {
         try expectEqual(activator.processIdentifiers, [101])
         try expectEqual(recencyStore.recordedIDs, [application.id])
         try expectEqual(recencyStore.flushCount, 1)
+        try expectEqual(
+            sequence.events,
+            ["activate:101", "record:\(application.id)", "flush"]
+        )
     }
 
     static func testActivationFailureDoesNotRecordOrFlushRecency() throws {
-        let activator = FakeApplicationActivator(result: false)
+        let sequence = RecordingApplicationSequence()
+        let activator = FakeApplicationActivator(result: false, sequence: sequence)
         let activationService = ApplicationActivationService(activator: activator)
-        let recencyStore = RecordingApplicationSelectionRecencyStore()
+        let recencyStore = RecordingApplicationSelectionRecencyStore(sequence: sequence)
         let coordinator = ApplicationSelectionCoordinator(
             activationService: activationService,
             recencyStore: recencyStore
@@ -265,6 +274,96 @@ enum ApplicationSwitchingTests {
         try expectEqual(activator.processIdentifiers, [202])
         try expectEqual(recencyStore.recordedIDs, [])
         try expectEqual(recencyStore.flushCount, 0)
+        try expectEqual(sequence.events, ["activate:202"])
+    }
+
+    static func testWorkspaceActivationObserverRecordsExternalRegularActivation() throws {
+        let sequence = RecordingApplicationSequence()
+        let recencyStore = RecordingApplicationSelectionRecencyStore(sequence: sequence)
+        let observer = WorkspaceActivationRecencyObserver(
+            recencyStore: recencyStore,
+            ownBundleIdentifier: "com.example.switchtab"
+        )
+        let snapshot = RunningApplicationSnapshot(
+            processIdentifier: 303,
+            bundleIdentifier: " com.example.notes ",
+            localizedName: "Notes",
+            isRegular: true,
+            isTerminated: false,
+            isActive: true
+        )
+
+        observer.recordActivation(snapshot)
+
+        try expectEqual(recencyStore.recordedIDs, ["com.example.notes"])
+        try expectEqual(recencyStore.flushCount, 1)
+        try expectEqual(sequence.events, ["record:com.example.notes", "flush"])
+    }
+
+    static func testWorkspaceActivationObserverRejectsOwnTerminatedAndNonRegularSnapshots() throws {
+        let sequence = RecordingApplicationSequence()
+        let recencyStore = RecordingApplicationSelectionRecencyStore(sequence: sequence)
+        let observer = WorkspaceActivationRecencyObserver(
+            recencyStore: recencyStore,
+            ownBundleIdentifier: " com.example.switchtab "
+        )
+        let snapshots = [
+            RunningApplicationSnapshot(
+                processIdentifier: 304,
+                bundleIdentifier: "com.example.switchtab",
+                localizedName: "SwitchTab",
+                isRegular: true,
+                isTerminated: false,
+                isActive: true
+            ),
+            RunningApplicationSnapshot(
+                processIdentifier: 305,
+                bundleIdentifier: "com.example.terminated",
+                localizedName: "Terminated",
+                isRegular: true,
+                isTerminated: true,
+                isActive: false
+            ),
+            RunningApplicationSnapshot(
+                processIdentifier: 306,
+                bundleIdentifier: "com.example.helper",
+                localizedName: "Helper",
+                isRegular: false,
+                isTerminated: false,
+                isActive: false
+            )
+        ]
+
+        for snapshot in snapshots {
+            observer.recordActivation(snapshot)
+        }
+
+        try expectEqual(recencyStore.recordedIDs, [])
+        try expectEqual(recencyStore.flushCount, 0)
+        try expectEqual(sequence.events, [])
+    }
+
+    static func testWorkspaceActivationObserverUsesProcessIdentifierFallback() throws {
+        let sequence = RecordingApplicationSequence()
+        let recencyStore = RecordingApplicationSelectionRecencyStore(sequence: sequence)
+        let observer = WorkspaceActivationRecencyObserver(
+            recencyStore: recencyStore,
+            ownBundleIdentifier: "com.example.switchtab"
+        )
+        let snapshot = RunningApplicationSnapshot(
+            processIdentifier: 307,
+            bundleIdentifier: "  ",
+            localizedName: "Unknown",
+            isRegular: true,
+            isTerminated: false,
+            isActive: true
+        )
+
+        observer.recordActivation(snapshot)
+
+        try expectEqual(recencyStore.recordedIDs, ["pid:307"])
+        try expectEqual(recencyStore.flushCount, 1)
+        try expectEqual(sequence.events, ["record:pid:307", "flush"])
     }
 
     private static func makeApplication(id: String, processIdentifier: Int) -> ApplicationItem {
@@ -296,29 +395,47 @@ private struct FakeRunningApplicationSnapshotProvider: RunningApplicationSnapsho
     }
 }
 
+private final class RecordingApplicationSequence {
+    private(set) var events: [String] = []
+
+    func append(_ event: String) {
+        events.append(event)
+    }
+}
+
 private final class FakeApplicationActivator: ApplicationActivating {
     let result: Bool
+    let sequence: RecordingApplicationSequence
     private(set) var processIdentifiers: [Int] = []
 
-    init(result: Bool) {
+    init(result: Bool, sequence: RecordingApplicationSequence) {
         self.result = result
+        self.sequence = sequence
     }
 
     func activate(processIdentifier: Int) -> Bool {
         processIdentifiers.append(processIdentifier)
+        sequence.append("activate:\(processIdentifier)")
         return result
     }
 }
 
 private final class RecordingApplicationSelectionRecencyStore: ApplicationSelectionRecencyRecording {
+    let sequence: RecordingApplicationSequence
     private(set) var recordedIDs: [String] = []
     private(set) var flushCount = 0
 
+    init(sequence: RecordingApplicationSequence) {
+        self.sequence = sequence
+    }
+
     func recordSelection(id: String) {
         recordedIDs.append(id)
+        sequence.append("record:\(id)")
     }
 
     func flush() {
         flushCount += 1
+        sequence.append("flush")
     }
 }

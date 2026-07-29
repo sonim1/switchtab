@@ -5,7 +5,6 @@ public final class SwitcherRecencyStore {
 
     private let userDefaults: UserDefaults
     private let maxHistoryCount: Int
-    private let mode: SwitcherMode
     private let recencyStorageKey: String
     private var cachedRankedIDs: [String]?
     private var isHistoryDirty = false
@@ -17,8 +16,7 @@ public final class SwitcherRecencyStore {
     ) {
         self.userDefaults = userDefaults
         self.maxHistoryCount = maxHistoryCount
-        self.mode = mode
-        self.recencyStorageKey = "SwitchTab.recency.\(mode.rawValue)"
+        self.recencyStorageKey = Self.storageKey(for: mode)
     }
 
     public static func initialSelectedIndex(itemCount: Int, reverse: Bool) -> Int {
@@ -170,5 +168,14 @@ public final class SwitcherRecencyStore {
             normalizedIDs.append(rankedID)
         }
         return normalizedIDs
+    }
+
+    private static func storageKey(for mode: SwitcherMode) -> String {
+        switch mode {
+        case .currentAppWindowSwitching:
+            return "SwitchTab.recency.currentAppWindowSwitching"
+        case .applicationSwitching:
+            return "SwitchTab.recency.applicationSwitching"
+        }
     }
 }

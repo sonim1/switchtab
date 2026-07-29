@@ -59,7 +59,10 @@ public struct RunningApplicationProvider {
                 continue
             }
 
-            let id = bundleIdentifier ?? "pid:\(snapshot.processIdentifier)"
+            let id = Self.stableApplicationIdentifier(
+                bundleIdentifier: bundleIdentifier,
+                processIdentifier: snapshot.processIdentifier
+            )
             let title = (snapshot.localizedName ?? "")
                 .switcherReadableText(fallback: "Unknown Application")
             let listItem = SwitcherListItem(
@@ -92,7 +95,14 @@ public struct RunningApplicationProvider {
         return applications
     }
 
-    private static func normalizedBundleIdentifier(_ bundleIdentifier: String?) -> String? {
+    static func stableApplicationIdentifier(
+        bundleIdentifier: String?,
+        processIdentifier: Int
+    ) -> String {
+        normalizedBundleIdentifier(bundleIdentifier) ?? "pid:\(processIdentifier)"
+    }
+
+    static func normalizedBundleIdentifier(_ bundleIdentifier: String?) -> String? {
         guard let bundleIdentifier else {
             return nil
         }
