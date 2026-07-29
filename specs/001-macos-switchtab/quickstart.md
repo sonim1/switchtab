@@ -5,6 +5,11 @@
 - macOS 14.0 or later.
 - Xcode with Swift 5.10 or later.
 - One application with multiple open windows for current-app window validation.
+- Finder, Safari, and Notes open for the application-switching acceptance
+  contract.
+- Accessibility permission for live current-app window focus and Cmd-Tab
+  EventTap interception. Screen Recording is optional for application icons and
+  names, but required for live current-app window previews.
 
 ## Build and Test
 
@@ -17,6 +22,7 @@ Expected:
 - Unit tests pass.
 - A menu bar item appears.
 - No overlay appears until a configured shortcut is pressed.
+- `Replace macOS Cmd-Tab` is off by default, so native Cmd+Tab remains available.
 
 ## Permission Validation
 
@@ -24,12 +30,20 @@ Expected:
 2. Invoke the current-app window switcher.
 3. Confirm the app explains the missing permission and gives recovery steps for
    current-app window switching.
-4. Grant Accessibility permission in macOS Settings.
-5. Relaunch the app if macOS requires it.
+4. Open Settings > Shortcut, enable `Replace macOS Cmd-Tab`, and confirm the
+   application-specific warning explains that Accessibility is required for
+   EventTap interception.
+5. Press Cmd+Tab and confirm native macOS behavior remains available while the
+   EventTap is unavailable.
+6. Grant Accessibility permission in macOS Settings, return to SwitchTab, and
+   relaunch if macOS requires it.
 
 Expected:
 - Missing permission blocks current-app window observation and window focus.
-- Recovery guidance is clear.
+- Replacement remains saved but does not consume Cmd+Tab until Accessibility is
+  granted and SwitchTab retries registration on activation.
+- Recovery guidance identifies both the current-app window capability and the
+  application EventTap requirement.
 - After permission is granted, current-app window switching behavior can proceed.
 
 For window previews:
@@ -49,6 +63,7 @@ Expected:
 - Missing Screen Recording permission blocks previews only.
 - Window switching remains understandable through titles/fallbacks.
 - After permission is granted, current window previews appear.
+- Application icons and names remain available without Screen Recording.
 
 ## System Settings Permission Recovery Scenario
 
@@ -97,6 +112,154 @@ Expected:
 - If macOS requires relaunch after granting access, relaunch SwitchTab before
   treating preview validation as complete.
 
+## Application Switching Manual Acceptance Contract
+
+Use a QA build with Finder, Safari, and Notes open. Start with Finder active
+unless a scenario says otherwise. The `Replace macOS Cmd-Tab` setting is
+default-off. When it is enabled, Accessibility must be granted so the
+dedicated EventTap can intercept Cmd+Tab and Cmd+Shift+Tab. Application mode
+shows icons and names only, uses application MRU independently from window MRU,
+and does not need Screen Recording. Turning the setting off or quitting
+SwitchTab must restore native Cmd+Tab.
+
+Run all eight scenarios exactly as written. For each one, write an entry in
+`.build/qa/application-switching/outcomes.md` with these fields; bracketed
+values are intentionally left for the live QA executor and are not a pass
+claim:
+
+```text
+Precondition:
+Exact action:
+Expected:
+Actual:
+Selected/frontmost app identity:
+Evidence path:
+```
+
+### 1. Native Cmd-Tab with replacement off
+
+- **Precondition:** Accessibility is granted; Finder, Safari, and Notes are
+  open; `Replace macOS Cmd-Tab` is off.
+- **Exact action:** With Accessibility granted and the toggle off, hold
+  Command, press Tab once, capture the native macOS switcher as
+  `01-native-off.png`, then release Command; no SwitchTab overlay may appear.
+- **Expected:** The native macOS application switcher is visible and no
+  SwitchTab application overlay appears.
+- **Actual:** `[record during manual QA]`
+- **Selected/frontmost app identity:** `[record the native switcher's selected
+  app and the frontmost app after release]`
+- **Evidence path:** `.build/qa/application-switching/01-native-off.png`
+
+### 2. SwitchTab overlay with replacement on
+
+- **Precondition:** Accessibility is granted; Finder, Safari, and Notes are
+  open; replacement is currently off.
+- **Exact action:** Turn the toggle on, repeat Command-Tab, and capture only the
+  SwitchTab application overlay as `02-switchtab-on.png`; the native switcher
+  must not appear.
+- **Expected:** The SwitchTab application overlay shows application icons and
+  names, and the native switcher is not visible.
+- **Actual:** `[record during manual QA]`
+- **Selected/frontmost app identity:** `[record the highlighted app and the
+  frontmost app after the interaction]`
+- **Evidence path:** `.build/qa/application-switching/02-switchtab-on.png`
+
+### 3. Forward and reverse application MRU
+
+- **Precondition:** Finder is active; Finder, Safari, and Notes are open;
+  replacement is enabled; no unrelated app has been selected in the current
+  application-switching session.
+- **Exact action:** Starting with Finder active and all three apps open, hold
+  Command, press Tab repeatedly, then use Shift-Tab; capture distinct forward
+  and reverse highlights as `03-forward.png` and `03-reverse.png` and match them
+  to the displayed application names.
+- **Expected:** Forward and reverse movement select distinct displayed app
+  names in the application MRU order, with reverse movement stepping back one
+  position.
+- **Actual:** `[record during manual QA]`
+- **Selected/frontmost app identity:** `[record each highlighted app name and
+  the frontmost app after any release]`
+- **Evidence path:** `.build/qa/application-switching/03-forward.png`,
+  `.build/qa/application-switching/03-reverse.png`
+
+### 4. Command-release activation
+
+- **Precondition:** Replacement is enabled; the application overlay is visible;
+  a non-Finder app is highlighted.
+- **Exact action:** While a non-Finder app is highlighted, release Command;
+  Computer Use app state must report that named app frontmost in
+  `04-activation-state.txt`.
+- **Expected:** The highlighted application becomes frontmost on Command
+  release, and no window thumbnail or close action is required.
+- **Actual:** `[record during manual QA]`
+- **Selected/frontmost app identity:** `[record the highlighted name and the
+  Computer Use frontmost identity]`
+- **Evidence path:** `.build/qa/application-switching/04-activation-state.txt`
+
+### 5. Native Cmd-Tab after disabling replacement
+
+- **Precondition:** Accessibility is granted; replacement is enabled and
+  SwitchTab is running; the current-app window shortcut is configured.
+- **Exact action:** Return to Settings, turn the toggle off, immediately repeat
+  Command-Tab, and capture the native switcher as `05-disabled-native.png`; the
+  window shortcut must remain registered.
+- **Expected:** The application EventTap is torn down, native Cmd+Tab appears,
+  and the configurable current-app window shortcut still works.
+- **Actual:** `[record during manual QA]`
+- **Selected/frontmost app identity:** `[record the native switcher's selected
+  app and the frontmost app after release]`
+- **Evidence path:** `.build/qa/application-switching/05-disabled-native.png`
+
+### 6. Accessibility fallback and recovery
+
+- **Precondition:** Finder, Safari, and Notes are open; SwitchTab is running;
+  Accessibility can be changed in System Settings.
+- **Exact action:** In System Settings > Privacy & Security > Accessibility, turn
+  SwitchTab access off. Enable replacement, return to SwitchTab, and verify
+  native Cmd-Tab plus the application-specific recovery copy in
+  `06-permission-fallback.png`. Turn access back on, return to SwitchTab to
+  trigger retry, and capture the working overlay and cleared warning as
+  `06-permission-recovered.png`.
+- **Expected:** While access is off, native Cmd+Tab remains available and the
+  application-specific warning is shown; after access is restored and retry
+  runs, the SwitchTab overlay works and the warning clears.
+- **Actual:** `[record during manual QA]`
+- **Selected/frontmost app identity:** `[record identities in fallback and
+  recovered states]`
+- **Evidence path:** `.build/qa/application-switching/06-permission-fallback.png`,
+  `.build/qa/application-switching/06-permission-recovered.png`
+
+### 7. Replacement persistence across relaunch
+
+- **Precondition:** Replacement is enabled; Finder, Safari, and Notes are open;
+  Accessibility is granted.
+- **Exact action:** Leave replacement enabled, quit and relaunch the QA build,
+  verify the toggle is still on and Command-Tab opens SwitchTab, and save
+  `07-relaunch-persistence.png`.
+- **Expected:** The toggle remains on after relaunch and Cmd+Tab opens the
+  SwitchTab application overlay.
+- **Actual:** `[record during manual QA]`
+- **Selected/frontmost app identity:** `[record the highlighted and frontmost
+  app identities]`
+- **Evidence path:** `.build/qa/application-switching/07-relaunch-persistence.png`
+
+### 8. Native Cmd-Tab after quitting SwitchTab
+
+- **Precondition:** Replacement is enabled and SwitchTab is running with
+  Finder, Safari, and Notes open.
+- **Exact action:** Quit SwitchTab through its menu, press Command-Tab, and
+  capture restored native behavior as `08-quit-native.png`.
+- **Expected:** SwitchTab's process-owned EventTap is gone and native macOS
+  Cmd+Tab behavior is restored.
+- **Actual:** `[record during manual QA]`
+- **Selected/frontmost app identity:** `[record the native switcher's selected
+  app and the frontmost app after release]`
+- **Evidence path:** `.build/qa/application-switching/08-quit-native.png`
+
+Do not mark an outcome as passed from the expected text alone. The actual result,
+selected/frontmost identity, and evidence path must be captured for every
+scenario before a live macOS QA sign-off.
+
 ## Overlay Presentation and Selection Behavior Scenario
 
 1. Open Settings from the menu bar item.
@@ -109,7 +272,8 @@ Expected:
 
 Expected:
 - Icon strip uses shortcut-release confirmation by default.
-- Switcher mode and selection-behavior controls are absent from Settings.
+- Selection-behavior controls remain absent from Settings; the explicit
+  `Replace macOS Cmd-Tab` opt-in toggle is present under Shortcut.
 - General app preferences such as overlay size may be present.
 - Pressing Enter or clicking a visible window target also confirms the selected
   window.
@@ -182,7 +346,12 @@ Expected:
 - Selection visibly updates within 100 ms per movement.
 - Idle app creates no visible UI activity and no user-noticeable slowdown.
 
-## Validation Results
+## Historical Validation Notes (Not Application-Switching QA Sign-off)
+
+The entries below are retained baseline records for the existing current-app
+window workflow. They do not certify the eight application-switching scenarios
+above; those scenarios require fresh live macOS evidence in
+`.build/qa/application-switching/outcomes.md`.
 
 Recorded on 2026-07-01:
 
