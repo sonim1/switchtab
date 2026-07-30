@@ -12,25 +12,29 @@ selection layout and showing how many windows each application owns.
 ## Scope
 
 The application switcher keeps its compact icon-and-name presentation. This
-follow-up changes its input handling, close behavior, window-count metadata,
+follow-up changes its input handling, quit behavior, window-count metadata,
 selection scrolling, and panel inset calculation. The window switcher's
 thumbnail presentation remains unchanged.
 
 ## Shared Keyboard Contract
 
-Both switcher modes use the same overlay interaction state machine:
+Both switcher modes use the same overlay interaction state machine for common
+navigation and confirmation:
 
 - releasing the trigger modifier confirms the selected item;
 - arrow keys move the selection;
 - Return confirms;
 - Escape cancels;
-- Command-W closes the selected target's window and keeps the overlay open.
+- Option-Tilde window mode keeps Command-W for closing the selected window.
+- Cmd-Tab application mode uses Command-Q to request termination of the
+  selected application, matching the native macOS application switcher.
 
-Application mode interprets Command-W as closing the selected application's
-most recently focused standard window. It never quits the application. After
-Accessibility reports that the window was destroyed, the item's window count
-is refreshed in place. An application with no remaining windows stays in the
-application list with a count of zero.
+Application mode does not reinterpret Command-W. Command-Q sends the selected
+application its normal termination request, so the application remains
+responsible for save confirmation or refusal. The overlay stays open. SwitchTab
+removes the application tile only after `NSWorkspace` reports that exact
+application terminated; releasing Command can then activate the remaining
+selection.
 
 Modifier release is observed by the same session Event Tap that owns overlay
 key events. Existing AppKit event monitors remain as a fallback, but correctness
@@ -64,19 +68,19 @@ agree at every overlay scale, leaving the full selected outline visible.
 
 - If modifier-release capture is unavailable, the existing AppKit monitor
   continues to provide the fallback confirmation path.
-- If the selected application has no closeable window, Command-W is a no-op and
-  the overlay remains open.
-- If a close request is rejected or a save dialog prevents destruction, the
-  application and count remain unchanged.
-- A destruction callback from an older presentation cannot mutate a newer
-  overlay session.
+- If the termination request is rejected, the application and overlay remain
+  unchanged.
+- If the application presents a save dialog or otherwise remains running, its
+  tile is not removed.
+- A termination notification only removes the matching application from the
+  currently presented application-switcher session.
 
 ## Verification
 
 - Event policy tests prove trigger release is handled through the Event Tap and
   passed through to macOS after confirmation.
-- State and controller tests prove application mode accepts Command-W and
-  refreshes the selected item without dismissing.
+- State and controller tests prove application mode accepts Command-Q, rejects
+  window-close semantics, and removes an item only after confirmed termination.
 - Accessibility-backed service tests cover standard/minimized window counts and
   focused-window selection.
 - Layout tests prove non-overflowing grids do not request scrolling and that
@@ -92,7 +96,8 @@ agree at every overlay scale, leaving the full selected outline visible.
 - Repeated Tab or arrow input does not shift a fully visible application grid.
 - The selected blue outline is visible on all four sides at every size scale.
 - Each application shows its current standard-window count when available.
-- Command-W closes one selected-app window without quitting the app or
-  dismissing the overlay.
+- Command-Q requests termination of the selected app and the tile disappears
+  only after confirmed termination; the overlay remains open.
+- Command-W remains a window-mode action and is not used by application mode.
 - Option-Tilde window switching retains the same keyboard behavior and
   thumbnail UI.

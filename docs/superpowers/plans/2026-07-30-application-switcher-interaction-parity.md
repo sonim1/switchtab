@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make Cmd-Tab release, navigation, and Command-W behavior match the window switcher while stabilizing the compact layout and displaying live application window counts.
+**Goal:** Make Cmd-Tab release and navigation reliable, add native-style Command-Q application termination, stabilize the compact layout, and display live application window counts.
 
 **Architecture:** Keep `SwitcherOverlayState` as the shared interaction state machine. Extend the overlay Event Tap to deliver modifier release reliably, use the existing Accessibility window boundary to summarize and close application windows, and make scrollability and panel inset explicit layout outputs instead of implicit SwiftUI behavior.
 
@@ -96,44 +96,50 @@ git add SwitchTab/Services/AccessibilityWindowProvider.swift SwitchTab/Models/Ap
 git commit -m "feat: summarize application window counts"
 ```
 
-### Task 3: Give application mode the shared Command-W close behavior
+### Task 3: Add native Command-Q application termination
 
 **Files:**
 - Modify: `SwitchTab/UI/Overlay/SwitcherOverlayState.swift`
 - Modify: `SwitchTab/UI/Overlay/SwitcherOverlayController.swift`
 - Modify: `SwitchTab/AppDelegate.swift`
+- Modify: `SwitchTab/Services/ApplicationActivationService.swift`
 - Test: `SwitchTabTests/Services/SwitcherOverlayStateTests.swift`
 - Test: `SwitchTabTests/Services/SwitcherOverlayConfirmationTests.swift`
 - Test: `SwitchTabTests/Services/ApplicationSwitchingTests.swift`
 
-- [ ] **Step 1: Write failing close-parity tests**
+- [ ] **Step 1: Write failing native-quit tests**
 
-Add tests requiring application mode to accept `.closeSelected` while keeping
-its mouse close control hidden. Add a state test that replaces one list item by
-identity without changing selection or dismissing. Add coordinator tests that
-choose the focused window first and return no target for a zero-window app.
+Add tests requiring Command-Q to map to an application quit command only while
+Command is held. Application mode returns a quit request without dismissing;
+window mode ignores it. Command-W remains accepted only by window mode, and the
+application tile keeps no visible close control. Add removal tests that preserve
+a valid neighbouring selection and cancel only when no applications remain.
+Add termination-service tests for accepted and rejected requests without
+optimistically removing an application.
 
 - [ ] **Step 2: Verify the tests fail**
 
 Run: `swift test --filter SwitchTabTests/testAllSuites`
 
-Expected: FAIL because application close is rejected and items cannot be
-updated in place.
+Expected: FAIL because no application quit command, interaction result, or
+termination service exists.
 
-- [ ] **Step 3: Implement shared keyboard close semantics**
+- [ ] **Step 3: Implement native application quit semantics**
 
-Split close policy into keyboard permission and visible close-control policy.
-Use the keyboard policy in `SwitcherOverlayState` and the visual policy in
-`SwitcherOverlayRootView`. Add identity-based list-item replacement through
-`SwitcherSession`, `SwitcherOverlayState`, and a presentation-ID-guarded
-controller update method.
+Add a Command-Q switcher command and application-only quit-request result.
+Retain Command-W and the visible close control only for window mode. Add a
+minimal `ApplicationTerminationService` around `NSRunningApplication.terminate`
+that reports whether the request was accepted but never treats acceptance as
+confirmed termination.
 
 In `AppDelegate.showApplicationSwitcher`, populate counts before presenting.
-Provide `onClose` that refreshes the selected app's windows, closes the focused
-window (falling back to the first standard window), and refreshes the count only
-after `WindowCloseService` observes destruction. Never terminate the app.
+Provide `onQuit` that requests normal termination for the selected application
+and leaves the overlay unchanged. Observe `NSWorkspace` application-termination
+notifications once at the app-delegate boundary; when an application actually
+terminates, remove its matching tile from a currently presented application
+session. External termination uses the same removal path.
 
-- [ ] **Step 4: Verify close behavior and the full suite**
+- [ ] **Step 4: Verify quit behavior and the full suite**
 
 Run: `swift test`
 
@@ -142,8 +148,8 @@ Expected: all tests pass with zero failures.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add SwitchTab/AppDelegate.swift SwitchTab/UI/Overlay/SwitcherOverlayState.swift SwitchTab/UI/Overlay/SwitcherOverlayController.swift SwitchTab/UI/Overlay/SwitcherOverlayRootView.swift SwitchTabTests/Services/SwitcherOverlayStateTests.swift SwitchTabTests/Services/SwitcherOverlayConfirmationTests.swift SwitchTabTests/Services/ApplicationSwitchingTests.swift
-git commit -m "feat: close selected application windows from switcher"
+git add SwitchTab/AppDelegate.swift SwitchTab/Services/ApplicationActivationService.swift SwitchTab/UI/Overlay/SwitcherOverlayState.swift SwitchTab/UI/Overlay/SwitcherOverlayController.swift SwitchTab/UI/Overlay/SwitcherOverlayRootView.swift SwitchTabTests/Services/SwitcherOverlayStateTests.swift SwitchTabTests/Services/SwitcherOverlayConfirmationTests.swift SwitchTabTests/Services/ApplicationSwitchingTests.swift
+git commit -m "feat: quit selected applications from switcher"
 ```
 
 ### Task 4: Prevent selection scrolling when every row is visible
@@ -236,7 +242,7 @@ git commit -m "fix: preserve compact switcher selection bounds"
 
 - [ ] **Step 1: Update the manual acceptance contract**
 
-Record Cmd-Tab modifier release, forward/reverse navigation, Command-W close,
+Record Cmd-Tab modifier release, forward/reverse navigation, Command-Q quit,
 window-count refresh, stationary fully visible grids, full outline visibility,
 and unchanged Option-Tilde thumbnail behavior.
 
@@ -254,9 +260,10 @@ Expected: `** BUILD SUCCEEDED **`.
 
 Build and launch the Debug app, enable Cmd-Tab replacement, and verify with at
 least Finder, Safari, and Notes: release activates the highlighted app; Tab and
-arrow navigation remain stationary; Command-W closes one selected-app window
-and decrements its count; all outline edges remain visible; Option-Tilde still
-shows and operates window thumbnails.
+arrow navigation remain stationary; Command-Q requests normal app termination
+and removes the tile only after confirmed termination; Command-W remains a
+window-mode action; all outline edges remain visible; Option-Tilde still shows
+and operates window thumbnails.
 
 - [ ] **Step 4: Commit acceptance documentation**
 
