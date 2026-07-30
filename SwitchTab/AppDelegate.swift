@@ -9,6 +9,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private let windowCloseService = WindowCloseService()
     private let applicationActivationService = ApplicationActivationService()
     private let applicationTerminationService = ApplicationTerminationService()
+    private let applicationWindowCountLoader = ApplicationWindowCountLoader()
     private let permissionService = PermissionService()
     private let shortcutStore = ShortcutSettingsStore()
     private let applicationSettingsStore = ApplicationSettingsStore()
@@ -203,16 +204,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         cancelThumbnailLoadingIfNeeded()
-        let countedApplications = ApplicationSwitcherWindowCountPolicy.addingCounts(
-            to: applicationProvider.runningApplications()
-        ) { [windowProvider] application in
-            windowProvider.applicationWindowCount(
-                ownerProcessIdentifier: application.processIdentifier,
-                ownerName: application.switcherListItem.title
-            )
-        }
         let recentlyOrderedApplications = applicationRecencyStore.order(
-            countedApplications
+            applicationProvider.runningApplications()
         ) { application in
             application.id
         }
@@ -232,7 +225,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { application in
             application.switcherListItem
         }
-        overlayController.present(
+        guard let presentationID = overlayController.present(
             mode: .applicationSwitching,
             items: snapshot.listItems,
             selectedIndex: ApplicationSwitcherSelectionPolicy.initialSelectedIndex(
@@ -260,7 +253,18 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
                 selectionCoordinator.confirm(selectedApplication)
             }
-        )
+        ) else {
+            return
+        }
+
+        applicationWindowCountLoader.load(applications: applications) { [weak self] countedApplications in
+            Task { @MainActor [weak self] in
+                self?.overlayController?.updateApplicationItems(
+                    countedApplications.map(\.switcherListItem),
+                    presentationID: presentationID
+                )
+            }
+        }
     }
 
     private func thumbnailLoaderForRefresh() -> WindowThumbnailLoader {
@@ -701,6 +705,43 @@ enum ApplicationSwitcherWindowCountPolicy {
     ) -> [ApplicationItem] {
         applications.map { application in
             application.withWindowCount(windowCount(application))
+        }
+    }
+}
+
+final class ApplicationWindowCountLoader: @unchecked Sendable {
+    typealias LoadCounts = @Sendable ([ApplicationItem]) -> [ApplicationItem]
+
+    private let queue: DispatchQueue
+    private let loadCounts: LoadCounts
+
+    init(
+        queue: DispatchQueue = DispatchQueue(
+            label: "com.royjen.switchtab.application-window-counts",
+            qos: .userInitiated
+        ),
+        loadCounts: @escaping LoadCounts = { applications in
+            let windowProvider = AccessibilityWindowProvider()
+            return ApplicationSwitcherWindowCountPolicy.addingCounts(
+                to: applications
+            ) { application in
+                windowProvider.applicationWindowCount(
+                    ownerProcessIdentifier: application.processIdentifier
+                )
+            }
+        }
+    ) {
+        self.queue = queue
+        self.loadCounts = loadCounts
+    }
+
+    func load(
+        applications: [ApplicationItem],
+        completion: @escaping @Sendable ([ApplicationItem]) -> Void
+    ) {
+        let loadCounts = self.loadCounts
+        queue.async {
+            completion(loadCounts(applications))
         }
     }
 }

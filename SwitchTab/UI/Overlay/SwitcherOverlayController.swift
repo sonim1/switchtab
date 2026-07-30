@@ -61,6 +61,7 @@ final class SwitcherOverlayController {
         presentationModel.scrollToken
     }
 
+    @discardableResult
     func present(
         mode: SwitcherMode,
         items: [SwitcherListItem],
@@ -69,10 +70,10 @@ final class SwitcherOverlayController {
         onClose: ((SwitcherListItem, UInt64) -> Void)? = nil,
         onQuit: ((SwitcherListItem, Int) -> Void)? = nil,
         onConfirm: ((SwitcherListItem, Int) -> Void)? = nil
-    ) {
+    ) -> UInt64? {
         guard !items.isEmpty else {
             dismiss()
-            return
+            return nil
         }
 
         presentationID &+= 1
@@ -98,6 +99,7 @@ final class SwitcherOverlayController {
             self.triggerReleaseModifiers = nil
         }
         showPanel()
+        return presentationID
     }
 
     func dismiss() {
@@ -238,6 +240,18 @@ final class SwitcherOverlayController {
         case .none, .confirmed, .closeRequested, .quitRequested:
             break
         }
+    }
+
+    func updateApplicationItems(
+        _ items: [SwitcherListItem],
+        presentationID: UInt64
+    ) {
+        guard presentationID == self.presentationID,
+              state.updateApplicationItems(items) == .updated else {
+            return
+        }
+
+        presentationModel.update(state)
     }
 
     @discardableResult

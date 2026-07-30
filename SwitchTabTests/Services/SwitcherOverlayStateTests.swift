@@ -31,6 +31,7 @@ enum SwitcherOverlayStateTests {
         try testRemovingSelectedLastChoosesPreviousItem()
         try testRemovingSelectedFirstChoosesNextItem()
         try testDelayedRemovalKeepsCurrentSelectionByStableIdentity()
+        try testApplicationMetadataRefreshPreservesItemsAndSelection()
     }
 
     static func testArrowKeysMoveSelection() throws {
@@ -524,5 +525,28 @@ enum SwitcherOverlayStateTests {
             SwitcherListItem(id: "b", title: "B", subtitle: nil),
             SwitcherListItem(id: "c", title: "C", subtitle: nil)
         ]
+    }
+
+    static func testApplicationMetadataRefreshPreservesItemsAndSelection() throws {
+        var state = SwitcherOverlayState()
+        state.present(
+            mode: .applicationSwitching,
+            items: [
+                SwitcherListItem(id: "finder", title: "Finder", subtitle: nil),
+                SwitcherListItem(id: "notes", title: "Notes", subtitle: nil)
+            ],
+            selectedIndex: 1
+        )
+
+        let result = state.updateApplicationItems([
+            SwitcherListItem(id: "finder", title: "Finder", subtitle: "4"),
+            SwitcherListItem(id: "notes", title: "Notes", subtitle: "2"),
+            SwitcherListItem(id: "stale", title: "Stale", subtitle: "1")
+        ])
+
+        try expectEqual(result, .updated)
+        try expectEqual(state.session?.items.map(\.id), ["finder", "notes"])
+        try expectEqual(state.session?.items.map(\.subtitle), ["4", "2"])
+        try expectEqual(state.session?.selectedItem?.id, "notes")
     }
 }

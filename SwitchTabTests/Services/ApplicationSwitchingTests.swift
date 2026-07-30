@@ -21,6 +21,7 @@ enum ApplicationSwitchingTests {
         try testApplicationWindowCountPreservesMetadataAndStoresNumericSubtitle()
         try testApplicationUnknownWindowCountPreservesMetadataAndClearsSubtitle()
         try testApplicationPresentationMapsKnownZeroAndUnknownWindowCounts()
+        try testWindowCountLoaderDefersWorkFromCaller()
         try testTerminationServiceReportsAcceptedAndRejectedRequests()
         try testTerminationIdentityUsesStableBundleOrProcessIdentifier()
         try testTerminationIdentityRejectsNonRegularOrUnterminatedSnapshots()
@@ -557,6 +558,30 @@ enum ApplicationSwitchingTests {
 
         try expectEqual(counted.map(\.switcherListItem.subtitle), ["4", "0", nil])
         try expectEqual(counted.map(\.id), applications.map(\.id))
+    }
+
+    static func testWindowCountLoaderDefersWorkFromCaller() throws {
+        let workerQueue = DispatchQueue(label: "ApplicationSwitchingTests.window-count-loader")
+        workerQueue.suspend()
+        let completion = DispatchSemaphore(value: 0)
+        let loader = ApplicationWindowCountLoader(
+            queue: workerQueue,
+            loadCounts: { applications in
+                applications.map { $0.withWindowCount(1) }
+            }
+        )
+
+        loader.load(applications: [
+            makeApplication(id: "com.example.editor", processIdentifier: 84)
+        ]) { _ in
+            completion.signal()
+        }
+
+        let immediateResult = completion.wait(timeout: .now())
+        workerQueue.resume()
+
+        try expectEqual(immediateResult, .timedOut)
+        try expectEqual(completion.wait(timeout: .now() + 1), .success)
     }
 
     static func testTerminationServiceReportsAcceptedAndRejectedRequests() throws {

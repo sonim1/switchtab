@@ -140,6 +140,7 @@ public enum SwitcherOverlayLayoutPolicy {
 
     private static let maximumVisibleIconGridRows = 3
     private static let screenHorizontalMargin: CGFloat = 96
+    private static let screenVerticalMargin: CGFloat = 48
 
     public static func presentationLayout(
         itemCount: Int,
@@ -176,8 +177,9 @@ public enum SwitcherOverlayLayoutPolicy {
         let contentWidth = iconGridContentWidth(columnCount: gridLayout.columnCount, metrics: metrics)
         let contentHeight = iconGridContentHeight(rowCount: gridLayout.visibleRowCount, metrics: metrics)
         let width = min(contentWidth, availableWidth)
+        let height = min(contentHeight, availableScreenHeight(screenSize: screenSize))
 
-        return CGSize(width: width.rounded(.up), height: contentHeight.rounded(.up))
+        return CGSize(width: width.rounded(.up), height: height.rounded(.up))
     }
 
     private static func iconGridLayout(
@@ -196,7 +198,11 @@ public enum SwitcherOverlayLayoutPolicy {
         let availableWidth = max(iconGridContentWidth(columnCount: 1, metrics: metrics), screenSize.width - screenHorizontalMargin)
         let maxColumns = max(1, iconGridColumnCount(forOverlayWidth: availableWidth, metrics: metrics))
         let rowsAtMaxWidth = ceilDivision(itemCount, by: maxColumns)
-        let visibleRowCount = min(maximumVisibleIconGridRows, max(1, rowsAtMaxWidth))
+        let visibleRowCount = min(
+            maximumVisibleIconGridRows,
+            maximumRowsThatFit(screenSize: screenSize, metrics: metrics),
+            max(1, rowsAtMaxWidth)
+        )
         let balancedColumns = ceilDivision(itemCount, by: visibleRowCount)
         let columnCount = min(maxColumns, max(1, balancedColumns))
         let logicalRowCount = ceilDivision(itemCount, by: columnCount)
@@ -234,6 +240,22 @@ public enum SwitcherOverlayLayoutPolicy {
             + metrics.gridPadding
     }
 
+    private static func maximumRowsThatFit(
+        screenSize: CGSize,
+        metrics: SwitcherOverlayLayoutMetrics
+    ) -> Int {
+        let availableHeight = availableScreenHeight(screenSize: screenSize)
+        let rowBudget = max(0, availableHeight - metrics.gridPadding)
+        return max(
+            1,
+            Int(((rowBudget + metrics.gridSpacing) / (metrics.tileSize.height + metrics.gridSpacing)).rounded(.down))
+        )
+    }
+
+    private static func availableScreenHeight(screenSize: CGSize) -> CGFloat {
+        max(1, screenSize.height - screenVerticalMargin)
+    }
+
     private static func smallItemLayoutSize(
         columnCount: Int,
         screenSize: CGSize,
@@ -241,7 +263,10 @@ public enum SwitcherOverlayLayoutPolicy {
     ) -> CGSize {
         let availableWidth = max(180, screenSize.width - screenHorizontalMargin)
         let width = min(iconGridContentWidth(columnCount: columnCount, metrics: metrics), availableWidth)
-        let height = iconGridContentHeight(rowCount: 1, metrics: metrics)
+        let height = min(
+            iconGridContentHeight(rowCount: 1, metrics: metrics),
+            availableScreenHeight(screenSize: screenSize)
+        )
         return CGSize(width: width.rounded(.up), height: height.rounded(.up))
     }
 

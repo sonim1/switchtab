@@ -53,8 +53,7 @@ public protocol AccessibilityWindowSnapshotProviding {
     func windows(
         ownerProcessIdentifier: Int,
         ownerName: String?,
-        includeScreenCaptureIdentifiers: Bool,
-        registerWindowElements: Bool
+        includeScreenCaptureIdentifiers: Bool
     ) -> [AccessibilityWindowSnapshot]?
 }
 
@@ -140,41 +139,23 @@ public struct AccessibilityWindowProvider {
         return windows(
             ownerProcessIdentifier: activeApplication.processIdentifier,
             ownerName: activeApplication.localizedName,
-            includeScreenCaptureIdentifiers: includeScreenCaptureIdentifiers,
-            registerWindowElements: true
+            includeScreenCaptureIdentifiers: includeScreenCaptureIdentifiers
         ) ?? []
     }
 
-    public func applicationWindows(
-        ownerProcessIdentifier: Int,
-        ownerName: String?
-    ) -> [WindowItem]? {
-        windows(
-            ownerProcessIdentifier: ownerProcessIdentifier,
-            ownerName: ownerName,
-            includeScreenCaptureIdentifiers: false,
-            registerWindowElements: true
-        )
-    }
-
-    public func applicationWindowCount(
-        ownerProcessIdentifier: Int,
-        ownerName: String?
-    ) -> Int? {
+    public func applicationWindowCount(ownerProcessIdentifier: Int) -> Int? {
         windowSnapshotProvider.windowCount(ownerProcessIdentifier: ownerProcessIdentifier)
     }
 
     private func windows(
         ownerProcessIdentifier: Int,
         ownerName: String?,
-        includeScreenCaptureIdentifiers: Bool,
-        registerWindowElements: Bool
+        includeScreenCaptureIdentifiers: Bool
     ) -> [WindowItem]? {
         guard let snapshots = windowSnapshotProvider.windows(
             ownerProcessIdentifier: ownerProcessIdentifier,
             ownerName: ownerName,
-            includeScreenCaptureIdentifiers: includeScreenCaptureIdentifiers,
-            registerWindowElements: registerWindowElements
+            includeScreenCaptureIdentifiers: includeScreenCaptureIdentifiers
         ) else {
             return nil
         }
@@ -368,21 +349,20 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
     public func windows(
         ownerProcessIdentifier: Int,
         ownerName: String?,
-        includeScreenCaptureIdentifiers: Bool,
-        registerWindowElements: Bool
+        includeScreenCaptureIdentifiers: Bool
     ) -> [AccessibilityWindowSnapshot]? {
+        AXWindowElementRegistry.shared.replace(
+            ownerProcessIdentifier: ownerProcessIdentifier,
+            with: [:]
+        )
         let appElement = AXUIElementCreateApplication(pid_t(ownerProcessIdentifier))
         guard let windowElements = attributeReader.windowElements(of: appElement) else {
-            if registerWindowElements {
-                AXWindowElementRegistry.shared.removeAll(ownerProcessIdentifier: ownerProcessIdentifier)
-            }
+            AXWindowElementRegistry.shared.removeAll(ownerProcessIdentifier: ownerProcessIdentifier)
             return nil
         }
 
         guard !windowElements.isEmpty else {
-            if registerWindowElements {
-                AXWindowElementRegistry.shared.removeAll(ownerProcessIdentifier: ownerProcessIdentifier)
-            }
+            AXWindowElementRegistry.shared.removeAll(ownerProcessIdentifier: ownerProcessIdentifier)
             return []
         }
 
@@ -423,9 +403,7 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
         for mapping in mappings {
             let windowElement = windowElements[mapping.originalIndex]
             let windowIdentifier = mapping.windowIdentifier
-            if registerWindowElements {
-                activeWindowElements[windowIdentifier] = windowElement
-            }
+            activeWindowElements[windowIdentifier] = windowElement
             snapshots.append(
                 windowSnapshot(
                     windowElement,
@@ -439,12 +417,10 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
             )
         }
 
-        if registerWindowElements {
-            AXWindowElementRegistry.shared.replace(
-                ownerProcessIdentifier: ownerProcessIdentifier,
-                with: activeWindowElements
-            )
-        }
+        AXWindowElementRegistry.shared.replace(
+            ownerProcessIdentifier: ownerProcessIdentifier,
+            with: activeWindowElements
+        )
         return snapshots
     }
 
@@ -625,7 +601,7 @@ final class AXWindowElementRegistry: @unchecked Sendable {
     ) {
         lock.lock()
         defer { lock.unlock() }
-        elementsByOwnerProcessIdentifier[ownerProcessIdentifier] = activeElements
+        elementsByOwnerProcessIdentifier = [ownerProcessIdentifier: activeElements]
     }
 
     func element(

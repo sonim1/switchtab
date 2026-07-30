@@ -158,6 +158,17 @@ public struct SwitcherOverlayState: Equatable, Sendable {
         return .updated
     }
 
+    public mutating func updateApplicationItems(
+        _ items: [SwitcherListItem]
+    ) -> SwitcherInteractionResult {
+        guard session?.mode == .applicationSwitching,
+              session?.updateItems(items) == true else {
+            return .none
+        }
+
+        return .updated
+    }
+
     private mutating func moveSelection(by delta: Int) -> SwitcherInteractionResult {
         guard session?.moveSelection(by: delta) == true else {
             return .none

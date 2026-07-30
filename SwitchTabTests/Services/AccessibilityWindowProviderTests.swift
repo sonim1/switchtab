@@ -7,9 +7,6 @@ enum AccessibilityWindowProviderTests {
         try testProviderPassesActiveApplicationNameToWindowSnapshots()
         try testProviderCanSkipScreenCaptureIdentifiersForCurrentApplication()
         try testCurrentApplicationWindowsMapsUnavailableSnapshotQueryToEmpty()
-        try testProviderReturnsApplicationWindowsForArbitraryProcessWithoutCaptureIdentifiers()
-        try testApplicationWindowsReturnsNilWhenSnapshotQueryIsUnavailable()
-        try testApplicationWindowsReturnsEmptyWhenSnapshotQuerySucceedsWithoutWindows()
         try testApplicationWindowCountDelegatesToCountPrimitive()
         try testApplicationWindowCountReturnsNilWhenSnapshotQueryIsUnavailable()
         try testApplicationWindowCountReturnsZeroWhenSnapshotQuerySucceedsWithoutWindows()
@@ -21,9 +18,9 @@ enum AccessibilityWindowProviderTests {
         try testProviderCarriesFocusedWindowFlagThrough()
         try testAXSnapshotProviderReadsAndMarksTheFocusedWindow()
         try testAXWindowCountReadsOnlyWindowsRolesAndSubroles()
-        try testAXSnapshotProviderKeepsRegistryEntriesScopedToTheirOwnerProcess()
+        try testAXSnapshotProviderReplacesRegistryOwner()
         try testApplicationWindowCountDoesNotMutateRegistryForSuccessFailureOrEmpty()
-        try testRegistryResolvesDuplicateIdentifiersByOwnerProcess()
+        try testRegistryReplacementDropsPreviousOwner()
     }
 
     static func testProviderReturnsOnlyActiveApplicationWindows() throws {
@@ -93,7 +90,6 @@ enum AccessibilityWindowProviderTests {
         _ = provider.currentApplicationWindows(includeScreenCaptureIdentifiers: false)
 
         try expectEqual(snapshotProvider.requestedIncludeScreenCaptureIdentifiers, false)
-        try expectEqual(snapshotProvider.requestedRegisterWindowElements, true)
     }
 
     static func testCurrentApplicationWindowsMapsUnavailableSnapshotQueryToEmpty() throws {
@@ -107,89 +103,6 @@ enum AccessibilityWindowProviderTests {
         try expectEqual(provider.currentApplicationWindows(), [])
     }
 
-    static func testProviderReturnsApplicationWindowsForArbitraryProcessWithoutCaptureIdentifiers() throws {
-        let snapshotProvider = RecordingWindowSnapshotProvider(snapshots: [
-            AccessibilityWindowSnapshot(
-                windowIdentifier: 1,
-                ownerProcessIdentifier: 84,
-                ownerName: "Safari",
-                title: "Available",
-                isMinimized: false,
-                availability: .available
-            ),
-            AccessibilityWindowSnapshot(
-                windowIdentifier: 2,
-                ownerProcessIdentifier: 84,
-                ownerName: "Safari",
-                title: "Minimized",
-                isMinimized: true,
-                availability: .minimized
-            ),
-            AccessibilityWindowSnapshot(
-                windowIdentifier: 3,
-                ownerProcessIdentifier: 84,
-                ownerName: "Safari",
-                title: "Closed",
-                isMinimized: false,
-                availability: .closed
-            ),
-            AccessibilityWindowSnapshot(
-                windowIdentifier: 4,
-                ownerProcessIdentifier: 42,
-                ownerName: "Notes",
-                title: "Other Application",
-                isMinimized: false,
-                availability: .available
-            )
-        ])
-        let provider = AccessibilityWindowProvider(
-            activeApplicationProvider: FakeActiveApplicationProvider(activeApplication: nil),
-            windowSnapshotProvider: snapshotProvider
-        )
-
-        let windows = provider.applicationWindows(
-            ownerProcessIdentifier: 84,
-            ownerName: "Safari"
-        )
-
-        try expectEqual(snapshotProvider.requestedOwnerProcessIdentifier, 84)
-        try expectEqual(snapshotProvider.requestedOwnerName, "Safari")
-        try expectEqual(snapshotProvider.requestedIncludeScreenCaptureIdentifiers, false)
-        try expectEqual(snapshotProvider.requestedRegisterWindowElements, true)
-        try expectEqual(windows?.map(\.windowIdentifier), [1, 2])
-        try expectEqual(windows?.map(\.isMinimized), [false, true])
-        try expectEqual(windows?.map(\.canFocus), [true, true])
-        try expectEqual(windows?.map(\.screenCaptureIdentifier), [nil, nil])
-    }
-
-    static func testApplicationWindowsReturnsNilWhenSnapshotQueryIsUnavailable() throws {
-        let provider = AccessibilityWindowProvider(
-            activeApplicationProvider: FakeActiveApplicationProvider(activeApplication: nil),
-            windowSnapshotProvider: FakeWindowSnapshotProvider(snapshots: nil)
-        )
-
-        let windows = provider.applicationWindows(
-            ownerProcessIdentifier: 84,
-            ownerName: "Safari"
-        )
-
-        try expectTrue(windows == nil)
-    }
-
-    static func testApplicationWindowsReturnsEmptyWhenSnapshotQuerySucceedsWithoutWindows() throws {
-        let provider = AccessibilityWindowProvider(
-            activeApplicationProvider: FakeActiveApplicationProvider(activeApplication: nil),
-            windowSnapshotProvider: FakeWindowSnapshotProvider(snapshots: [])
-        )
-
-        let windows = provider.applicationWindows(
-            ownerProcessIdentifier: 84,
-            ownerName: "Safari"
-        )
-
-        try expectEqual(windows?.count, 0)
-    }
-
     static func testApplicationWindowCountDelegatesToCountPrimitive() throws {
         let snapshotProvider = RecordingWindowSnapshotProvider(windowCount: 3)
         let provider = AccessibilityWindowProvider(
@@ -197,10 +110,7 @@ enum AccessibilityWindowProviderTests {
             windowSnapshotProvider: snapshotProvider
         )
 
-        let count = provider.applicationWindowCount(
-            ownerProcessIdentifier: 84,
-            ownerName: "Safari"
-        )
+        let count = provider.applicationWindowCount(ownerProcessIdentifier: 84)
 
         try expectEqual(count, 3)
         try expectEqual(snapshotProvider.requestedCountOwnerProcessIdentifier, 84)
@@ -216,10 +126,7 @@ enum AccessibilityWindowProviderTests {
             )
         )
 
-        let count = provider.applicationWindowCount(
-            ownerProcessIdentifier: 84,
-            ownerName: "Safari"
-        )
+        let count = provider.applicationWindowCount(ownerProcessIdentifier: 84)
 
         try expectTrue(count == nil)
     }
@@ -233,10 +140,7 @@ enum AccessibilityWindowProviderTests {
             )
         )
 
-        let count = provider.applicationWindowCount(
-            ownerProcessIdentifier: 84,
-            ownerName: "Safari"
-        )
+        let count = provider.applicationWindowCount(ownerProcessIdentifier: 84)
 
         try expectEqual(count, 0)
     }
@@ -349,8 +253,7 @@ enum AccessibilityWindowProviderTests {
         let snapshots = provider.windows(
             ownerProcessIdentifier: 42,
             ownerName: "Notes",
-            includeScreenCaptureIdentifiers: false,
-            registerWindowElements: true
+            includeScreenCaptureIdentifiers: false
         )
 
         try expectEqual(attributes.focusedWindowReadCount, 1)
@@ -393,7 +296,7 @@ enum AccessibilityWindowProviderTests {
         try expectEqual(resolver.callCount, 0)
     }
 
-    static func testAXSnapshotProviderKeepsRegistryEntriesScopedToTheirOwnerProcess() throws {
+    static func testAXSnapshotProviderReplacesRegistryOwner() throws {
         let firstProcessWindow = AXUIElementCreateApplication(201)
         let secondProcessOldWindow = AXUIElementCreateApplication(202)
         let secondProcessNewWindow = AXUIElementCreateApplication(203)
@@ -425,19 +328,17 @@ enum AccessibilityWindowProviderTests {
         _ = provider.windows(
             ownerProcessIdentifier: firstProcessIdentifier,
             ownerName: "First",
-            includeScreenCaptureIdentifiers: false,
-            registerWindowElements: true
+            includeScreenCaptureIdentifiers: false
         )
         _ = provider.windows(
             ownerProcessIdentifier: secondProcessIdentifier,
             ownerName: "Second",
-            includeScreenCaptureIdentifiers: false,
-            registerWindowElements: true
+            includeScreenCaptureIdentifiers: false
         )
         try expectTrue(registry.element(
             ownerProcessIdentifier: firstProcessIdentifier,
             windowIdentifier: 9_101
-        ).map { CFEqual($0, firstProcessWindow) } ?? false)
+        ) == nil)
         try expectTrue(registry.element(
             ownerProcessIdentifier: secondProcessIdentifier,
             windowIdentifier: 9_202
@@ -446,13 +347,12 @@ enum AccessibilityWindowProviderTests {
         _ = provider.windows(
             ownerProcessIdentifier: secondProcessIdentifier,
             ownerName: "Second",
-            includeScreenCaptureIdentifiers: false,
-            registerWindowElements: true
+            includeScreenCaptureIdentifiers: false
         )
         try expectTrue(registry.element(
             ownerProcessIdentifier: firstProcessIdentifier,
             windowIdentifier: 9_101
-        ).map { CFEqual($0, firstProcessWindow) } ?? false)
+        ) == nil)
         try expectTrue(registry.element(
             ownerProcessIdentifier: secondProcessIdentifier,
             windowIdentifier: 9_202
@@ -465,14 +365,13 @@ enum AccessibilityWindowProviderTests {
         let unavailable = provider.windows(
             ownerProcessIdentifier: secondProcessIdentifier,
             ownerName: "Second",
-            includeScreenCaptureIdentifiers: false,
-            registerWindowElements: true
+            includeScreenCaptureIdentifiers: false
         )
         try expectTrue(unavailable == nil)
         try expectTrue(registry.element(
             ownerProcessIdentifier: firstProcessIdentifier,
             windowIdentifier: 9_101
-        ).map { CFEqual($0, firstProcessWindow) } ?? false)
+        ) == nil)
         try expectTrue(registry.element(
             ownerProcessIdentifier: secondProcessIdentifier,
             windowIdentifier: 9_203
@@ -481,20 +380,18 @@ enum AccessibilityWindowProviderTests {
         _ = provider.windows(
             ownerProcessIdentifier: secondProcessIdentifier,
             ownerName: "Second",
-            includeScreenCaptureIdentifiers: false,
-            registerWindowElements: true
+            includeScreenCaptureIdentifiers: false
         )
         let empty = provider.windows(
             ownerProcessIdentifier: secondProcessIdentifier,
             ownerName: "Second",
-            includeScreenCaptureIdentifiers: false,
-            registerWindowElements: true
+            includeScreenCaptureIdentifiers: false
         )
         try expectEqual(empty?.count, 0)
         try expectTrue(registry.element(
             ownerProcessIdentifier: firstProcessIdentifier,
             windowIdentifier: 9_101
-        ).map { CFEqual($0, firstProcessWindow) } ?? false)
+        ) == nil)
         try expectTrue(registry.element(
             ownerProcessIdentifier: secondProcessIdentifier,
             windowIdentifier: 9_203
@@ -534,16 +431,13 @@ enum AccessibilityWindowProviderTests {
         )
 
         let availableCount = provider.applicationWindowCount(
-            ownerProcessIdentifier: firstProcessIdentifier,
-            ownerName: "Summary"
+            ownerProcessIdentifier: firstProcessIdentifier
         )
         let unavailableCount = provider.applicationWindowCount(
-            ownerProcessIdentifier: firstProcessIdentifier,
-            ownerName: "Summary"
+            ownerProcessIdentifier: firstProcessIdentifier
         )
         let emptyCount = provider.applicationWindowCount(
-            ownerProcessIdentifier: firstProcessIdentifier,
-            ownerName: "Summary"
+            ownerProcessIdentifier: firstProcessIdentifier
         )
 
         try expectEqual(availableCount, 1)
@@ -562,7 +456,7 @@ enum AccessibilityWindowProviderTests {
         ) == nil)
     }
 
-    static func testRegistryResolvesDuplicateIdentifiersByOwnerProcess() throws {
+    static func testRegistryReplacementDropsPreviousOwner() throws {
         let firstProcessWindow = AXUIElementCreateApplication(401)
         let secondProcessWindow = AXUIElementCreateApplication(402)
         let firstProcessIdentifier = 94
@@ -589,7 +483,7 @@ enum AccessibilityWindowProviderTests {
             registry.element(
                 ownerProcessIdentifier: firstProcessIdentifier,
                 windowIdentifier: sharedWindowIdentifier
-            ).map { CFEqual($0, firstProcessWindow) } ?? false
+            ) == nil
         )
         try expectTrue(
             registry.element(
@@ -783,8 +677,7 @@ struct FakeWindowSnapshotProvider: AccessibilityWindowSnapshotProviding {
     func windows(
         ownerProcessIdentifier: Int,
         ownerName: String?,
-        includeScreenCaptureIdentifiers: Bool,
-        registerWindowElements: Bool
+        includeScreenCaptureIdentifiers: Bool
     ) -> [AccessibilityWindowSnapshot]? {
         snapshots
     }
@@ -800,7 +693,6 @@ final class RecordingWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
     private(set) var requestedOwnerProcessIdentifier: Int?
     private(set) var requestedOwnerName: String?
     private(set) var requestedIncludeScreenCaptureIdentifiers: Bool?
-    private(set) var requestedRegisterWindowElements: Bool?
     private(set) var requestedCountOwnerProcessIdentifier: Int?
     private(set) var windowsRequestCount = 0
 
@@ -812,14 +704,12 @@ final class RecordingWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
     func windows(
         ownerProcessIdentifier: Int,
         ownerName: String?,
-        includeScreenCaptureIdentifiers: Bool,
-        registerWindowElements: Bool
+        includeScreenCaptureIdentifiers: Bool
     ) -> [AccessibilityWindowSnapshot]? {
         windowsRequestCount += 1
         requestedOwnerProcessIdentifier = ownerProcessIdentifier
         requestedOwnerName = ownerName
         requestedIncludeScreenCaptureIdentifiers = includeScreenCaptureIdentifiers
-        requestedRegisterWindowElements = registerWindowElements
         return snapshots
     }
 

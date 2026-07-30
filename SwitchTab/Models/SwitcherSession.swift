@@ -100,6 +100,23 @@ public struct SwitcherSession: Equatable, Sendable {
     }
 
     @discardableResult
+    public mutating func updateItems(_ replacements: [SwitcherListItem]) -> Bool {
+        var didUpdate = false
+
+        for index in items.indices {
+            guard let replacement = replacements.first(where: { $0.id == items[index].id }),
+                  replacement != items[index] else {
+                continue
+            }
+
+            items[index] = replacement
+            didUpdate = true
+        }
+
+        return didUpdate
+    }
+
+    @discardableResult
     public mutating func selectItem(at index: Int) -> Bool {
         guard index >= 0, index < items.count, index != selectedIndex else {
             return false

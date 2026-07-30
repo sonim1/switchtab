@@ -12,6 +12,7 @@ enum SwitcherOverlayPresentationTests {
         try testIconGridWrapsToTwoRowsWhenWidthWouldOverflow()
         try testIconGridCapsAtThreeVisibleRows()
         try testSelectionScrollingOnlyRequiredForOverflowingGrid()
+        try testMaximumScaleWindowGridFitsVisibleScreenHeight()
         try testSingleItemLayoutFitsContentInsteadOfUsingWideMinimum()
         try testTwoItemLayoutFitsTwoColumns()
         try testOverlaySizeScaleScalesLayout()
@@ -120,6 +121,19 @@ enum SwitcherOverlayPresentationTests {
         try expectFalse(twoRowLayout.requiresSelectionScrolling)
         try expectFalse(threeRowLayout.requiresSelectionScrolling)
         try expectTrue(overflowingLayout.requiresSelectionScrolling)
+    }
+
+    static func testMaximumScaleWindowGridFitsVisibleScreenHeight() throws {
+        let screenSize = CGSize(width: 1000, height: 700)
+        let layout = SwitcherOverlayLayoutPolicy.presentationLayout(
+            itemCount: 9,
+            screenSize: screenSize,
+            mode: .currentAppWindowSwitching,
+            scale: OverlaySizeScale(OverlaySizeScale.maximum)
+        )
+
+        try expectTrue(layout.size.height <= screenSize.height)
+        try expectTrue(layout.requiresSelectionScrolling)
     }
 
     static func testSingleItemLayoutFitsContentInsteadOfUsingWideMinimum() throws {
@@ -259,7 +273,7 @@ enum SwitcherOverlayPresentationTests {
 
         for mode in modes {
             for scale in scales {
-                let stationaryLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
+                let boundedLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
                     itemCount: 9,
                     screenSize: CGSize(width: 1000, height: 700),
                     mode: mode,
@@ -272,7 +286,12 @@ enum SwitcherOverlayPresentationTests {
                     scale: scale
                 )
 
-                try expectFalse(stationaryLayout.requiresSelectionScrolling)
+                let heightLimitedWindowLayout = mode == .currentAppWindowSwitching
+                    && scale.value == OverlaySizeScale.maximum
+                try expectEqual(
+                    boundedLayout.requiresSelectionScrolling,
+                    heightLimitedWindowLayout
+                )
                 try expectTrue(overflowingLayout.requiresSelectionScrolling)
             }
         }
