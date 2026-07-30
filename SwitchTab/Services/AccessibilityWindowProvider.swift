@@ -48,6 +48,8 @@ public protocol ActiveApplicationProviding {
 }
 
 public protocol AccessibilityWindowSnapshotProviding {
+    func windowCount(ownerProcessIdentifier: Int) -> Int?
+
     func windows(
         ownerProcessIdentifier: Int,
         ownerName: String?,
@@ -159,12 +161,7 @@ public struct AccessibilityWindowProvider {
         ownerProcessIdentifier: Int,
         ownerName: String?
     ) -> Int? {
-        windows(
-            ownerProcessIdentifier: ownerProcessIdentifier,
-            ownerName: ownerName,
-            includeScreenCaptureIdentifiers: false,
-            registerWindowElements: false
-        )?.count
+        windowSnapshotProvider.windowCount(ownerProcessIdentifier: ownerProcessIdentifier)
     }
 
     private func windows(
@@ -343,6 +340,29 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
     ) {
         self.windowNumberResolver = windowNumberResolver
         self.attributeReader = attributeReader
+    }
+
+    public func windowCount(ownerProcessIdentifier: Int) -> Int? {
+        let appElement = AXUIElementCreateApplication(pid_t(ownerProcessIdentifier))
+        guard let windowElements = attributeReader.windowElements(of: appElement) else {
+            return nil
+        }
+
+        var count = 0
+        for windowElement in windowElements {
+            let role = attributeReader.stringAttribute(
+                windowElement,
+                kAXRoleAttribute as CFString
+            )
+            let subrole = attributeReader.stringAttribute(
+                windowElement,
+                kAXSubroleAttribute as CFString
+            )
+            if AccessibilityWindowInclusionPolicy.shouldInclude(role: role, subrole: subrole) {
+                count += 1
+            }
+        }
+        return count
     }
 
     public func windows(

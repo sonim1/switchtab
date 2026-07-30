@@ -10,7 +10,7 @@ enum AccessibilityWindowProviderTests {
         try testProviderReturnsApplicationWindowsForArbitraryProcessWithoutCaptureIdentifiers()
         try testApplicationWindowsReturnsNilWhenSnapshotQueryIsUnavailable()
         try testApplicationWindowsReturnsEmptyWhenSnapshotQuerySucceedsWithoutWindows()
-        try testApplicationWindowCountRequestsNonRegisteringSnapshotsWithoutCaptureIdentifiers()
+        try testApplicationWindowCountDelegatesToCountPrimitive()
         try testApplicationWindowCountReturnsNilWhenSnapshotQueryIsUnavailable()
         try testApplicationWindowCountReturnsZeroWhenSnapshotQuerySucceedsWithoutWindows()
         try testWindowInclusionPolicyKeepsStandardWindows()
@@ -20,6 +20,7 @@ enum AccessibilityWindowProviderTests {
         try testWindowInclusionPolicyFallsBackToIndexIdentifierWithoutWindowNumber()
         try testProviderCarriesFocusedWindowFlagThrough()
         try testAXSnapshotProviderReadsAndMarksTheFocusedWindow()
+        try testAXWindowCountReadsOnlyWindowsRolesAndSubroles()
         try testAXSnapshotProviderKeepsRegistryEntriesScopedToTheirOwnerProcess()
         try testApplicationWindowCountDoesNotMutateRegistryForSuccessFailureOrEmpty()
         try testRegistryResolvesDuplicateIdentifiersByOwnerProcess()
@@ -189,33 +190,8 @@ enum AccessibilityWindowProviderTests {
         try expectEqual(windows?.count, 0)
     }
 
-    static func testApplicationWindowCountRequestsNonRegisteringSnapshotsWithoutCaptureIdentifiers() throws {
-        let snapshotProvider = RecordingWindowSnapshotProvider(snapshots: [
-            AccessibilityWindowSnapshot(
-                windowIdentifier: 1,
-                ownerProcessIdentifier: 84,
-                ownerName: "Safari",
-                title: "Available",
-                isMinimized: false,
-                availability: .available
-            ),
-            AccessibilityWindowSnapshot(
-                windowIdentifier: 2,
-                ownerProcessIdentifier: 84,
-                ownerName: "Safari",
-                title: "Closed",
-                isMinimized: false,
-                availability: .closed
-            ),
-            AccessibilityWindowSnapshot(
-                windowIdentifier: 3,
-                ownerProcessIdentifier: 42,
-                ownerName: "Notes",
-                title: "Other Application",
-                isMinimized: false,
-                availability: .available
-            )
-        ])
+    static func testApplicationWindowCountDelegatesToCountPrimitive() throws {
+        let snapshotProvider = RecordingWindowSnapshotProvider(windowCount: 3)
         let provider = AccessibilityWindowProvider(
             activeApplicationProvider: FakeActiveApplicationProvider(activeApplication: nil),
             windowSnapshotProvider: snapshotProvider
@@ -226,17 +202,18 @@ enum AccessibilityWindowProviderTests {
             ownerName: "Safari"
         )
 
-        try expectEqual(count, 1)
-        try expectEqual(snapshotProvider.requestedOwnerProcessIdentifier, 84)
-        try expectEqual(snapshotProvider.requestedOwnerName, "Safari")
-        try expectEqual(snapshotProvider.requestedIncludeScreenCaptureIdentifiers, false)
-        try expectEqual(snapshotProvider.requestedRegisterWindowElements, false)
+        try expectEqual(count, 3)
+        try expectEqual(snapshotProvider.requestedCountOwnerProcessIdentifier, 84)
+        try expectEqual(snapshotProvider.windowsRequestCount, 0)
     }
 
     static func testApplicationWindowCountReturnsNilWhenSnapshotQueryIsUnavailable() throws {
         let provider = AccessibilityWindowProvider(
             activeApplicationProvider: FakeActiveApplicationProvider(activeApplication: nil),
-            windowSnapshotProvider: FakeWindowSnapshotProvider(snapshots: nil)
+            windowSnapshotProvider: FakeWindowSnapshotProvider(
+                snapshots: [],
+                windowCount: nil
+            )
         )
 
         let count = provider.applicationWindowCount(
@@ -250,7 +227,10 @@ enum AccessibilityWindowProviderTests {
     static func testApplicationWindowCountReturnsZeroWhenSnapshotQuerySucceedsWithoutWindows() throws {
         let provider = AccessibilityWindowProvider(
             activeApplicationProvider: FakeActiveApplicationProvider(activeApplication: nil),
-            windowSnapshotProvider: FakeWindowSnapshotProvider(snapshots: [])
+            windowSnapshotProvider: FakeWindowSnapshotProvider(
+                snapshots: nil,
+                windowCount: 0
+            )
         )
 
         let count = provider.applicationWindowCount(
@@ -376,6 +356,41 @@ enum AccessibilityWindowProviderTests {
         try expectEqual(attributes.focusedWindowReadCount, 1)
         try expectEqual(snapshots?.map(\.windowIdentifier), [11, 22])
         try expectEqual(snapshots?.map(\.isFocused), [false, true])
+    }
+
+    static func testAXWindowCountReadsOnlyWindowsRolesAndSubroles() throws {
+        let standardWindow = AXUIElementCreateApplication(111)
+        let panelWindow = AXUIElementCreateApplication(112)
+        let buttonElement = AXUIElementCreateApplication(113)
+        let attributes = CountOnlyAXWindowAttributeReader(
+            windowElements: [standardWindow, panelWindow, buttonElement],
+            roles: [
+                kAXWindowRole as String,
+                kAXWindowRole as String,
+                kAXButtonRole as String
+            ],
+            subroles: [
+                kAXStandardWindowSubrole as String,
+                "AXUnknown",
+                kAXStandardWindowSubrole as String
+            ]
+        )
+        let resolver = RecordingAXWindowNumberResolver()
+        let provider = AXWindowSnapshotProvider(
+            windowNumberResolver: resolver,
+            attributeReader: attributes
+        )
+
+        let count = provider.windowCount(ownerProcessIdentifier: 42)
+
+        try expectEqual(count, 1)
+        try expectEqual(attributes.windowElementsReadCount, 1)
+        try expectEqual(attributes.roleReadCount, 3)
+        try expectEqual(attributes.subroleReadCount, 3)
+        try expectEqual(attributes.focusedWindowReadCount, 0)
+        try expectEqual(attributes.titleReadCount, 0)
+        try expectEqual(attributes.boolReadCount, 0)
+        try expectEqual(resolver.callCount, 0)
     }
 
     static func testAXSnapshotProviderKeepsRegistryEntriesScopedToTheirOwnerProcess() throws {
@@ -636,6 +651,59 @@ private final class SequencedAXWindowAttributeReader: AXWindowAttributeReading {
     }
 }
 
+private final class CountOnlyAXWindowAttributeReader: AXWindowAttributeReading {
+    let windowElements: [AXUIElement]
+    let roles: [String?]
+    let subroles: [String?]
+    private(set) var windowElementsReadCount = 0
+    private(set) var focusedWindowReadCount = 0
+    private(set) var roleReadCount = 0
+    private(set) var subroleReadCount = 0
+    private(set) var titleReadCount = 0
+    private(set) var boolReadCount = 0
+
+    init(windowElements: [AXUIElement], roles: [String?], subroles: [String?]) {
+        self.windowElements = windowElements
+        self.roles = roles
+        self.subroles = subroles
+    }
+
+    func windowElements(of _: AXUIElement) -> [AXUIElement]? {
+        windowElementsReadCount += 1
+        return windowElements
+    }
+
+    func focusedWindowElement(of _: AXUIElement) -> AXUIElement? {
+        focusedWindowReadCount += 1
+        return nil
+    }
+
+    func stringAttribute(_ element: AXUIElement, _ attribute: CFString) -> String? {
+        guard let index = windowElements.firstIndex(where: { CFEqual($0, element) }) else {
+            return nil
+        }
+
+        let attributeName = attribute as String
+        if attributeName == kAXRoleAttribute as String {
+            roleReadCount += 1
+            return roles[index]
+        }
+        if attributeName == kAXSubroleAttribute as String {
+            subroleReadCount += 1
+            return subroles[index]
+        }
+        if attributeName == kAXTitleAttribute as String {
+            titleReadCount += 1
+        }
+        return nil
+    }
+
+    func boolAttribute(_: AXUIElement, _: CFString) -> Bool {
+        boolReadCount += 1
+        return false
+    }
+}
+
 private final class RecordingAXWindowAttributeReader: AXWindowAttributeReading {
     let windowElements: [AXUIElement]
     let focusedWindowElement: AXUIElement?
@@ -686,6 +754,15 @@ private struct FixedAXWindowNumberResolver: AXWindowNumberResolving {
     }
 }
 
+private final class RecordingAXWindowNumberResolver: AXWindowNumberResolving {
+    private(set) var callCount = 0
+
+    func windowNumber(for _: AXUIElement) -> UInt32? {
+        callCount += 1
+        return nil
+    }
+}
+
 struct FakeActiveApplicationProvider: ActiveApplicationProviding {
     let activeApplication: ActiveApplicationSnapshot?
 
@@ -696,6 +773,12 @@ struct FakeActiveApplicationProvider: ActiveApplicationProviding {
 
 struct FakeWindowSnapshotProvider: AccessibilityWindowSnapshotProviding {
     let snapshots: [AccessibilityWindowSnapshot]?
+    let count: Int?
+
+    init(snapshots: [AccessibilityWindowSnapshot]?, windowCount: Int? = 0) {
+        self.snapshots = snapshots
+        self.count = windowCount
+    }
 
     func windows(
         ownerProcessIdentifier: Int,
@@ -705,17 +788,25 @@ struct FakeWindowSnapshotProvider: AccessibilityWindowSnapshotProviding {
     ) -> [AccessibilityWindowSnapshot]? {
         snapshots
     }
+
+    func windowCount(ownerProcessIdentifier: Int) -> Int? {
+        count
+    }
 }
 
 final class RecordingWindowSnapshotProvider: AccessibilityWindowSnapshotProviding {
     let snapshots: [AccessibilityWindowSnapshot]?
+    let count: Int?
     private(set) var requestedOwnerProcessIdentifier: Int?
     private(set) var requestedOwnerName: String?
     private(set) var requestedIncludeScreenCaptureIdentifiers: Bool?
     private(set) var requestedRegisterWindowElements: Bool?
+    private(set) var requestedCountOwnerProcessIdentifier: Int?
+    private(set) var windowsRequestCount = 0
 
-    init(snapshots: [AccessibilityWindowSnapshot]? = []) {
+    init(snapshots: [AccessibilityWindowSnapshot]? = [], windowCount: Int? = 0) {
         self.snapshots = snapshots
+        self.count = windowCount
     }
 
     func windows(
@@ -724,10 +815,16 @@ final class RecordingWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
         includeScreenCaptureIdentifiers: Bool,
         registerWindowElements: Bool
     ) -> [AccessibilityWindowSnapshot]? {
+        windowsRequestCount += 1
         requestedOwnerProcessIdentifier = ownerProcessIdentifier
         requestedOwnerName = ownerName
         requestedIncludeScreenCaptureIdentifiers = includeScreenCaptureIdentifiers
         requestedRegisterWindowElements = registerWindowElements
         return snapshots
+    }
+
+    func windowCount(ownerProcessIdentifier: Int) -> Int? {
+        requestedCountOwnerProcessIdentifier = ownerProcessIdentifier
+        return count
     }
 }
