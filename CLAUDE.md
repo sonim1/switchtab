@@ -41,7 +41,7 @@ Added (follow these too):
 
 1. **Incomplete Test Invocation** — claiming tests pass without running the XCTest target. *Rule: `swift test` is the SwiftPM gate; report its executed-test count and failures.*
 2. **Sparkle Contamination** — adding Sparkle/update code to the checked-in project. *Rule: Sparkle exists only in the script-generated variant; `git diff` on the xcodeproj must stay clean of it.*
-3. **Cmd+Tab Trespass** — features that intercept or alter system app switching. *Rule: scope is current-app windows; global shortcut changes → ask.*
+3. **Cmd+Tab Trespass** — intercepting system app switching without explicit user opt-in. *Rule: native Cmd+Tab stays untouched by default; global replacement must be separately enabled and restore native behavior when disabled or on exit.*
 4. **Permission-Blind Claim** — "window switching works" from a build. *Rule: builds prove compilation; behavior claims need a run with Accessibility permission (or an explicit "not runtime-verified" statement).*
 5. **Concurrency Sledgehammer** — silencing Swift 6 isolation errors with `@unchecked Sendable`/`nonisolated(unsafe)`. *Rule: match the isolation patterns of the surrounding file; hacks → ask.*
 6. **Resource Exclusion Break** — adding files under `SwitchTab/Resources` that SwiftPM then tries to compile. *Rule: Package.swift excludes specific Resources entries; new resource files need matching excludes.*
