@@ -43,3 +43,20 @@ public struct SwitcherPresentationSnapshot<Element> {
         return elements[index]
     }
 }
+
+public enum ApplicationSwitcherSelectionPolicy {
+    public static func initialSelectedIndex(
+        applications: [ApplicationItem],
+        reverse: Bool
+    ) -> Int {
+        guard applications.count > 1 else {
+            return 0
+        }
+
+        if reverse {
+            return applications.count - 1
+        }
+
+        return applications.first?.isActive == true ? 1 : 0
+    }
+}

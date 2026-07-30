@@ -30,6 +30,8 @@ enum SwitcherRecencyStoreTests {
         try testExternalFocusChangeStillHighlightsTheSecondSlot()
         try testTogglingBetweenTwoWindowsAlwaysHighlightsTheOtherOne()
         try testRecencyKeepsRepeatedToggleStableWhenProviderOrderDoesNotChange()
+        try testModesPersistRecencyIndependently()
+        try testApplicationMRUIsAppliedBeforeActiveApplicationPinning()
     }
 
     static func testOrderingFallsBackToIncomingOrderWithoutHistory() throws {
@@ -392,6 +394,87 @@ enum SwitcherRecencyStoreTests {
             store.recordSelection(id: expectedSelection)
             focusedID = expectedSelection
         }
+    }
+
+    static func testModesPersistRecencyIndependently() throws {
+        let defaults = makeDefaults()
+        let windowStore = SwitcherRecencyStore(
+            userDefaults: defaults,
+            mode: .currentAppWindowSwitching
+        )
+        let applicationStore = SwitcherRecencyStore(
+            userDefaults: defaults,
+            mode: .applicationSwitching
+        )
+
+        windowStore.recordSelection(id: "window-a")
+        applicationStore.recordSelection(id: "application-a")
+        windowStore.flush()
+        applicationStore.flush()
+
+        try expectEqual(
+            defaults.stringArray(forKey: "SwitchTab.recency.currentAppWindowSwitching"),
+            ["window-a"]
+        )
+        try expectEqual(
+            defaults.stringArray(forKey: "SwitchTab.recency.applicationSwitching"),
+            ["application-a"]
+        )
+        try expectEqual(
+            windowStore.order(["window-b", "window-a"]) { $0 },
+            ["window-a", "window-b"]
+        )
+        try expectEqual(
+            applicationStore.order(["application-b", "application-a"]) { $0 },
+            ["application-a", "application-b"]
+        )
+    }
+
+    static func testApplicationMRUIsAppliedBeforeActiveApplicationPinning() throws {
+        let store = SwitcherRecencyStore(
+            userDefaults: makeDefaults(),
+            mode: .applicationSwitching
+        )
+        store.recordSelection(id: "safari")
+        store.recordSelection(id: "notes")
+
+        let source = [
+            makeApplication(id: "finder", isActive: true),
+            makeApplication(id: "safari", isActive: false),
+            makeApplication(id: "notes", isActive: false)
+        ]
+        let mruApplied = store.order(source) { $0.id }
+        let ordered = SwitcherWindowOrderPolicy.pinningFocusedWindowFirst(mruApplied) {
+            $0.isActive
+        }
+
+        try expectEqual(ordered.map(\.id), ["finder", "notes", "safari"])
+
+        let forwardIndex = SwitcherRecencyStore.initialSelectedIndex(
+            itemCount: ordered.count,
+            reverse: false
+        )
+        let reverseIndex = SwitcherRecencyStore.initialSelectedIndex(
+            itemCount: ordered.count,
+            reverse: true
+        )
+        try expectEqual(ordered[forwardIndex].id, "notes")
+        try expectEqual(ordered[reverseIndex].id, "safari")
+    }
+
+    private static func makeApplication(id: String, isActive: Bool) -> ApplicationItem {
+        ApplicationItem(
+            id: id,
+            processIdentifier: id.hashValue,
+            bundleIdentifier: "com.example.\(id)",
+            isActive: isActive,
+            switcherListItem: SwitcherListItem(
+                id: id,
+                title: id.capitalized,
+                subtitle: nil,
+                symbolName: "app"
+            )
+        )
     }
 }
 

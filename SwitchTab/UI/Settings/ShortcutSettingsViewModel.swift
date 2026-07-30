@@ -11,9 +11,11 @@ public extension Notification.Name {
 public final class ShortcutSettingsViewModel: ObservableObject {
     private struct RegistrationMessageText: Equatable {
         let currentAppWindowSwitching: String?
+        let applicationSwitching: String?
 
         static let empty = RegistrationMessageText(
-            currentAppWindowSwitching: nil
+            currentAppWindowSwitching: nil,
+            applicationSwitching: nil
         )
     }
 
@@ -63,6 +65,10 @@ public final class ShortcutSettingsViewModel: ObservableObject {
 
     public func registrationMessage() -> String? {
         registrationMessageText.currentAppWindowSwitching
+    }
+
+    public func applicationSwitchingRegistrationMessage() -> String? {
+        registrationMessageText.applicationSwitching
     }
 
     public func refreshPermissionState() {
@@ -169,13 +175,20 @@ public final class ShortcutSettingsViewModel: ObservableObject {
         }
 
         var currentAppWindowSwitchingText = ""
+        var applicationSwitchingText = ""
 
         for message in messages {
-            append(message.message, to: &currentAppWindowSwitchingText)
+            switch message.mode {
+            case .currentAppWindowSwitching:
+                append(message.message, to: &currentAppWindowSwitchingText)
+            case .applicationSwitching:
+                append(message.message, to: &applicationSwitchingText)
+            }
         }
 
         return RegistrationMessageText(
-            currentAppWindowSwitching: currentAppWindowSwitchingText.isEmpty ? nil : currentAppWindowSwitchingText
+            currentAppWindowSwitching: currentAppWindowSwitchingText.isEmpty ? nil : currentAppWindowSwitchingText,
+            applicationSwitching: applicationSwitchingText.isEmpty ? nil : applicationSwitchingText
         )
     }
 

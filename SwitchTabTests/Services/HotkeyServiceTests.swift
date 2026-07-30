@@ -5,8 +5,11 @@ import CoreGraphics
 enum HotkeyServiceTests {
     static func run() throws {
         try testFallbackRegistrationRecordsWarningWhenRequestedShortcutUnavailable()
+        try testPersistedWindowCmdTabFallsBackWithoutRegisteringReservedKey()
         try testExactRegistrationDoesNotUseFallbackWhenRequestedShortcutIsUnavailable()
         try testSameModeForwardAndReverseHotkeysCanHaveSeparateHandlers()
+        try testEventTapDispatcherInvokesApplicationAutorepeats()
+        try testEventTapDispatcherConsumesIgnoredWindowAutorepeats()
         try testModeInvocationKeepsFirstRegisteredSettingWhenHandlerIsUpdated()
         try testPreferredRegistrarUsesPrimaryBeforeFallback()
         try testPreferredRegistrarFallsBackWhenPrimaryRejectsShortcut()
@@ -32,6 +35,34 @@ enum HotkeyServiceTests {
         try expectEqual(registrationMessages.first?.mode, .currentAppWindowSwitching)
         try expectTrue(registrationMessages.first?.message.contains("Cmd + `") == true)
         try expectTrue(registrationMessages.first?.message.contains("Option + Ctrl + `") == true)
+    }
+
+    static func testPersistedWindowCmdTabFallsBackWithoutRegisteringReservedKey() throws {
+        let registrar = CountingHotkeyRegistrar(shouldRegister: true)
+        let service = HotkeyService(registrar: registrar)
+        let persistedWindowShortcut = ShortcutSetting(
+            id: "current-app-window-switching",
+            mode: .currentAppWindowSwitching,
+            keyEquivalent: "Tab",
+            keyCode: 48,
+            modifiers: ["command"],
+            isUsable: true
+        )
+
+        let result = service.registerFirstUsable(
+            primaryCandidate: persistedWindowShortcut,
+            fallbackCandidate: .fallbackCurrentAppWindowSwitching,
+            existing: [] as [ShortcutSetting],
+            mode: .currentAppWindowSwitching
+        ) {}
+
+        try expectEqual(result, .registered)
+        try expectEqual(
+            service.registeredSetting(for: .currentAppWindowSwitching),
+            .fallbackCurrentAppWindowSwitching
+        )
+        try expectEqual(registrar.registeredKeyCodes, [50])
+        try expectFalse(registrar.registeredKeyCodes.contains(48))
     }
 
     static func testExactRegistrationDoesNotUseFallbackWhenRequestedShortcutIsUnavailable() throws {
@@ -79,6 +110,57 @@ enum HotkeyServiceTests {
         try expectEqual(forwardCount, 1)
         try expectEqual(reverseCount, 1)
         try expectEqual(service.registeredSetting(for: .currentAppWindowSwitching), .defaultCurrentAppWindowSwitching)
+    }
+
+    static func testEventTapDispatcherInvokesApplicationAutorepeats() throws {
+        let dispatcher = EventTapHotkeyDispatcher(invokesHandlersForAutorepeat: true)
+        var forwardCount = 0
+        var reverseCount = 0
+
+        try expectTrue(dispatcher.register(setting: .defaultApplicationSwitching) {
+            forwardCount += 1
+        })
+        try expectTrue(dispatcher.register(setting: .defaultApplicationSwitchingReverse) {
+            reverseCount += 1
+        })
+
+        try expectTrue(
+            dispatcher.dispatch(keyCode: 48, modifiers: ["command"], isAutorepeat: true)
+        )
+        try expectTrue(
+            dispatcher.dispatch(
+                keyCode: 48,
+                modifiers: ["command", "shift"],
+                isAutorepeat: true
+            )
+        )
+        try expectFalse(
+            dispatcher.dispatch(
+                keyCode: 48,
+                modifiers: ["command", "option"],
+                isAutorepeat: true
+            )
+        )
+        try expectEqual(forwardCount, 1)
+        try expectEqual(reverseCount, 1)
+    }
+
+    static func testEventTapDispatcherConsumesIgnoredWindowAutorepeats() throws {
+        let dispatcher = EventTapHotkeyDispatcher(invokesHandlersForAutorepeat: false)
+        var invocationCount = 0
+
+        try expectTrue(dispatcher.register(setting: .defaultCurrentAppWindowSwitching) {
+            invocationCount += 1
+        })
+
+        try expectTrue(
+            dispatcher.dispatch(keyCode: 50, modifiers: ["command"], isAutorepeat: true)
+        )
+        try expectEqual(invocationCount, 0)
+        try expectTrue(
+            dispatcher.dispatch(keyCode: 50, modifiers: ["command"], isAutorepeat: false)
+        )
+        try expectEqual(invocationCount, 1)
     }
 
     static func testModeInvocationKeepsFirstRegisteredSettingWhenHandlerIsUpdated() throws {

@@ -701,6 +701,183 @@ expected_with_keychain="<notarytool>"$'\n'"<submit>"$'\n'"</tmp/SwitchTab.dmg>"$
 [[ "$(<"$NOTARY_LOG")" == "$expected_with_keychain" ]] || \
     fail "nonempty Keychain path was not passed atomically: $(<"$NOTARY_LOG")"
 
+# Actual builds must repair every nested Sparkle signature with the required
+# trusted identity. Local signing must explicitly disable timestamps, while
+# the release path must keep its Developer ID identity and trusted timestamp.
+SIGNING_FIXTURE_ROOT="$TEMP_ROOT/direct-signing"
+SIGNING_BIN="$SIGNING_FIXTURE_ROOT/bin"
+SIGNING_LOG="$SIGNING_FIXTURE_ROOT/codesign.log"
+mkdir -p "$SIGNING_BIN"
+
+cat > "$SIGNING_BIN/codesign" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$CODESIGN_LOG"
+EOF
+chmod +x "$SIGNING_BIN/codesign"
+
+cat > "$SIGNING_BIN/xcodebuild" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -n "${XCODEBUILD_LOG:-}" ]]; then
+    printf 'invoked\n' >> "$XCODEBUILD_LOG"
+fi
+
+derived_data_path=''
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -derivedDataPath)
+            derived_data_path="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+[[ -n "$derived_data_path" ]]
+app_path="$derived_data_path/Build/Products/Release/SwitchTab.app"
+sparkle_current="$app_path/Contents/Frameworks/Sparkle.framework/Versions/Current"
+mkdir -p "$sparkle_current/XPCServices" "$sparkle_current/Updater.app"
+touch \
+    "$sparkle_current/Autoupdate" \
+    "$sparkle_current/XPCServices/Downloader.xpc" \
+    "$sparkle_current/XPCServices/Installer.xpc"
+EOF
+chmod +x "$SIGNING_BIN/xcodebuild"
+
+AD_HOC_IDENTITY_BUILD_ROOT="$SIGNING_FIXTURE_ROOT/ad-hoc-identity"
+AD_HOC_IDENTITY_XCODEBUILD_LOG="$SIGNING_FIXTURE_ROOT/ad-hoc-identity-xcodebuild.log"
+set +e
+ad_hoc_identity_output="$(
+    CODESIGN_BIN="$SIGNING_BIN/codesign" \
+    CODESIGN_LOG="$SIGNING_LOG" \
+    DIRECT_BUILD_ROOT="$AD_HOC_IDENTITY_BUILD_ROOT" \
+    SPARKLE_PUBLIC_ED_KEY='fixture-public-key' \
+    DEVELOPER_ID_APPLICATION='-' \
+    XCODEBUILD_LOG="$AD_HOC_IDENTITY_XCODEBUILD_LOG" \
+    PATH="$SIGNING_BIN:$PATH" \
+    CONFIGURATION=Release \
+    bash "$BUILDER_PATH" 2>&1
+)"
+ad_hoc_identity_status=$?
+set -e
+[[ "$ad_hoc_identity_status" -eq 64 ]] || \
+    fail "ad-hoc signing identity was not rejected: status=$ad_hoc_identity_status output=$ad_hoc_identity_output"
+[[ "$ad_hoc_identity_output" == *"DEVELOPER_ID_APPLICATION must name a Developer ID Application certificate"* ]] || \
+    fail "ad-hoc identity rejection did not explain the Developer ID requirement: $ad_hoc_identity_output"
+[[ ! -e "$AD_HOC_IDENTITY_XCODEBUILD_LOG" ]] || \
+    fail "ad-hoc identity was discovered only after xcodebuild started"
+
+MISSING_IDENTITY_BUILD_ROOT="$SIGNING_FIXTURE_ROOT/missing-identity"
+MISSING_IDENTITY_XCODEBUILD_LOG="$SIGNING_FIXTURE_ROOT/missing-identity-xcodebuild.log"
+set +e
+missing_identity_output="$(
+    CODESIGN_BIN="$SIGNING_BIN/codesign" \
+    CODESIGN_LOG="$SIGNING_LOG" \
+    DIRECT_BUILD_ROOT="$MISSING_IDENTITY_BUILD_ROOT" \
+    SPARKLE_PUBLIC_ED_KEY='fixture-public-key' \
+    DEVELOPER_ID_APPLICATION='' \
+    XCODEBUILD_LOG="$MISSING_IDENTITY_XCODEBUILD_LOG" \
+    PATH="$SIGNING_BIN:$PATH" \
+    CONFIGURATION=Release \
+    bash "$BUILDER_PATH" 2>&1
+)"
+missing_identity_status=$?
+set -e
+[[ "$missing_identity_status" -eq 64 ]] || \
+    fail "actual local build without Developer ID was not rejected: status=$missing_identity_status output=$missing_identity_output"
+[[ "$missing_identity_output" == *"DEVELOPER_ID_APPLICATION is required"* ]] || \
+    fail "missing Developer ID rejection did not identify the required variable: $missing_identity_output"
+[[ ! -e "$MISSING_IDENTITY_XCODEBUILD_LOG" ]] || \
+    fail "missing Developer ID was discovered only after xcodebuild started"
+
+PREPARE_ONLY_ROOT="$SIGNING_FIXTURE_ROOT/prepare-only"
+PREPARE_ONLY_OUTPUT="$(
+    CODESIGN_BIN="$SIGNING_BIN/codesign" \
+    CODESIGN_LOG="$SIGNING_LOG" \
+    DIRECT_BUILD_ROOT="$PREPARE_ONLY_ROOT" \
+    SPARKLE_PUBLIC_ED_KEY='fixture-public-key' \
+    DEVELOPER_ID_APPLICATION='' \
+    XCODEBUILD_LOG="$SIGNING_FIXTURE_ROOT/prepare-only-xcodebuild.log" \
+    PATH="$SIGNING_BIN:$PATH" \
+    CONFIGURATION=Release \
+    bash "$BUILDER_PATH" --prepare-only
+)"
+[[ "$PREPARE_ONLY_OUTPUT" == *"Prepared direct distribution workspace:"* ]] || \
+    fail "prepare-only unexpectedly required a Developer ID identity: $PREPARE_ONLY_OUTPUT"
+
+LOCAL_BUILD_ROOT="$SIGNING_FIXTURE_ROOT/local-build"
+: > "$SIGNING_LOG"
+CODESIGN_BIN="$SIGNING_BIN/codesign" \
+CODESIGN_LOG="$SIGNING_LOG" \
+DIRECT_BUILD_ROOT="$LOCAL_BUILD_ROOT" \
+SPARKLE_PUBLIC_ED_KEY='fixture-public-key' \
+DEVELOPER_ID_APPLICATION='Developer ID Application: Fixture (TEAM)' \
+PATH="$SIGNING_BIN:$PATH" \
+CONFIGURATION=Release \
+bash "$BUILDER_PATH"
+
+LOCAL_APP_PATH="$LOCAL_BUILD_ROOT/DerivedData/Build/Products/Release/SwitchTab.app"
+LOCAL_SPARKLE_CURRENT="$LOCAL_APP_PATH/Contents/Frameworks/Sparkle.framework/Versions/Current"
+expected_local_signing=$(cat <<EOF
+--force --options runtime --timestamp=none --sign Developer ID Application: Fixture (TEAM) $LOCAL_SPARKLE_CURRENT/Autoupdate
+--force --options runtime --timestamp=none --sign Developer ID Application: Fixture (TEAM) $LOCAL_SPARKLE_CURRENT/Updater.app
+--force --options runtime --timestamp=none --sign Developer ID Application: Fixture (TEAM) $LOCAL_SPARKLE_CURRENT/XPCServices/Downloader.xpc
+--force --options runtime --timestamp=none --sign Developer ID Application: Fixture (TEAM) $LOCAL_SPARKLE_CURRENT/XPCServices/Installer.xpc
+--force --options runtime --timestamp=none --sign Developer ID Application: Fixture (TEAM) $LOCAL_APP_PATH/Contents/Frameworks/Sparkle.framework
+--force --options runtime --timestamp=none --sign Developer ID Application: Fixture (TEAM) $LOCAL_APP_PATH
+--verify --deep --strict --verbose=2 $LOCAL_APP_PATH
+EOF
+)
+[[ "$(<"$SIGNING_LOG")" == "$expected_local_signing" ]] || \
+    fail "local direct build did not re-sign Sparkle in order: $(<"$SIGNING_LOG")"
+[[ "$(<"$SIGNING_LOG")" != *"--timestamp --sign"* ]] || \
+    fail "local direct build requested a trusted signing timestamp"
+
+SIGNING_FUNCTION_HARNESS="$TEMP_ROOT/signing-functions.sh"
+{
+    printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail'
+    printf '%s\n' 'RELEASE="${RELEASE:-0}"' 'DEVELOPER_ID_APPLICATION="${DEVELOPER_ID_APPLICATION:-}"' 'CODESIGN_BIN="${CODESIGN_BIN:-/usr/bin/codesign}"'
+    /usr/bin/awk '
+        /^sign_code\(\)/ { capture = 1 }
+        capture && /^while \[\[/ { exit }
+        capture { print }
+    ' "$BUILDER_PATH"
+    printf '%s\n' 'sign_app_bundle "$APP_PATH"'
+} > "$SIGNING_FUNCTION_HARNESS"
+chmod +x "$SIGNING_FUNCTION_HARNESS"
+
+RELEASE_APP_PATH="$SIGNING_FIXTURE_ROOT/release/SwitchTab.app"
+RELEASE_SPARKLE_CURRENT="$RELEASE_APP_PATH/Contents/Frameworks/Sparkle.framework/Versions/Current"
+mkdir -p "$RELEASE_SPARKLE_CURRENT/XPCServices" "$RELEASE_SPARKLE_CURRENT/Updater.app"
+touch \
+    "$RELEASE_SPARKLE_CURRENT/Autoupdate" \
+    "$RELEASE_SPARKLE_CURRENT/XPCServices/Downloader.xpc" \
+    "$RELEASE_SPARKLE_CURRENT/XPCServices/Installer.xpc"
+: > "$SIGNING_LOG"
+APP_PATH="$RELEASE_APP_PATH" \
+RELEASE=1 \
+DEVELOPER_ID_APPLICATION='Developer ID Application: Fixture (TEAM)' \
+CODESIGN_BIN="$SIGNING_BIN/codesign" \
+CODESIGN_LOG="$SIGNING_LOG" \
+bash "$SIGNING_FUNCTION_HARNESS"
+
+expected_release_signing=$(cat <<EOF
+--force --options runtime --timestamp --sign Developer ID Application: Fixture (TEAM) $RELEASE_SPARKLE_CURRENT/Autoupdate
+--force --options runtime --timestamp --sign Developer ID Application: Fixture (TEAM) $RELEASE_SPARKLE_CURRENT/Updater.app
+--force --options runtime --timestamp --sign Developer ID Application: Fixture (TEAM) $RELEASE_SPARKLE_CURRENT/XPCServices/Downloader.xpc
+--force --options runtime --timestamp --sign Developer ID Application: Fixture (TEAM) $RELEASE_SPARKLE_CURRENT/XPCServices/Installer.xpc
+--force --options runtime --timestamp --sign Developer ID Application: Fixture (TEAM) $RELEASE_APP_PATH/Contents/Frameworks/Sparkle.framework
+--force --options runtime --timestamp --sign Developer ID Application: Fixture (TEAM) $RELEASE_APP_PATH
+--verify --deep --strict --verbose=2 $RELEASE_APP_PATH
+EOF
+)
+[[ "$(<"$SIGNING_LOG")" == "$expected_release_signing" ]] || \
+    fail "release signing no longer preserves Developer ID/timestamp behavior: $(<"$SIGNING_LOG")"
+
 /usr/bin/ruby -e 'require "yaml"; YAML.safe_load(File.read(ARGV.fetch(0)), permitted_classes: [], permitted_symbols: [], aliases: false)' "$WORKFLOW_PATH"
 bash -n "$BUILDER_PATH"
 bash -n "$0"

@@ -1,17 +1,22 @@
 import Foundation
 
 public final class SwitcherRecencyStore {
-    private static let windowRecencyStorageKey = "SwitchTab.recency.currentAppWindowSwitching"
     private static let emptyRankedIDs: [String] = []
 
     private let userDefaults: UserDefaults
     private let maxHistoryCount: Int
-    private var cachedWindowRankedIDs: [String]?
-    private var isWindowHistoryDirty = false
+    private let recencyStorageKey: String
+    private var cachedRankedIDs: [String]?
+    private var isHistoryDirty = false
 
-    public init(userDefaults: UserDefaults = .standard, maxHistoryCount: Int = 100) {
+    public init(
+        userDefaults: UserDefaults = .standard,
+        maxHistoryCount: Int = 100,
+        mode: SwitcherMode = .currentAppWindowSwitching
+    ) {
         self.userDefaults = userDefaults
         self.maxHistoryCount = maxHistoryCount
+        self.recencyStorageKey = Self.storageKey(for: mode)
     }
 
     public static func initialSelectedIndex(itemCount: Int, reverse: Bool) -> Int {
@@ -46,18 +51,18 @@ public final class SwitcherRecencyStore {
 
             ids.append(currentID)
         }
-        cachedWindowRankedIDs = ids
-        isWindowHistoryDirty = true
+        cachedRankedIDs = ids
+        isHistoryDirty = true
     }
 
     public func flush() {
-        guard isWindowHistoryDirty else {
+        guard isHistoryDirty else {
             return
         }
 
-        if isWindowHistoryDirty, let rankedIDs = cachedWindowRankedIDs {
-            userDefaults.set(rankedIDs, forKey: Self.windowRecencyStorageKey)
-            isWindowHistoryDirty = false
+        if isHistoryDirty, let rankedIDs = cachedRankedIDs {
+            userDefaults.set(rankedIDs, forKey: recencyStorageKey)
+            isHistoryDirty = false
         }
     }
 
@@ -129,22 +134,22 @@ public final class SwitcherRecencyStore {
             return []
         }
 
-        if let cachedRankedIDs = cachedWindowRankedIDs {
+        if let cachedRankedIDs {
             return cachedRankedIDs
         }
 
-        guard let rankedIDs = userDefaults.stringArray(forKey: Self.windowRecencyStorageKey) else {
-            cachedWindowRankedIDs = Self.emptyRankedIDs
+        guard let rankedIDs = userDefaults.stringArray(forKey: recencyStorageKey) else {
+            cachedRankedIDs = Self.emptyRankedIDs
             return Self.emptyRankedIDs
         }
 
         guard !rankedIDs.isEmpty else {
-            cachedWindowRankedIDs = Self.emptyRankedIDs
+            cachedRankedIDs = Self.emptyRankedIDs
             return Self.emptyRankedIDs
         }
 
         let normalizedRankedIDs = normalizedRankedIDs(from: rankedIDs)
-        cachedWindowRankedIDs = normalizedRankedIDs
+        cachedRankedIDs = normalizedRankedIDs
         return normalizedRankedIDs
     }
 
@@ -163,5 +168,14 @@ public final class SwitcherRecencyStore {
             normalizedIDs.append(rankedID)
         }
         return normalizedIDs
+    }
+
+    private static func storageKey(for mode: SwitcherMode) -> String {
+        switch mode {
+        case .currentAppWindowSwitching:
+            return "SwitchTab.recency.currentAppWindowSwitching"
+        case .applicationSwitching:
+            return "SwitchTab.recency.applicationSwitching"
+        }
     }
 }

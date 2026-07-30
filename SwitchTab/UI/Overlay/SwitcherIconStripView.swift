@@ -4,7 +4,9 @@ import SwiftUI
 struct SwitcherIconStripView: View {
     private let items: [SwitcherListItem]
     private let selectedIndex: Int
-    private let showsThumbnails: Bool
+    private let mode: SwitcherMode
+    private let showsCloseControl: Bool
+    private let switchAccessibilityHint: String
     private let onConfirm: (SwitcherListItem, Int) -> Void
     private let onClose: (SwitcherListItem, Int) -> Void
     private let onHover: (Int) -> Void
@@ -20,7 +22,9 @@ struct SwitcherIconStripView: View {
         selectedIndex: Int,
         gridColumns: [GridItem],
         layoutMetrics: SwitcherOverlayLayoutMetrics,
-        showsThumbnails: Bool,
+        mode: SwitcherMode,
+        showsCloseControl: Bool = true,
+        switchAccessibilityHint: String = "Switch to this window.",
         hoverEnabled: Bool,
         scrollToken: Int,
         thumbnailStore: WindowThumbnailStore,
@@ -33,7 +37,9 @@ struct SwitcherIconStripView: View {
         self.selectedIndex = selectedIndex
         self.gridColumns = gridColumns
         self.layoutMetrics = layoutMetrics
-        self.showsThumbnails = showsThumbnails
+        self.mode = mode
+        self.showsCloseControl = showsCloseControl
+        self.switchAccessibilityHint = switchAccessibilityHint
         self.hoverEnabled = hoverEnabled
         self.scrollToken = scrollToken
         self.thumbnailStore = thumbnailStore
@@ -55,7 +61,9 @@ struct SwitcherIconStripView: View {
                                 item: item,
                                 index: index,
                                 isSelected: index == selectedIndex,
-                                showsThumbnails: showsThumbnails,
+                                mode: mode,
+                                showsCloseControl: showsCloseControl,
+                                switchAccessibilityHint: switchAccessibilityHint,
                                 hoverEnabled: hoverEnabled,
                                 layoutMetrics: layoutMetrics,
                                 thumbnailStore: thumbnailStore,
@@ -110,7 +118,9 @@ private struct SwitcherWindowTile: View {
     let item: SwitcherListItem
     let index: Int
     let isSelected: Bool
-    let showsThumbnails: Bool
+    let mode: SwitcherMode
+    let showsCloseControl: Bool
+    let switchAccessibilityHint: String
     let hoverEnabled: Bool
     let layoutMetrics: SwitcherOverlayLayoutMetrics
     let thumbnailStore: WindowThumbnailStore
@@ -127,10 +137,7 @@ private struct SwitcherWindowTile: View {
             Button {
                 onConfirm(item, index)
             } label: {
-                VStack(alignment: .leading, spacing: 6) {
-                    titleHeader(for: item)
-                    icon(for: item)
-                }
+                tileContent(for: item)
                 .padding(layoutMetrics.tileContentPadding)
                 .frame(
                     width: layoutMetrics.tileSize.width,
@@ -148,9 +155,9 @@ private struct SwitcherWindowTile: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text(item.title))
-            .accessibilityHint(Text("Switch to this window."))
+            .accessibilityHint(Text(switchAccessibilityHint))
 
-            if isSelected || isHovered {
+            if showsCloseControl && (isSelected || isHovered) {
                 closeButton
             }
         }
@@ -171,6 +178,38 @@ private struct SwitcherWindowTile: View {
         }
 
         onHover(index)
+    }
+
+    @ViewBuilder
+    private func tileContent(for item: SwitcherListItem) -> some View {
+        switch mode {
+        case .currentAppWindowSwitching:
+            windowContent(for: item)
+        case .applicationSwitching:
+            applicationContent(for: item)
+        }
+    }
+
+    private func windowContent(for item: SwitcherListItem) -> some View {
+        VStack(alignment: .leading, spacing: layoutMetrics.tileContentSpacing) {
+            titleHeader(for: item)
+            icon(for: item)
+        }
+    }
+
+    private func applicationContent(for item: SwitcherListItem) -> some View {
+        VStack(alignment: .center, spacing: layoutMetrics.tileContentSpacing) {
+            icon(for: item)
+            applicationTitle(for: item)
+        }
+    }
+
+    private func applicationTitle(for item: SwitcherListItem) -> some View {
+        Text(item.title)
+            .font(.system(size: layoutMetrics.titleFontSize, weight: .medium))
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(width: layoutMetrics.thumbnailSize.width, alignment: .center)
     }
 
     private var closeButton: some View {
@@ -222,15 +261,17 @@ private struct SwitcherWindowTile: View {
                 .font(.system(size: layoutMetrics.titleFontSize, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
-                // Keep the title clear of the close button in the top corner.
-                .padding(.trailing, layoutMetrics.closeButtonHitTargetSize.width)
+                .padding(
+                    .trailing,
+                    showsCloseControl ? layoutMetrics.closeButtonHitTargetSize.width : 0
+                )
         }
         .frame(width: layoutMetrics.thumbnailSize.width, alignment: .leading)
     }
 
     @ViewBuilder
     private func icon(for item: SwitcherListItem) -> some View {
-        if showsThumbnails,
+        if SwitcherOverlayThumbnailPolicy.showsThumbnails(for: mode),
            let thumbnailKey = item.thumbnailKey {
             WindowThumbnailIconView(
                 thumbnailKey: thumbnailKey,

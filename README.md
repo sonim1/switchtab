@@ -1,6 +1,7 @@
 # SwitchTab
 
-Native macOS window switcher prototype for fast keyboard-first current-app window switching.
+Native macOS keyboard-first switcher for fast current-app window switching and
+optional application switching.
 
 ## Requirements
 
@@ -11,7 +12,31 @@ Native macOS window switcher prototype for fast keyboard-first current-app windo
 
 Open `SwitchTab.xcodeproj` in Xcode, select the `SwitchTab` scheme, then use `Product > Build` or `Product > Test`.
 
-SwitchTab leaves macOS Cmd+Tab app switching untouched. The app focuses on current-app window switching with Cmd+` by default, falling back to Option+Ctrl+` when macOS refuses the reserved shortcut.
+SwitchTab keeps native macOS Cmd+Tab behavior by default. The current-app
+window shortcut is Cmd+` by default, falling back to Option+Ctrl+` when macOS
+refuses the reserved shortcut.
+
+Settings > Shortcut includes an opt-in `Replace macOS Cmd-Tab` toggle. It is
+off by default, and the configurable current-app window shortcut remains
+independent. When enabled with Accessibility access, SwitchTab uses a
+dedicated EventTap to handle Cmd-Tab (forward) and Cmd-Shift-Tab (reverse),
+showing application icons and names. Application selection has its own MRU
+history and never reorders window history. Turning the toggle off tears down
+only the application EventTap; quitting SwitchTab also removes that process-
+owned tap, so native macOS Cmd+Tab is restored in either case.
+
+Application icons and names do not require Screen Recording. Screen Recording
+is still used only for current-app window previews; without it, window rows
+retain their title/fallback behavior and the existing preview permission
+guidance remains in effect. Accessibility is required for current-app window
+enumeration/focus and for the application replacement EventTap. If EventTap
+registration is unavailable, the opt-in setting remains saved, native Cmd+Tab
+continues to work, and Settings shows the application-specific recovery copy
+until access is granted and SwitchTab becomes active again.
+
+The complete manual acceptance contract for Finder, Safari, and Notes is in
+[the macOS quickstart](specs/001-macos-switchtab/quickstart.md). It records
+each action and result in `.build/qa/application-switching/outcomes.md`.
 
 This workspace can be tested with Swift Package Manager:
 
@@ -28,10 +53,13 @@ prepare or build the website/DMG distribution variant, use:
 ```bash
 SPARKLE_PUBLIC_ED_KEY="<public-ed25519-key>" \
 SWITCHTAB_UPDATE_FEED_URL="https://updates.switchtab.royjen.com/appcast.xml" \
+DEVELOPER_ID_APPLICATION="Developer ID Application: Your Name (TEAMID)" \
 scripts/build-direct-distribution.sh
 ```
 
-`SWITCHTAB_UPDATE_FEED_URL` must use `https://`.
+`SWITCHTAB_UPDATE_FEED_URL` must use `https://`. Actual direct builds require a
+trusted signing identity so the hardened app can load Sparkle; `--prepare-only`
+does not require that identity.
 
 Use `--prepare-only` to generate the patched workspace without building:
 

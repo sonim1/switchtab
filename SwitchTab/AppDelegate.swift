@@ -4,15 +4,22 @@ import AppKit
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayController: SwitcherOverlayController?
     private let windowProvider = AccessibilityWindowProvider()
+    private let applicationProvider = RunningApplicationProvider()
     private let windowFocusService = WindowFocusService()
     private let windowCloseService = WindowCloseService()
+    private let applicationActivationService = ApplicationActivationService()
     private let permissionService = PermissionService()
     private let shortcutStore = ShortcutSettingsStore()
     private let applicationSettingsStore = ApplicationSettingsStore()
     private let updateChecker: any UpdateChecking = UpdateControllerFactory.make()
     private let recencyStore = SwitcherRecencyStore()
+    private let applicationRecencyStore = SwitcherRecencyStore(mode: .applicationSwitching)
     private let usageMetricsStore = UsageMetricsStore()
     private let hotkeyService = HotkeyService()
+    private let applicationHotkeyController = ApplicationSwitchingHotkeyController()
+    private lazy var workspaceActivationRecencyObserver = WorkspaceActivationRecencyObserver(
+        recencyStore: applicationRecencyStore
+    )
     private let thumbnailStore = WindowThumbnailStore()
     private var thumbnailLoader: WindowThumbnailLoader?
     private var menuBarStatusItemController: MenuBarStatusItemController?
@@ -22,6 +29,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var shortcutRecordingDidBeginObserver: NSObjectProtocol?
     private var shortcutRecordingDidEndObserver: NSObjectProtocol?
     private var applicationDidBecomeActiveObserver: NSObjectProtocol?
+    private var applicationSettingsObserver: NSObjectProtocol?
+    private var workspaceApplicationActivationObserver: NSObjectProtocol?
     private var settingsRequestObserver: NSObjectProtocol?
     private var aboutRequestObserver: NSObjectProtocol?
     private var updateCheckRequestObserver: NSObjectProtocol?
@@ -42,10 +51,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         observeShortcutChanges()
         observeShortcutRecording()
         observeApplicationActivation()
+        observeApplicationSettingsChanges()
+        observeWorkspaceApplicationActivation()
         observeSettingsRequests()
         observeAboutRequests()
         observeUpdateCheckRequests()
         registerWindowHotkeys(setting: shortcutStore.load())
+        if applicationSettingsStore.replacesCommandTab {
+            updateApplicationHotkeyRegistration()
+        }
         showSettingsWindowIfNeededOnLaunch()
     }
 
@@ -62,7 +76,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarStatusItemController?.invalidate()
         menuBarStatusItemController = nil
         hotkeyService.unregisterAll()
+        applicationHotkeyController.unregisterAll()
         recencyStore.flush()
+        applicationRecencyStore.flush()
         usageMetricsStore.flush()
         removeNotificationObservers()
     }
@@ -170,6 +186,64 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    public func showApplicationSwitcher(reverse: Bool = false) {
+        guard let overlayController else {
+            return
+        }
+
+        if advancePresentedOverlayIfNeeded(
+            overlayController: overlayController,
+            mode: .applicationSwitching,
+            reverse: reverse
+        ) {
+            return
+        }
+
+        cancelThumbnailLoadingIfNeeded()
+        let recentlyOrderedApplications = applicationRecencyStore.order(
+            applicationProvider.runningApplications()
+        ) { application in
+            application.id
+        }
+        let applications = SwitcherWindowOrderPolicy.pinningFocusedWindowFirst(
+            recentlyOrderedApplications
+        ) { application in
+            application.isActive
+        }
+        guard !applications.isEmpty else {
+            overlayController.dismiss()
+            return
+        }
+
+        let snapshot = SwitcherPresentationSnapshot(
+            elements: applications,
+            reverse: reverse
+        ) { application in
+            application.switcherListItem
+        }
+        overlayController.present(
+            mode: .applicationSwitching,
+            items: snapshot.listItems,
+            selectedIndex: ApplicationSwitcherSelectionPolicy.initialSelectedIndex(
+                applications: applications,
+                reverse: reverse
+            ),
+            triggerShortcut: .defaultApplicationSwitching,
+            onConfirm: { [weak self] item, _ in
+                guard let self,
+                      let selectedApplication = snapshot.element(withID: item.id) else {
+                    return
+                }
+
+                let selectionCoordinator = ApplicationSelectionCoordinator(
+                    activationService: self.applicationActivationService,
+                    recencyStore: self.applicationRecencyStore
+                )
+                selectionCoordinator.confirm(selectedApplication)
+            }
+        )
+    }
+
     private func thumbnailLoaderForRefresh() -> WindowThumbnailLoader {
         if let thumbnailLoader {
             return thumbnailLoader
@@ -214,6 +288,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private func observeShortcutRecording() {
         observe(.shortcutRecordingDidBegin, storing: &shortcutRecordingDidBeginObserver) { [weak self] in
             self?.hotkeyService.unregisterAll()
+            self?.persistRegistrationMessages()
         }
 
         observe(.shortcutRecordingDidEnd, storing: &shortcutRecordingDidEndObserver) { [weak self] in
@@ -225,6 +300,42 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func observeApplicationSettingsChanges() {
+        observe(.commandTabReplacementDidChange, storing: &applicationSettingsObserver) { [weak self] in
+            self?.updateApplicationHotkeyRegistration()
+        }
+    }
+
+    private func observeWorkspaceApplicationActivation() {
+        guard workspaceApplicationActivationObserver == nil else {
+            return
+        }
+
+        workspaceApplicationActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let application = notification.userInfo?[
+                NSWorkspace.applicationUserInfoKey
+            ] as? NSRunningApplication else {
+                return
+            }
+
+            let snapshot = RunningApplicationSnapshot(
+                processIdentifier: Int(application.processIdentifier),
+                bundleIdentifier: application.bundleIdentifier,
+                localizedName: application.localizedName,
+                isRegular: application.activationPolicy == .regular,
+                isTerminated: application.isTerminated,
+                isActive: application.isActive
+            )
+            MainActor.assumeIsolated {
+                self?.workspaceActivationRecencyObserver.recordActivation(snapshot)
+            }
+        }
+    }
+
     private func observeApplicationActivation() {
         observe(NSApplication.didBecomeActiveNotification, storing: &applicationDidBecomeActiveObserver) { [weak self] in
             guard let self else {
@@ -232,6 +343,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             self.registerWindowHotkeys(setting: self.shortcutStore.load())
+            self.updateApplicationHotkeyRegistration()
         }
     }
 
@@ -293,6 +405,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         removeObserver(&shortcutRecordingDidBeginObserver)
         removeObserver(&shortcutRecordingDidEndObserver)
         removeObserver(&applicationDidBecomeActiveObserver)
+        removeObserver(&applicationSettingsObserver)
+        removeWorkspaceApplicationActivationObserver()
         removeObserver(&settingsRequestObserver)
         removeObserver(&aboutRequestObserver)
         removeObserver(&updateCheckRequestObserver)
@@ -305,6 +419,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
         NotificationCenter.default.removeObserver(registeredObserver)
         observer = nil
+    }
+
+    private func removeWorkspaceApplicationActivationObserver() {
+        guard let workspaceApplicationActivationObserver else {
+            return
+        }
+
+        NSWorkspace.shared.notificationCenter.removeObserver(workspaceApplicationActivationObserver)
+        self.workspaceApplicationActivationObserver = nil
     }
 
     private func showSettingsWindow() {
@@ -396,7 +519,31 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         debugLog("registered reverse shortcut=\(windowReverseSetting.displayText) keyCode=\(String(describing: windowReverseSetting.keyCode)) result=\(reverseResult)")
 
+        persistRegistrationMessages()
+    }
+
+    private func updateApplicationHotkeyRegistration() {
+        let isEnabled = applicationSettingsStore.replacesCommandTab
+        _ = applicationHotkeyController.updateRegistration(
+            enabled: isEnabled,
+            forwardHandler: { [weak self] in
+                self?.showApplicationSwitcher()
+            },
+            reverseHandler: { [weak self] in
+                self?.showApplicationSwitcher(reverse: true)
+            }
+        )
+
+        if !isEnabled,
+           overlayController?.activeMode == .applicationSwitching {
+            overlayController?.dismiss()
+        }
+        persistRegistrationMessages()
+    }
+
+    private func persistRegistrationMessages() {
         let registrationMessages = hotkeyService.registrationMessageSnapshot()
+            + applicationHotkeyController.registrationMessageSnapshot()
         if shortcutStore.saveRegistrationMessages(registrationMessages) {
             NotificationCenter.default.post(name: .shortcutRegistrationDidChange, object: nil)
         }
@@ -411,6 +558,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             return false
         }
 
+        persistRegistrationMessages()
         return true
     }
 

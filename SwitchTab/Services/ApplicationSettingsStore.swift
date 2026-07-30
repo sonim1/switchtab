@@ -3,10 +3,14 @@ import ServiceManagement
 
 public extension Notification.Name {
     static let applicationSettingsDidChange = Notification.Name("SwitchTab.applicationSettingsDidChange")
+    static let commandTabReplacementDidChange = Notification.Name(
+        "SwitchTab.commandTabReplacementDidChange"
+    )
 }
 
 public struct ApplicationSettingsStore {
     public static let menuBarIconVisibleKey = "ApplicationSettings.menuBarIconVisible"
+    public static let replacesCommandTabKey = "ApplicationSettings.replacesCommandTab"
     public static let overlaySizeScaleKey = "ApplicationSettings.overlaySizeScale"
     /// Legacy three-step preference, read once to migrate onto the scale.
     public static let overlaySizeKey = "ApplicationSettings.overlaySize"
@@ -28,6 +32,20 @@ public struct ApplicationSettingsStore {
 
         userDefaults.set(visible, forKey: Self.menuBarIconVisibleKey)
         NotificationCenter.default.post(name: .applicationSettingsDidChange, object: nil)
+    }
+
+    public var replacesCommandTab: Bool {
+        userDefaults.object(forKey: Self.replacesCommandTabKey) as? Bool ?? false
+    }
+
+    public func saveReplacesCommandTab(_ enabled: Bool) {
+        guard replacesCommandTab != enabled else {
+            return
+        }
+
+        userDefaults.set(enabled, forKey: Self.replacesCommandTabKey)
+        NotificationCenter.default.post(name: .applicationSettingsDidChange, object: nil)
+        NotificationCenter.default.post(name: .commandTabReplacementDidChange, object: nil)
     }
 
     public var overlaySizeScale: OverlaySizeScale {

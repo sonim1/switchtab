@@ -77,7 +77,10 @@ public struct ShortcutSettingsView: View {
         case .general:
             GeneralSettingsPanel(viewModel: applicationSettingsViewModel)
         case .shortcut:
-            ShortcutSettingsPanel(viewModel: viewModel)
+            ShortcutSettingsPanel(
+                viewModel: viewModel,
+                applicationSettingsViewModel: applicationSettingsViewModel
+            )
         case .permissions:
             PermissionsSettingsPanel(viewModel: viewModel)
         }
@@ -300,11 +303,12 @@ private struct GeneralSettingsPanel: View {
 
 private struct ShortcutSettingsPanel: View {
     @ObservedObject var viewModel: ShortcutSettingsViewModel
+    @ObservedObject var applicationSettingsViewModel: ApplicationSettingsViewModel
 
     var body: some View {
         SettingsSection(
-            title: "Window Shortcut",
-            subtitle: "Use one gesture to cycle windows in the frontmost app.",
+            title: "Shortcuts",
+            subtitle: "Configure window switching and optional Cmd-Tab replacement.",
             symbolName: "keyboard"
         ) {
             ShortcutRecorderRow(
@@ -317,6 +321,30 @@ private struct ShortcutSettingsPanel: View {
                 )
             } onReset: {
                 viewModel.resetToDefault()
+            }
+
+            SettingsDivider()
+
+            SettingsRow(
+                symbolName: "command",
+                title: "Replace macOS Cmd-Tab",
+                detail: "Use SwitchTab to switch applications while it is running."
+            ) {
+                Toggle(
+                    "Replace macOS Cmd-Tab",
+                    isOn: Binding(
+                        get: { applicationSettingsViewModel.replacesCommandTab },
+                        set: { applicationSettingsViewModel.setReplacesCommandTab($0) }
+                    )
+                )
+                .labelsHidden()
+                .toggleStyle(.switch)
+            }
+
+            if let message = viewModel.applicationSwitchingRegistrationMessage() {
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.yellow)
             }
         }
     }

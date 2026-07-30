@@ -177,11 +177,15 @@ public final class PreferredHotkeyRegistrar: HotkeyRegistering {
 }
 
 public final class EventTapHotkeyRegistrar: HotkeyRegistering {
-    private var registrations: [EventTapHotkey: () -> Void] = [:]
+    private let dispatcher: EventTapHotkeyDispatcher
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
-    public init() {}
+    public init(invokesHandlersForAutorepeat: Bool = false) {
+        dispatcher = EventTapHotkeyDispatcher(
+            invokesHandlersForAutorepeat: invokesHandlersForAutorepeat
+        )
+    }
 
     deinit {
         // The tap callback holds an unretained pointer to self; tear the tap
@@ -190,17 +194,17 @@ public final class EventTapHotkeyRegistrar: HotkeyRegistering {
     }
 
     public func register(setting: ShortcutSetting, handler: @escaping () -> Void) -> Bool {
-        guard let hotkey = EventTapHotkey(setting: setting),
-              installTapIfNeeded() else {
+        guard EventTapHotkey(setting: setting) != nil,
+              installTapIfNeeded(),
+              dispatcher.register(setting: setting, handler: handler) else {
             return false
         }
 
-        registrations[hotkey] = handler
         return true
     }
 
     public func unregisterAll() {
-        registrations.removeAll(keepingCapacity: true)
+        dispatcher.unregisterAll()
         if let tap {
             CFMachPortInvalidate(tap)
         }
@@ -247,25 +251,55 @@ public final class EventTapHotkeyRegistrar: HotkeyRegistering {
             return Unmanaged.passUnretained(event)
         }
 
-        guard event.getIntegerValueField(.keyboardEventAutorepeat) == 0,
-              let handler = registrar.handler(for: event) else {
+        let shouldConsume = registrar.dispatcher.dispatch(
+            keyCode: UInt16(event.getIntegerValueField(.keyboardEventKeycode)),
+            modifiers: EventTapModifierResolver.modifierNames(from: event.flags),
+            isAutorepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        )
+        guard shouldConsume else {
             return Unmanaged.passUnretained(event)
         }
 
-        handler()
         return nil
-    }
-
-    private func handler(for event: CGEvent) -> (() -> Void)? {
-        let hotkey = EventTapHotkey(
-            keyCode: UInt16(event.getIntegerValueField(.keyboardEventKeycode)),
-            modifiers: EventTapModifierResolver.modifierNames(from: event.flags)
-        )
-        return registrations[hotkey]
     }
 }
 
-private struct EventTapHotkey: Hashable {
+final class EventTapHotkeyDispatcher {
+    private let invokesHandlersForAutorepeat: Bool
+    private var registrations: [EventTapHotkey: () -> Void] = [:]
+
+    init(invokesHandlersForAutorepeat: Bool) {
+        self.invokesHandlersForAutorepeat = invokesHandlersForAutorepeat
+    }
+
+    @discardableResult
+    func register(setting: ShortcutSetting, handler: @escaping () -> Void) -> Bool {
+        guard let hotkey = EventTapHotkey(setting: setting) else {
+            return false
+        }
+
+        registrations[hotkey] = handler
+        return true
+    }
+
+    func unregisterAll() {
+        registrations.removeAll(keepingCapacity: true)
+    }
+
+    func dispatch(keyCode: UInt16, modifiers: [String], isAutorepeat: Bool) -> Bool {
+        let hotkey = EventTapHotkey(keyCode: keyCode, modifiers: modifiers)
+        guard let handler = registrations[hotkey] else {
+            return false
+        }
+
+        if !isAutorepeat || invokesHandlersForAutorepeat {
+            handler()
+        }
+        return true
+    }
+}
+
+struct EventTapHotkey: Hashable {
     let keyCode: UInt16
     let modifiers: [String]
 

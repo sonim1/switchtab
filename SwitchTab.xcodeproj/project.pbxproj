@@ -83,6 +83,11 @@
 		A00000000000000000000095 /* WindowCloseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000099 /* WindowCloseService.swift */; };
 		A00000000000000000000096 /* WindowCloseServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000100 /* WindowCloseServiceTests.swift */; };
 		A00000000000000000000097 /* SwitcherWindowOrdering.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000101 /* SwitcherWindowOrdering.swift */; };
+		A00000000000000000000103 /* ApplicationItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000103 /* ApplicationItem.swift */; };
+		A00000000000000000000104 /* RunningApplicationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000104 /* RunningApplicationProvider.swift */; };
+		A00000000000000000000105 /* ApplicationSwitchingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000105 /* ApplicationSwitchingTests.swift */; };
+		A00000000000000000000106 /* ApplicationActivationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000106 /* ApplicationActivationService.swift */; };
+		A00000000000000000000107 /* ApplicationSwitchingHotkeyController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000107 /* ApplicationSwitchingHotkeyController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -176,6 +181,11 @@
 		B00000000000000000000099 /* WindowCloseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowCloseService.swift; sourceTree = "<group>"; };
 		B00000000000000000000100 /* WindowCloseServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowCloseServiceTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000101 /* SwitcherWindowOrdering.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherWindowOrdering.swift; sourceTree = "<group>"; };
+		B00000000000000000000103 /* ApplicationItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationItem.swift; sourceTree = "<group>"; };
+		B00000000000000000000104 /* RunningApplicationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunningApplicationProvider.swift; sourceTree = "<group>"; };
+		B00000000000000000000105 /* ApplicationSwitchingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationSwitchingTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000106 /* ApplicationActivationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationActivationService.swift; sourceTree = "<group>"; };
+		B00000000000000000000107 /* ApplicationSwitchingHotkeyController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationSwitchingHotkeyController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -222,6 +232,7 @@
 			isa = PBXGroup;
 			children = (
 				B00000000000000000000004 /* SwitcherMode.swift */,
+				B00000000000000000000103 /* ApplicationItem.swift */,
 				B00000000000000000000005 /* PermissionState.swift */,
 				B00000000000000000000006 /* ShortcutSetting.swift */,
 				B00000000000000000000097 /* ShortcutKeyCodeResolver.swift */,
@@ -252,6 +263,9 @@
 				B00000000000000000000068 /* PermissionSettingsDestination.swift */,
 				B00000000000000000000029 /* HotkeyService.swift */,
 				B00000000000000000000035 /* AccessibilityWindowProvider.swift */,
+				B00000000000000000000104 /* RunningApplicationProvider.swift */,
+				B00000000000000000000106 /* ApplicationActivationService.swift */,
+				B00000000000000000000107 /* ApplicationSwitchingHotkeyController.swift */,
 				B00000000000000000000036 /* WindowThumbnailService.swift */,
 				B00000000000000000000037 /* WindowFocusService.swift */,
 				B00000000000000000000099 /* WindowCloseService.swift */,
@@ -326,6 +340,7 @@
 			isa = PBXGroup;
 			children = (
 				B00000000000000000000021 /* PermissionServiceTests.swift */,
+				B00000000000000000000105 /* ApplicationSwitchingTests.swift */,
 				B00000000000000000000022 /* ShortcutValidationTests.swift */,
 				B00000000000000000000033 /* SwitcherOverlayStateTests.swift */,
 				B00000000000000000000039 /* AccessibilityWindowProviderTests.swift */,
@@ -504,6 +519,7 @@
 				A00000000000000000000001 /* SwitchTabApp.swift in Sources */,
 				A00000000000000000000002 /* AppDelegate.swift in Sources */,
 				A00000000000000000000004 /* SwitcherMode.swift in Sources */,
+				A00000000000000000000103 /* ApplicationItem.swift in Sources */,
 				A00000000000000000000005 /* PermissionState.swift in Sources */,
 				A00000000000000000000006 /* ShortcutSetting.swift in Sources */,
 				A00000000000000000000093 /* ShortcutKeyCodeResolver.swift in Sources */,
@@ -536,6 +552,9 @@
 				A00000000000000000000051 /* SwitcherIconStripView.swift in Sources */,
 				A00000000000000000000027 /* PermissionStatusView.swift in Sources */,
 				A00000000000000000000031 /* AccessibilityWindowProvider.swift in Sources */,
+				A00000000000000000000104 /* RunningApplicationProvider.swift in Sources */,
+				A00000000000000000000106 /* ApplicationActivationService.swift in Sources */,
+				A00000000000000000000107 /* ApplicationSwitchingHotkeyController.swift in Sources */,
 				A00000000000000000000032 /* WindowThumbnailService.swift in Sources */,
 				A00000000000000000000033 /* WindowFocusService.swift in Sources */,
 				A00000000000000000000040 /* ShortcutSettingsViewModel.swift in Sources */,
@@ -554,6 +573,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A00000000000000000000018 /* CoreModelsTests.swift in Sources */,
+				A00000000000000000000105 /* ApplicationSwitchingTests.swift in Sources */,
 				A00000000000000000000019 /* SwitcherItemTests.swift in Sources */,
 				A00000000000000000000021 /* PermissionServiceTests.swift in Sources */,
 				A00000000000000000000022 /* ShortcutValidationTests.swift in Sources */,

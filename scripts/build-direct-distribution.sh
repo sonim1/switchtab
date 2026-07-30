@@ -15,6 +15,7 @@ NOTARYTOOL_KEYCHAIN_PATH="${NOTARYTOOL_KEYCHAIN_PATH:-}"
 DIRECT_RELEASE_OUTPUT_DIR="${DIRECT_RELEASE_OUTPUT_DIR:-$BUILD_ROOT/release}"
 PREPARE_ONLY=0
 RELEASE=0
+CODESIGN_BIN="${CODESIGN_BIN:-/usr/bin/codesign}"
 
 usage() {
     cat <<'EOF'
@@ -25,9 +26,10 @@ Environment:
   SWITCHTAB_UPDATE_FEED_URL      Optional appcast URL. Defaults to https://updates.switchtab.royjen.com/appcast.xml
   SPARKLE_PACKAGE_REVISION       Optional Sparkle package commit revision. Defaults to Sparkle 2.9.4.
   CONFIGURATION                  Optional Xcode configuration. Defaults to Release
+  CODESIGN_BIN                   Optional codesign executable. Defaults to /usr/bin/codesign.
   DIRECT_BUILD_ROOT              Optional generated workspace root. Defaults to .build/direct-distribution
   DIRECT_RELEASE_OUTPUT_DIR      Optional release artifact directory. Defaults to .build/direct-distribution/release
-  DEVELOPER_ID_APPLICATION       Required with --release. Example: Developer ID Application: Name (TEAMID)
+  DEVELOPER_ID_APPLICATION       Required for builds, including local; used with a timestamp only for --release. Example: Developer ID Application: Name (TEAMID)
   NOTARYTOOL_KEYCHAIN_PROFILE    Required with --release. Keychain profile created by xcrun notarytool store-credentials.
   NOTARYTOOL_KEYCHAIN_PATH       Optional Keychain containing the notarytool profile.
 EOF
@@ -47,12 +49,15 @@ sign_code() {
     local path="$1"
 
     if [[ -e "$path" ]]; then
-        /usr/bin/codesign \
-            --force \
-            --options runtime \
-            --timestamp \
-            --sign "$DEVELOPER_ID_APPLICATION" \
-            "$path"
+        local codesign_args=(--force --options runtime)
+
+        if [[ "$RELEASE" == "1" ]]; then
+            codesign_args+=(--timestamp --sign "$DEVELOPER_ID_APPLICATION")
+        else
+            codesign_args+=(--timestamp=none --sign "$DEVELOPER_ID_APPLICATION")
+        fi
+
+        "$CODESIGN_BIN" "${codesign_args[@]}" "$path"
     fi
 }
 
@@ -68,7 +73,7 @@ sign_app_bundle() {
     sign_code "$sparkle_framework"
     sign_code "$app_path"
 
-    /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
+    "$CODESIGN_BIN" --verify --deep --strict --verbose=2 "$app_path"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -110,8 +115,15 @@ if [[ "$PREPARE_ONLY" == "1" && "$RELEASE" == "1" ]]; then
     exit 64
 fi
 
-if [[ "$RELEASE" == "1" ]]; then
+if [[ "$PREPARE_ONLY" != "1" ]]; then
     require_env "DEVELOPER_ID_APPLICATION" "$DEVELOPER_ID_APPLICATION"
+    if [[ "$DEVELOPER_ID_APPLICATION" != "Developer ID Application:"* ]]; then
+        echo "DEVELOPER_ID_APPLICATION must name a Developer ID Application certificate" >&2
+        exit 64
+    fi
+fi
+
+if [[ "$RELEASE" == "1" ]]; then
     require_env "NOTARYTOOL_KEYCHAIN_PROFILE" "$NOTARYTOOL_KEYCHAIN_PROFILE"
 fi
 
@@ -242,6 +254,7 @@ APP_PATH="$DERIVED_DATA_DIR/Build/Products/$CONFIGURATION/SwitchTab.app"
 echo "$APP_PATH"
 
 if [[ "$RELEASE" != "1" ]]; then
+    sign_app_bundle "$APP_PATH"
     exit 0
 fi
 
