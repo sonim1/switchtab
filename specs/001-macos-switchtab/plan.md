@@ -32,7 +32,7 @@ workspace.
 
 **Storage**: UserDefaults for the window shortcut setting, shortcut
 registration messages, app settings, separate window/application MRU histories,
-and lightweight switching usage metrics. No database.
+and lightweight window-switching usage metrics. No database.
 
 **Testing**: XCTest for pure logic and service boundaries; manual quickstart
 validation for live macOS window/application focus, opt-in Cmd+Tab replacement,
