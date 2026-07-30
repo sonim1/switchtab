@@ -28,6 +28,7 @@ final class SwitchTabTests: XCTestCase {
         try AboutSwitchTabContentTests.run()
         try MenuBarIconAssetTests.run()
         try AppStoreDistributionSettingsTests.run()
+        try UpdateDiagnosticTests.run()
         try UpdateControllerTests.run()
         try SwitcherOverlayPresentationPolicyTests.run()
         try ShortcutSettingsViewModelPermissionTests.run()
