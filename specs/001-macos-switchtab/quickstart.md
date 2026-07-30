@@ -122,6 +122,17 @@ shows icons and names only, uses application MRU independently from window MRU,
 and does not need Screen Recording. Turning the setting off or quitting
 SwitchTab must restore native Cmd+Tab.
 
+Application-mode interaction matches the current-app window switcher: repeated
+Tab/Shift-Tab and arrow keys move the selection, releasing Command confirms the
+highlighted app, and the selected tile has an inset outline. Each tile contains
+one app icon, the app name, and (when known) an optional window-count glyph/value.
+One-, two-, and three-row grids remain stationary when fully visible; only a
+grid with real row overflow scrolls to keep the selection visible. Cmd+Q asks
+the selected app to terminate normally; its tile stays until
+`NSWorkspace.didTerminateApplicationNotification` arrives (including when a
+save dialog or rejection keeps the app alive), while the overlay remains open.
+Cmd+W and visible close controls apply only to current-app window mode.
+
 Run all eight scenarios exactly as written. For each one, write an entry in
 `.build/qa/application-switching/outcomes.md` with these fields; bracketed
 values are intentionally left for the live QA executor and are not a pass
@@ -156,9 +167,13 @@ Evidence path:
   open; replacement is currently off.
 - **Exact action:** Turn the toggle on, repeat Command-Tab, and capture only the
   SwitchTab application overlay as `02-switchtab-on.png`; the native switcher
-  must not appear.
-- **Expected:** The SwitchTab application overlay shows application icons and
-  names, and the native switcher is not visible.
+  must not appear. Repeat with enough regular apps to produce one-, two-,
+  three-row, and overflowing grids at the current display size.
+- **Expected:** The SwitchTab application overlay shows only one icon, the
+  application name, and any available window-count glyph/value per tile; the
+  selected tile has an inset outline, and the native switcher is not visible.
+  Confirm that a fully visible one-, two-, or three-row grid does not move under
+  selection, while a grid with actual row overflow scrolls only as needed.
 - **Actual:** `[record during manual QA]`
 - **Selected/frontmost app identity:** `[record the highlighted app and the
   frontmost app after the interaction]`
@@ -170,12 +185,13 @@ Evidence path:
   replacement is enabled; no unrelated app has been selected in the current
   application-switching session.
 - **Exact action:** Starting with Finder active and all three apps open, hold
-  Command, press Tab repeatedly, then use Shift-Tab; capture distinct forward
-  and reverse highlights as `03-forward.png` and `03-reverse.png` and match them
-  to the displayed application names.
-- **Expected:** Forward and reverse movement select distinct displayed app
-  names in the application MRU order, with reverse movement stepping back one
-  position.
+  Command, press Tab repeatedly, then use Shift-Tab and the arrow keys; capture
+  distinct forward and reverse highlights as `03-forward.png` and
+  `03-reverse.png` and match them to the displayed application names.
+- **Expected:** Forward, reverse, and arrow-key movement select distinct
+  displayed app names in the application MRU order, with reverse movement
+  stepping back one position and arrow navigation matching the window-mode
+  selection behavior.
 - **Actual:** `[record during manual QA]`
 - **Selected/frontmost app identity:** `[record each highlighted app name and
   the frontmost app after any release]`
@@ -186,11 +202,19 @@ Evidence path:
 
 - **Precondition:** Replacement is enabled; the application overlay is visible;
   a non-Finder app is highlighted.
-- **Exact action:** While a non-Finder app is highlighted, release Command;
-  Computer Use app state must report that named app frontmost in
-  `04-activation-state.txt`.
-- **Expected:** The highlighted application becomes frontmost on Command
-  release, and no window thumbnail or close action is required.
+- **Exact action:** While a non-Finder app is highlighted, trigger a workspace
+  activation without releasing Command and verify the overlay remains visible;
+  then release Command. Computer Use app state must report that named app
+  frontmost in `04-activation-state.txt`. In a second pass, press Cmd+Q and
+  record the selected tile before termination, after any save/rejection, and
+  after the app's didTerminate notification.
+- **Expected:** Workspace activation while the trigger modifier is held does
+  not cancel the overlay. Releasing Command confirms the highlighted
+  application, which becomes frontmost, and no window thumbnail or close action
+  is required. Cmd+Q requests normal termination; the tile remains for a save
+  dialog or rejected request and is removed only after didTerminate while the
+  overlay stays open for remaining apps. Cmd+W and visible close controls have
+  no effect in application mode.
 - **Actual:** `[record during manual QA]`
 - **Selected/frontmost app identity:** `[record the highlighted name and the
   Computer Use frontmost identity]`

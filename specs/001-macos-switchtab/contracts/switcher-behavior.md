@@ -56,6 +56,12 @@ Preconditions:
 Visible result:
 - The existing overlay appears in application mode with application icons and
   names only.
+- Each application tile contains one application icon, the application name,
+  and, when known, an optional window-count glyph/value.
+- The selected tile has an inset selection outline.
+- Fully visible one-, two-, and three-row grids stay stationary. Selection
+  scrolling starts only when the logical grid actually overflows the visible
+  rows.
 - Window thumbnails and close controls are not shown.
 - Application order uses a mode-scoped application MRU, independent from window
   MRU. The active application is pinned first so the initial forward selection
@@ -65,7 +71,10 @@ Visible result:
 Keyboard behavior:
 - Repeated Cmd+Tab advances application selection.
 - Repeated Cmd+Shift+Tab reverses application selection.
+- Tab/Shift-Tab and arrow-key movement follow the same selection navigation as
+  the current-app window switcher.
 - Releasing Command confirms the highlighted application.
+- Cmd+Q requests normal application termination. It is not a force-quit path.
 - Escape cancels without changing the frontmost application or writing MRU.
 
 Completion:
@@ -75,6 +84,15 @@ Completion:
 - Overlay closes after confirmation.
 
 Lifecycle and fallback:
+- A Cmd+Q request does not optimistically remove its tile. The tile is removed
+  only after `NSWorkspace.didTerminateApplicationNotification`; save dialogs or
+  a rejected termination leave it in place. The overlay remains open for the
+  remaining applications so the user can continue cycling.
+- Cmd+W and visible close controls are window-mode behavior only; application
+  mode does not close a window for either input.
+- Workspace activation while the trigger modifier is still held does not cancel
+  the overlay. After the trigger modifier is released, normal confirmation and
+  activation semantics apply.
 - Disabling the toggle unregisters only the application EventTap and dismisses
   an active application overlay; the configurable current-app window shortcut
   remains registered.
