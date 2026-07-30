@@ -38,6 +38,7 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
     private static let baseWindowTitleFontSize: CGFloat = 13
     private static let baseWindowGridSpacing: CGFloat = 14
     private static let baseWindowGridPadding: CGFloat = 28
+    private static let baseWindowPanelPadding: CGFloat = 12
     private static let baseApplicationTileSize = CGSize(width: 120, height: 128)
     private static let baseApplicationVisualSize = CGSize(width: 108, height: 96)
     private static let baseApplicationIconExtent: CGFloat = 96
@@ -71,6 +72,7 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
         let closeButtonSize = scaled(baseCloseButtonSize, by: factor)
         let closeButtonHitTargetExtent = max(24, closeButtonSize + 8)
         let gridPadding = scaled(baseWindowGridPadding, by: factor)
+        let panelPadding = scaled(baseWindowPanelPadding, by: factor)
 
         return SwitcherOverlayLayoutMetrics(
             tileSize: CGSize(
@@ -91,7 +93,7 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
             ),
             gridSpacing: scaled(baseWindowGridSpacing, by: factor),
             gridPadding: gridPadding,
-            panelPadding: gridPadding / 2
+            panelPadding: panelPadding
         )
     }
 

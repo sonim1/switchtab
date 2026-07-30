@@ -20,6 +20,7 @@ enum SwitcherOverlayPresentationTests {
         try testOverlaySizeScaleScalesMultiRowLayout()
         try testOverlaySizeScaleClampsOutOfRangeValues()
         try testPanelPaddingBudgetsGridPaddingAcrossModesAndScales()
+        try testDefaultPanelPaddingPreservesWindowInset()
         try testSelectionScrollingPolicyCoversModesAndScales()
         try testLegacyOverlaySizePreferenceMapsOntoScale()
         try testDefaultThumbnailIsLargerThanRetiredLargePreset()
@@ -235,9 +236,23 @@ enum SwitcherOverlayPresentationTests {
         for mode in modes {
             for scale in scales {
                 let metrics = SwitcherOverlayLayoutMetrics.metrics(for: scale, mode: mode)
-                try expectEqual(metrics.panelPadding * 2, metrics.gridPadding)
+                try expectTrue(metrics.panelPadding * 2 <= metrics.gridPadding)
             }
         }
+    }
+
+    static func testDefaultPanelPaddingPreservesWindowInset() throws {
+        let windowMetrics = SwitcherOverlayLayoutMetrics.metrics(
+            for: .default,
+            mode: .currentAppWindowSwitching
+        )
+        let applicationMetrics = SwitcherOverlayLayoutMetrics.metrics(
+            for: .default,
+            mode: .applicationSwitching
+        )
+
+        try expectEqual(windowMetrics.panelPadding, 12)
+        try expectEqual(applicationMetrics.panelPadding * 2, applicationMetrics.gridPadding)
     }
 
     static func testSelectionScrollingPolicyCoversModesAndScales() throws {
