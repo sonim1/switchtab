@@ -304,3 +304,21 @@ public enum SwitcherOverlayExternalEventPolicy {
         }
     }
 }
+
+public enum SwitcherOverlayWorkspaceActivationPolicy {
+    public static func decision(
+        mode: SwitcherMode,
+        triggerReleaseModifiers: SwitcherShortcutModifiers?,
+        activeModifiers: SwitcherShortcutModifiers
+    ) -> SwitcherOverlayExternalEventDecision {
+        switch mode {
+        case .currentAppWindowSwitching, .applicationSwitching:
+            guard let triggerReleaseModifiers,
+                  activeModifiers.rawValue & triggerReleaseModifiers.rawValue != 0 else {
+                return .cancel
+            }
+
+            return .none
+        }
+    }
+}

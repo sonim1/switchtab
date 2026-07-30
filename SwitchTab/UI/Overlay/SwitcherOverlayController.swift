@@ -406,7 +406,20 @@ final class SwitcherOverlayController {
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.applyExternalDecision(.cancel)
+                guard let self,
+                      let mode = self.state.session?.mode else {
+                    return
+                }
+
+                let activeModifiers = ShortcutModifierResolver.shortcutModifiers(
+                    from: CGEventSource.flagsState(.combinedSessionState)
+                )
+                let decision = SwitcherOverlayWorkspaceActivationPolicy.decision(
+                    mode: mode,
+                    triggerReleaseModifiers: self.triggerReleaseModifiers,
+                    activeModifiers: activeModifiers
+                )
+                self.applyExternalDecision(decision)
             }
         }
     }

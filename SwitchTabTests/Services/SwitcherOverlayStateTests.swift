@@ -19,6 +19,10 @@ enum SwitcherOverlayStateTests {
         try testQuitCommandNeedsCommandModifier()
         try testApplicationModeRequestsQuitWithoutDismissing()
         try testWindowModeIgnoresQuitSelectedApplication()
+        try testWorkspaceActivationDoesNotCancelApplicationSwitcherWhileCommandIsHeld()
+        try testWorkspaceActivationDoesNotCancelWindowSwitcherWhileOptionIsHeld()
+        try testWorkspaceActivationCancelsAfterTriggerModifiersAreReleased()
+        try testWorkspaceActivationWithoutTriggerModifiersCancels()
         try testGlobalEventMonitorObservesModifierChanges()
         try testApplicationCommandReleaseConfirmsSelection()
         try testHoverSelectionMovesHighlightWithoutConfirming()
@@ -342,6 +346,58 @@ enum SwitcherOverlayStateTests {
         try expectEqual(state.handle(.quitSelectedApplication), .none)
         try expectTrue(state.isPresented)
         try expectEqual(state.session?.selectedItem, window)
+    }
+
+    static func testWorkspaceActivationDoesNotCancelApplicationSwitcherWhileCommandIsHeld() throws {
+        try expectEqual(
+            SwitcherOverlayWorkspaceActivationPolicy.decision(
+                mode: .applicationSwitching,
+                triggerReleaseModifiers: .command,
+                activeModifiers: [.command, .shift]
+            ),
+            .none
+        )
+    }
+
+    static func testWorkspaceActivationDoesNotCancelWindowSwitcherWhileOptionIsHeld() throws {
+        try expectEqual(
+            SwitcherOverlayWorkspaceActivationPolicy.decision(
+                mode: .currentAppWindowSwitching,
+                triggerReleaseModifiers: .option,
+                activeModifiers: .option
+            ),
+            .none
+        )
+    }
+
+    static func testWorkspaceActivationCancelsAfterTriggerModifiersAreReleased() throws {
+        try expectEqual(
+            SwitcherOverlayWorkspaceActivationPolicy.decision(
+                mode: .applicationSwitching,
+                triggerReleaseModifiers: .command,
+                activeModifiers: []
+            ),
+            .cancel
+        )
+        try expectEqual(
+            SwitcherOverlayWorkspaceActivationPolicy.decision(
+                mode: .currentAppWindowSwitching,
+                triggerReleaseModifiers: .option,
+                activeModifiers: []
+            ),
+            .cancel
+        )
+    }
+
+    static func testWorkspaceActivationWithoutTriggerModifiersCancels() throws {
+        try expectEqual(
+            SwitcherOverlayWorkspaceActivationPolicy.decision(
+                mode: .applicationSwitching,
+                triggerReleaseModifiers: nil,
+                activeModifiers: .command
+            ),
+            .cancel
+        )
     }
 
     static func testGlobalEventMonitorObservesModifierChanges() throws {
