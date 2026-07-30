@@ -72,6 +72,14 @@ public struct SwitcherOverlayState: Equatable, Sendable {
             }
 
             return .closeRequested(item: selectedItem, index: activeSession.selectedIndex)
+        case .quitSelectedApplication:
+            guard let activeSession = session,
+                  activeSession.mode == .applicationSwitching,
+                  let selectedItem = activeSession.selectedItem else {
+                return .none
+            }
+
+            return .quitRequested(item: selectedItem, index: activeSession.selectedIndex)
         case .confirm:
             guard let activeSession = session else {
                 return .none
@@ -162,17 +170,20 @@ public enum SwitcherCommand: Equatable, Sendable {
     case releaseShortcut
     case cancel
     case closeSelected
+    case quitSelectedApplication
 }
 
 public extension SwitcherCommand {
     /// Holding the key must not fire this command repeatedly.
     var repeatsAreDestructive: Bool {
-        self == .closeSelected
+        self == .closeSelected || self == .quitSelectedApplication
     }
 
     /// Key code 13 is `W`; it only closes while a modifier is held so the
     /// switcher never swallows a bare keystroke.
     static let closeSelectedKeyCode: UInt16 = 13
+    /// Key code 12 is `Q`; Command-Q mirrors the native application switcher.
+    static let quitSelectedApplicationKeyCode: UInt16 = 12
 
     init?(keyCode: UInt16, modifiers: SwitcherShortcutModifiers = []) {
         switch keyCode {
@@ -186,6 +197,8 @@ public extension SwitcherCommand {
             self = .moveDown
         case Self.closeSelectedKeyCode where modifiers.contains(.command):
             self = .closeSelected
+        case Self.quitSelectedApplicationKeyCode where modifiers.contains(.command):
+            self = .quitSelectedApplication
         default:
             return nil
         }
@@ -198,6 +211,7 @@ public enum SwitcherInteractionResult: Equatable, Sendable {
     case confirmed(item: SwitcherListItem, index: Int)
     case cancelled
     case closeRequested(item: SwitcherListItem, index: Int)
+    case quitRequested(item: SwitcherListItem, index: Int)
 }
 
 public struct SwitcherShortcutModifiers: OptionSet, Equatable, Sendable {

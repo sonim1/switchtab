@@ -10,6 +10,33 @@ public protocol ApplicationActivating {
     func activate(processIdentifier: Int) -> Bool
 }
 
+public enum ApplicationTerminationResult: Equatable, Sendable {
+    case requestAccepted
+    case unavailableTarget
+}
+
+public protocol ApplicationTerminating: AnyObject {
+    func terminate(processIdentifier: Int) -> Bool
+}
+
+public struct ApplicationTerminationService {
+    private let terminator: any ApplicationTerminating
+
+    public init() {
+        self.terminator = NSRunningApplicationTerminator()
+    }
+
+    public init(terminator: any ApplicationTerminating) {
+        self.terminator = terminator
+    }
+
+    public func terminate(_ application: ApplicationItem) -> ApplicationTerminationResult {
+        terminator.terminate(processIdentifier: application.processIdentifier)
+            ? .requestAccepted
+            : .unavailableTarget
+    }
+}
+
 public protocol ApplicationActivationServicing {
     func activate(_ application: ApplicationItem) -> ApplicationActivationResult
 }
@@ -100,6 +127,21 @@ public struct WorkspaceActivationRecencyObserver {
     }
 }
 
+public enum WorkspaceApplicationTerminationPolicy {
+    public static func applicationIdentifier(
+        for snapshot: RunningApplicationSnapshot
+    ) -> String? {
+        guard snapshot.isRegular, snapshot.isTerminated else {
+            return nil
+        }
+
+        return RunningApplicationProvider.stableApplicationIdentifier(
+            bundleIdentifier: snapshot.bundleIdentifier,
+            processIdentifier: snapshot.processIdentifier
+        )
+    }
+}
+
 private struct NSRunningApplicationActivator: ApplicationActivating {
     func activate(processIdentifier: Int) -> Bool {
         guard let application = NSRunningApplication(
@@ -109,5 +151,17 @@ private struct NSRunningApplicationActivator: ApplicationActivating {
         }
 
         return application.activate(options: .activateAllWindows)
+    }
+}
+
+private final class NSRunningApplicationTerminator: ApplicationTerminating {
+    func terminate(processIdentifier: Int) -> Bool {
+        guard let application = NSRunningApplication(
+            processIdentifier: pid_t(processIdentifier)
+        ), !application.isTerminated else {
+            return false
+        }
+
+        return application.terminate()
     }
 }

@@ -17,6 +17,7 @@ final class SwitcherOverlayController {
     private var activationObserver: NSObjectProtocol?
     private var onConfirm: ((SwitcherListItem, Int) -> Void)?
     private var onClose: ((SwitcherListItem, UInt64) -> Void)?
+    private var onQuit: ((SwitcherListItem, Int) -> Void)?
     private var presentationID: UInt64 = 0
     private var triggerReleaseModifiers: SwitcherShortcutModifiers?
     var onDismiss: (() -> Void)?
@@ -65,6 +66,7 @@ final class SwitcherOverlayController {
         selectedIndex: Int = 0,
         triggerShortcut: ShortcutSetting? = nil,
         onClose: ((SwitcherListItem, UInt64) -> Void)? = nil,
+        onQuit: ((SwitcherListItem, Int) -> Void)? = nil,
         onConfirm: ((SwitcherListItem, Int) -> Void)? = nil
     ) {
         guard !items.isEmpty else {
@@ -88,6 +90,7 @@ final class SwitcherOverlayController {
         )
         self.onConfirm = onConfirm
         self.onClose = onClose
+        self.onQuit = onQuit
         if let triggerShortcut {
             self.triggerReleaseModifiers = SwitcherShortcutModifiers.releaseRelevantModifiers(triggerShortcut)
         } else {
@@ -133,6 +136,8 @@ final class SwitcherOverlayController {
             apply(result)
         case .closeRequested(let item, let index):
             closeItem(item, at: index)
+        case .quitRequested(let item, let index):
+            quitItem(item, at: index)
         case .none:
             break
         }
@@ -180,6 +185,10 @@ final class SwitcherOverlayController {
         onClose(item, presentationID)
     }
 
+    private func quitItem(_ item: SwitcherListItem, at index: Int) {
+        onQuit?(item, index)
+    }
+
     func confirmWindowDisappeared(id: String, presentationID: UInt64) {
         guard presentationID == self.presentationID, state.isPresented else {
             return
@@ -197,7 +206,34 @@ final class SwitcherOverlayController {
             updatePresentationLayout(session: session, panel: panel)
         case .cancelled:
             apply(.cancelled)
-        case .none, .confirmed, .closeRequested:
+        case .none, .confirmed, .closeRequested, .quitRequested:
+            break
+        }
+    }
+
+    func confirmApplicationTerminated(id: String, processIdentifier: Int) {
+        guard state.isPresented,
+              let session = state.session,
+              session.mode == .applicationSwitching,
+              session.items.contains(where: {
+                  $0.id == id && $0.appIconProcessIdentifier == processIdentifier
+              }) else {
+            return
+        }
+
+        switch state.removeItem(withID: id) {
+        case .updated:
+            guard let session = state.session, let panel else {
+                return
+            }
+
+            presentationModel.setHoverSelectionEnabled(false)
+            presentationPointerLocation = NSEvent.mouseLocation
+            presentationModel.advanceScrollToken()
+            updatePresentationLayout(session: session, panel: panel)
+        case .cancelled:
+            apply(.cancelled)
+        case .none, .confirmed, .closeRequested, .quitRequested:
             break
         }
     }
@@ -528,7 +564,7 @@ final class SwitcherOverlayController {
         case .cancelled:
             endPresentation()
             clearPresentationCallbacks()
-        case .none, .updated, .closeRequested:
+        case .none, .updated, .closeRequested, .quitRequested:
             break
         }
     }
@@ -536,6 +572,7 @@ final class SwitcherOverlayController {
     private func clearPresentationCallbacks() {
         onConfirm = nil
         onClose = nil
+        onQuit = nil
         triggerReleaseModifiers = nil
     }
 
@@ -839,6 +876,7 @@ private extension SwitcherCommand {
         case .releaseShortcut: 4
         case .cancel: 5
         case .closeSelected: 6
+        case .quitSelectedApplication: 7
         }
     }
 }
@@ -851,6 +889,7 @@ private extension SwitcherInteractionResult {
         case .confirmed: 2
         case .cancelled: 3
         case .closeRequested: 4
+        case .quitRequested: 5
         }
     }
 }

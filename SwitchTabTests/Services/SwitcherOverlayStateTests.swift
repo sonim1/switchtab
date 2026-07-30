@@ -15,6 +15,9 @@ enum SwitcherOverlayStateTests {
         try testClosePolicyOnlyAllowsWindowMode()
         try testSwitchAccessibilityHintMatchesMode()
         try testApplicationModeIgnoresCloseSelected()
+        try testQuitCommandNeedsCommandModifier()
+        try testApplicationModeRequestsQuitWithoutDismissing()
+        try testWindowModeIgnoresQuitSelectedApplication()
         try testGlobalEventMonitorObservesModifierChanges()
         try testApplicationCommandReleaseConfirmsSelection()
         try testHoverSelectionMovesHighlightWithoutConfirming()
@@ -224,6 +227,61 @@ enum SwitcherOverlayStateTests {
         try expectEqual(state.handle(.closeSelected), .none)
         try expectTrue(state.isPresented)
         try expectEqual(state.session?.selectedItem, application)
+    }
+
+    static func testQuitCommandNeedsCommandModifier() throws {
+        try expectEqual(
+            SwitcherCommand(
+                keyCode: SwitcherCommand.quitSelectedApplicationKeyCode,
+                modifiers: .command
+            ),
+            .quitSelectedApplication
+        )
+        try expectEqual(
+            SwitcherCommand(
+                keyCode: SwitcherCommand.quitSelectedApplicationKeyCode,
+                modifiers: [.command, .shift]
+            ),
+            .quitSelectedApplication
+        )
+        try expectEqual(
+            SwitcherCommand(keyCode: SwitcherCommand.quitSelectedApplicationKeyCode),
+            nil
+        )
+        try expectEqual(
+            SwitcherCommand(
+                keyCode: SwitcherCommand.quitSelectedApplicationKeyCode,
+                modifiers: .option
+            ),
+            nil
+        )
+    }
+
+    static func testApplicationModeRequestsQuitWithoutDismissing() throws {
+        let application = SwitcherListItem(
+            id: "com.apple.Safari",
+            title: "Safari",
+            subtitle: "3"
+        )
+        var state = SwitcherOverlayState()
+        state.present(mode: .applicationSwitching, items: [application])
+
+        try expectEqual(
+            state.handle(.quitSelectedApplication),
+            .quitRequested(item: application, index: 0)
+        )
+        try expectTrue(state.isPresented)
+        try expectEqual(state.session?.selectedItem, application)
+    }
+
+    static func testWindowModeIgnoresQuitSelectedApplication() throws {
+        let window = SwitcherListItem(id: "window", title: "Window", subtitle: "Safari")
+        var state = SwitcherOverlayState()
+        state.present(mode: .currentAppWindowSwitching, items: [window])
+
+        try expectEqual(state.handle(.quitSelectedApplication), .none)
+        try expectTrue(state.isPresented)
+        try expectEqual(state.session?.selectedItem, window)
     }
 
     static func testGlobalEventMonitorObservesModifierChanges() throws {
