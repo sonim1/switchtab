@@ -141,6 +141,17 @@ public struct AccessibilityWindowProvider {
         )
     }
 
+    public func applicationWindows(
+        ownerProcessIdentifier: Int,
+        ownerName: String?
+    ) -> [WindowItem] {
+        windows(
+            ownerProcessIdentifier: ownerProcessIdentifier,
+            ownerName: ownerName,
+            includeScreenCaptureIdentifiers: false
+        )
+    }
+
     private func windows(
         ownerProcessIdentifier: Int,
         ownerName: String?,

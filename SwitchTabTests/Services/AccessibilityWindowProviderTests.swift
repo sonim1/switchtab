@@ -6,6 +6,7 @@ enum AccessibilityWindowProviderTests {
         try testProviderReturnsOnlyActiveApplicationWindows()
         try testProviderPassesActiveApplicationNameToWindowSnapshots()
         try testProviderCanSkipScreenCaptureIdentifiersForCurrentApplication()
+        try testProviderReturnsApplicationWindowsForArbitraryProcessWithoutCaptureIdentifiers()
         try testWindowInclusionPolicyKeepsStandardWindows()
         try testWindowInclusionPolicyDropsChromeFindPanel()
         try testWindowInclusionPolicyMapsOnlyAcceptedWindows()
@@ -82,6 +83,60 @@ enum AccessibilityWindowProviderTests {
         _ = provider.currentApplicationWindows(includeScreenCaptureIdentifiers: false)
 
         try expectEqual(snapshotProvider.requestedIncludeScreenCaptureIdentifiers, false)
+    }
+
+    static func testProviderReturnsApplicationWindowsForArbitraryProcessWithoutCaptureIdentifiers() throws {
+        let snapshotProvider = RecordingWindowSnapshotProvider(snapshots: [
+            AccessibilityWindowSnapshot(
+                windowIdentifier: 1,
+                ownerProcessIdentifier: 84,
+                ownerName: "Safari",
+                title: "Available",
+                isMinimized: false,
+                availability: .available
+            ),
+            AccessibilityWindowSnapshot(
+                windowIdentifier: 2,
+                ownerProcessIdentifier: 84,
+                ownerName: "Safari",
+                title: "Minimized",
+                isMinimized: true,
+                availability: .minimized
+            ),
+            AccessibilityWindowSnapshot(
+                windowIdentifier: 3,
+                ownerProcessIdentifier: 84,
+                ownerName: "Safari",
+                title: "Closed",
+                isMinimized: false,
+                availability: .closed
+            ),
+            AccessibilityWindowSnapshot(
+                windowIdentifier: 4,
+                ownerProcessIdentifier: 42,
+                ownerName: "Notes",
+                title: "Other Application",
+                isMinimized: false,
+                availability: .available
+            )
+        ])
+        let provider = AccessibilityWindowProvider(
+            activeApplicationProvider: FakeActiveApplicationProvider(activeApplication: nil),
+            windowSnapshotProvider: snapshotProvider
+        )
+
+        let windows = provider.applicationWindows(
+            ownerProcessIdentifier: 84,
+            ownerName: "Safari"
+        )
+
+        try expectEqual(snapshotProvider.requestedOwnerProcessIdentifier, 84)
+        try expectEqual(snapshotProvider.requestedOwnerName, "Safari")
+        try expectEqual(snapshotProvider.requestedIncludeScreenCaptureIdentifiers, false)
+        try expectEqual(windows.map(\.windowIdentifier), [1, 2])
+        try expectEqual(windows.map(\.isMinimized), [false, true])
+        try expectEqual(windows.map(\.canFocus), [true, true])
+        try expectEqual(windows.map(\.screenCaptureIdentifier), [nil, nil])
     }
 
     static func testWindowInclusionPolicyKeepsStandardWindows() throws {
@@ -272,16 +327,23 @@ struct FakeWindowSnapshotProvider: AccessibilityWindowSnapshotProviding {
 }
 
 final class RecordingWindowSnapshotProvider: AccessibilityWindowSnapshotProviding {
+    let snapshots: [AccessibilityWindowSnapshot]
+    private(set) var requestedOwnerProcessIdentifier: Int?
     private(set) var requestedOwnerName: String?
     private(set) var requestedIncludeScreenCaptureIdentifiers: Bool?
+
+    init(snapshots: [AccessibilityWindowSnapshot] = []) {
+        self.snapshots = snapshots
+    }
 
     func windows(
         ownerProcessIdentifier: Int,
         ownerName: String?,
         includeScreenCaptureIdentifiers: Bool
     ) -> [AccessibilityWindowSnapshot] {
+        requestedOwnerProcessIdentifier = ownerProcessIdentifier
         requestedOwnerName = ownerName
         requestedIncludeScreenCaptureIdentifiers = includeScreenCaptureIdentifiers
-        return []
+        return snapshots
     }
 }

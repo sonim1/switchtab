@@ -18,6 +18,8 @@ enum ApplicationSwitchingTests {
         try testProviderUsesDeterministicProcessScopedFallbackIdentifiers()
         try testProviderPreservesIncomingSnapshotOrder()
         try testProviderMapsApplicationIconsToProcessIdentifiers()
+        try testApplicationWindowCountPreservesMetadataAndStoresNumericSubtitle()
+        try testApplicationUnknownWindowCountPreservesMetadataAndClearsSubtitle()
         try testActivationSuccessRecordsAndFlushesRecencyOnce()
         try testActivationFailureDoesNotRecordOrFlushRecency()
         try testWorkspaceActivationObserverRecordsExternalRegularActivation()
@@ -464,6 +466,76 @@ enum ApplicationSwitchingTests {
             [60, 61]
         )
         try expectEqual(applications.map { $0.switcherListItem.id }, applications.map(\.id))
+    }
+
+    static func testApplicationWindowCountPreservesMetadataAndStoresNumericSubtitle() throws {
+        let application = ApplicationItem(
+            id: "com.example.editor",
+            processIdentifier: 81,
+            bundleIdentifier: "com.example.editor",
+            isActive: true,
+            switcherListItem: SwitcherListItem(
+                id: "com.example.editor",
+                title: "Editor",
+                subtitle: nil,
+                symbolName: "square.stack.3d.up",
+                thumbnailKey: "editor-thumbnail",
+                appIconProcessIdentifier: 81
+            )
+        )
+
+        let counted = application.withWindowCount(3)
+
+        try expectEqual(counted.id, application.id)
+        try expectEqual(counted.processIdentifier, application.processIdentifier)
+        try expectEqual(counted.bundleIdentifier, application.bundleIdentifier)
+        try expectEqual(counted.isActive, application.isActive)
+        try expectEqual(counted.switcherListItem.id, application.switcherListItem.id)
+        try expectEqual(counted.switcherListItem.title, application.switcherListItem.title)
+        try expectEqual(counted.switcherListItem.subtitle, "3")
+        try expectEqual(counted.switcherListItem.symbolName, application.switcherListItem.symbolName)
+        try expectEqual(counted.switcherListItem.thumbnailKey, application.switcherListItem.thumbnailKey)
+        try expectEqual(
+            counted.switcherListItem.appIconProcessIdentifier,
+            application.switcherListItem.appIconProcessIdentifier
+        )
+    }
+
+    static func testApplicationUnknownWindowCountPreservesMetadataAndClearsSubtitle() throws {
+        let application = ApplicationItem(
+            id: "com.example.editor",
+            processIdentifier: 81,
+            bundleIdentifier: nil,
+            isActive: false,
+            switcherListItem: SwitcherListItem(
+                id: "com.example.editor",
+                title: "Editor",
+                subtitle: "stale",
+                symbolName: "app",
+                thumbnailKey: "editor-thumbnail",
+                appIconProcessIdentifier: 81
+            )
+        )
+
+        let unknown = application.withWindowCount(nil)
+
+        try expectEqual(
+            unknown,
+            ApplicationItem(
+                id: application.id,
+                processIdentifier: application.processIdentifier,
+                bundleIdentifier: application.bundleIdentifier,
+                isActive: application.isActive,
+                switcherListItem: SwitcherListItem(
+                    id: application.switcherListItem.id,
+                    title: application.switcherListItem.title,
+                    subtitle: nil,
+                    symbolName: application.switcherListItem.symbolName,
+                    thumbnailKey: application.switcherListItem.thumbnailKey,
+                    appIconProcessIdentifier: application.switcherListItem.appIconProcessIdentifier
+                )
+            )
+        )
     }
 
     static func testActivationSuccessRecordsAndFlushesRecencyOnce() throws {

@@ -18,4 +18,21 @@ public struct ApplicationItem: Identifiable, Equatable, Sendable {
         self.isActive = isActive
         self.switcherListItem = switcherListItem
     }
+
+    public func withWindowCount(_ windowCount: Int?) -> ApplicationItem {
+        ApplicationItem(
+            id: id,
+            processIdentifier: processIdentifier,
+            bundleIdentifier: bundleIdentifier,
+            isActive: isActive,
+            switcherListItem: SwitcherListItem(
+                id: switcherListItem.id,
+                title: switcherListItem.title,
+                subtitle: windowCount.map(String.init),
+                symbolName: switcherListItem.symbolName,
+                thumbnailKey: switcherListItem.thumbnailKey,
+                appIconProcessIdentifier: switcherListItem.appIconProcessIdentifier
+            )
+        )
+    }
 }
