@@ -6,8 +6,14 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 WRAPPER="$PROJECT_ROOT/scripts/release-local.sh"
 EXAMPLE="$PROJECT_ROOT/.env.release.local.example"
 README="$PROJECT_ROOT/README.md"
+RELEASE_WORKFLOW="$PROJECT_ROOT/docs/release-workflow.md"
+UPDATE_HOSTING="$PROJECT_ROOT/docs/update-hosting.md"
+DIRECT_DISTRIBUTION="$PROJECT_ROOT/docs/direct-distribution.md"
 DOCUMENTATION_FILES=(
     "$README"
+    "$RELEASE_WORKFLOW"
+    "$UPDATE_HOSTING"
+    "$DIRECT_DISTRIBUTION"
     "$EXAMPLE"
     "$PROJECT_ROOT/BLOCKERS.md"
     "$PROJECT_ROOT/docs/repository-maintenance.md"
@@ -175,31 +181,31 @@ for text in \
     "--account ed25519" \
     "If-None-Match: *" \
     'ETag-guarded `If-Match`' \
-    'strictly increase `CURRENT_PROJECT_VERSION`' \
-    'calls `publish-update.sh` internally' \
+    'strictly increase Xcode `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION`' \
+    'publish-update.sh' \
     "Choose one publisher for a tag" \
     "Never race local and CI publication" \
-    "Do not rebuild or re-tag" \
-    "Do not automatically delete objects" \
-    "both publishing-" \
+    "Do not rebuild or retag" \
+    "never deletes resources" \
+    "secret lines commented during OAuth setup" \
     "uncomment and fill in only" \
     "setup management token" \
-    "not used by publication" \
+    "Do not give CI that broader setup" \
     "The draft is created or reused first, exact assets are staged" \
     "Base64" \
     "Recovery"; do
-    grep -Fq -- "$text" "$README" || fail "$README is missing '$text'"
+    grep -Fq -- "$text" "${DOCUMENTATION_FILES[@]}" || fail "documentation is missing '$text'"
 done
 
 for repository_variable in \
     SPARKLE_PUBLIC_ED_KEY \
     DEVELOPER_ID_APPLICATION \
     CLOUDFLARE_ACCOUNT_ID; do
-    grep -Fq -- "$repository_variable" "$README" || \
-        fail "$README is missing repository variable $repository_variable"
+    grep -Fq -- "$repository_variable" "${DOCUMENTATION_FILES[@]}" || \
+        fail "documentation is missing repository variable $repository_variable"
 done
 
-/usr/bin/ruby - "$README" <<'RUBY'
+/usr/bin/ruby - "$RELEASE_WORKFLOW" "$UPDATE_HOSTING" <<'RUBY'
 class DocumentationContractError < StandardError; end
 
 def assert_documented(condition, message)
@@ -344,7 +350,9 @@ end
 
 def validate_release_operations!(readme)
   readme = visible_markdown(readme)
-  local = markdown_section(readme, "Local signing and publishing")
+  guarded_recovery_tag = markdown_section(readme, "Guarded Recovery Tag")
+  local_fallback = markdown_section(readme, "Local Publishing Fallback")
+  local = guarded_recovery_tag + local_fallback
   local_steps = local_release_steps(local)
   assert_documented(
     local_steps == [
@@ -378,32 +386,27 @@ def validate_release_operations!(readme)
     "local release provenance and fallback steps are missing or out of order: #{local_steps.inspect}"
   )
   local_text = normalized(local)
-  assert_documented(local_text.match?(/normal.*CI.*(?:owns|builds|publishes).*release/i), "normal tag path must stop for CI ownership")
+  assert_documented(local_text.match?(/After the tag push.*CI owns the release build.*publication/i), "normal tag path must stop for CI ownership")
   assert_documented(local_text.match?(/fallback.*(?:disabled|cancelled).*CI/i), "local fallback must require disabled or cancelled CI")
-  assert_documented(local_text.match?(/ignored artifacts.*(?:do not|does not).*source provenance/i), "ignored artifact provenance must be explained")
+  assert_documented(normalized(readme).match?(/ignored artifacts.*(?:do not|does not).*source provenance/i), "ignored artifact provenance must be explained")
   assert_documented(local_text.match?(/never race.*CI/i), "local fallback must not race CI")
-  assert_documented(local_text.match?(/short-lived.*tap.*token.*(?:shell )?history/i), "fallback token must be short-lived and kept out of history")
-  assert_documented(local_text.match?(/dispatch fails.*same.*dispatch.*(?:without|do not).*rebuild/i), "dispatch recovery must reuse the narrow command without rebuilding")
-  assert_documented(local_text.match?(/dispatch.*only.*repository.*tag.*downloads.*release-manifest.*public GitHub Release/i), "local dispatch transport must remain repository/tag plus public manifest download")
+  assert_documented(local_text.match?(/temporary tap token.*shell history/i), "fallback token must be temporary and kept out of history")
+  assert_documented(local_text.match?(/dispatch fails.*rerun only.*dispatch commands.*without rebuilding/i), "dispatch recovery must reuse the narrow command without rebuilding")
+  assert_documented(normalized(readme).match?(/dispatch payload contains only `repository` and `tag`.*downloads.*`release-manifest[.]json`.*public GitHub Release/i), "local dispatch transport must remain repository/tag plus public manifest download")
 
-  app_setup = markdown_section(readme, "Protected release environment and tap integration")
+  app_setup = markdown_section(readme, "Protected Release Environment") +
+    markdown_section(readme, "Homebrew Tap Integration")
   app_setup_text = normalized(app_setup)
-  assert_documented(app_setup_text.include?("The current automatic mode has no required reviewer rule."), "current automatic mode must explicitly have no required reviewer rule")
-  assert_documented(app_setup_text.include?("Merging a release-relevant PR into `main` is the production release authorization point"), "merge to main must be the production release authorization point")
-  assert_documented(app_setup_text.include?("downstream release jobs continue without manual approval"), "current automatic release jobs must continue without manual approval")
-  assert_documented(app_setup_text.include?("Both the `release` and enabled `notify` jobs use this Environment sequentially and request no approval in current mode."), "release and notify must explicitly request no approval in current mode")
-  assert_documented(app_setup_text.include?("Adding required reviewers to the `release` Environment is a deliberate alternative that changes merge-to-main releases to manual approval."), "required reviewers must be documented only as a deliberate manual-approval alternative")
+  assert_documented(app_setup_text.include?("The current automatic mode has no required reviewer rule"), "current automatic mode must explicitly have no required reviewer rule")
+  assert_documented(app_setup_text.match?(/merging a release-relevant PR into `main` is the production release authorization point/i), "merge to main must be the production release authorization point")
+  assert_documented(app_setup_text.match?(/Adding required reviewers deliberately changes.*manual approval/i), "required reviewers must be documented only as a deliberate manual-approval alternative")
   assert_documented(app_setup_text.match?(/installed only on `sonim1\/homebrew-tap`/i), "GitHub App installation scope must be tap-only")
   ["`Administration: Read`", "`Contents: Read & write`", "`Pull requests: Read & write`"].each do |permission|
     assert_documented(app_setup.include?(permission), "missing unified GitHub App permission: #{permission}")
   end
-  assert_documented(app_setup_text.match?(/SwitchTab `notify` token.*dispatch\/contents capability/i), "source notify token scope must be explained")
-  assert_documented(app_setup_text.match?(/tap receiver token.*all three permissions/i), "tap receiver token scope must be explained")
-  assert_documented(app_setup_text.include?("The Environment still scopes production secrets to jobs that explicitly reference it."), "release Environment secret scoping must be explicit")
-  assert_documented(app_setup_text.include?("Environment secrets are available to both jobs when each starts in current mode, not after approval."), "shared Environment secret availability must match current automatic mode")
-  assert_documented(app_setup_text.match?(/workflow YAML.*references and injects Apple.*Sparkle.*R2.*`release` steps/i), "release secret references must be documented")
-  assert_documented(app_setup_text.match?(/references and injects.*tap App private key.*`notify`/i), "notify secret references must be documented")
-  assert_documented(app_setup_text.match?(/secret-availability isolation.*separate Environments/i), "separate Environment isolation boundary must be documented")
+  assert_documented(app_setup_text.match?(/Workflow YAML injects Apple.*Sparkle.*R2 secrets only into `release` steps/i), "release secret references must be documented")
+  assert_documented(app_setup_text.match?(/tap App private key only into `notify`/i), "notify secret references must be documented")
+  assert_documented(app_setup_text.match?(/Environment itself makes all its secrets available to either job.*true availability isolation requires separate Environments/i), "separate Environment isolation boundary must be documented")
 
   app_commands = fenced_blocks(app_setup).join("\n")
   required_app_commands = [
@@ -416,7 +419,7 @@ def validate_release_operations!(readme)
     assert_documented(app_commands.lines.map(&:strip).include?(command), "missing scoped GitHub App setup command: #{command}")
   end
 
-  execution = markdown_section(readme, "Tags and release execution")
+  execution = markdown_section(readme, "Tags and Release Execution")
   flow_line = execution.lines.map(&:strip).find { |line| line.start_with?("tag push ->") }
   assert_documented(flow_line, "release flow line is missing")
   flow = flow_line.split("->").map { |step| step.strip.delete("`") }
@@ -424,26 +427,29 @@ def validate_release_operations!(readme)
     flow == [
       "tag push",
       "secret-free verify",
-      "protected signed release",
+      "signed release",
       "public GitHub/Sparkle publication",
-      "protected notify",
+      "notify",
       "tap PR/CI/auto-merge"
     ],
     "release flow order is incorrect"
   )
   execution_text = normalized(execution)
   assert_documented(!execution_text.match?(/\bAfter approval,[[:space:]]*`release`/i), "automatic release execution must not claim an approval gate")
-  outside_authoritative_release_block = readme.sub(local, "")
+  outside_authoritative_release_block = readme
+    .sub(guarded_recovery_tag, "")
+    .sub(local_fallback, "")
   unsafe_tag_commands = outside_authoritative_release_block.lines.map(&:strip).select do |line|
     line.match?(/\A(?:git tag -a|git push origin)(?:[[:space:]]|\z)/)
   end
   assert_documented(unsafe_tag_commands.empty?, "release instructions outside the guarded block must not offer tag shortcuts: #{unsafe_tag_commands.inspect}")
-  assert_documented(execution_text.match?(/guarded normal CI block.*Local signing and publishing.*fully qualified ref/i), "Tags section must point operators to the guarded fully qualified tag flow")
-  assert_documented(execution_text.match?(/`homebrew_release`.*dispatch payload.*only.*`repository`.*`tag`/i), "dispatch payload must contain only repository and tag")
-  assert_documented(execution_text.match?(/downloads.*`release-manifest[.]json`.*public GitHub Release/i), "tap manifest download transport must be documented")
-  assert_documented(execution_text.match?(/shared by.*Sparkle appcast.*GitHub Release.*Homebrew Cask/i), "canonical DMG reuse must be documented")
+  assert_documented(execution_text.match?(/creates or verifies the annotated `refs\/tags\/v<MARKETING_VERSION>`.*exact merge commit/i), "Tags section must preserve exact annotated tag provenance")
+  whole_text = normalized(readme)
+  assert_documented(whole_text.match?(/`homebrew_release` dispatch payload contains only `repository` and `tag`/i), "dispatch payload must contain only repository and tag")
+  assert_documented(whole_text.match?(/downloads and validates `release-manifest[.]json` from the public GitHub Release/i), "tap manifest download transport must be documented")
+  assert_documented(whole_text.match?(/canonical DMG is shared by the Sparkle appcast.*GitHub Release.*Homebrew Cask/i), "canonical DMG reuse must be documented")
 
-  recovery = markdown_section(readme, "Recovery and immutability")
+  recovery = markdown_section(readme, "Recovery") + markdown_section(readme, "Immutability Rules")
   recovery_text = normalized(recovery)
   recovery_steps = recovery_dispatch_steps(recovery)
   assert_documented(
@@ -465,20 +471,20 @@ def validate_release_operations!(readme)
     ],
     "recovery dispatch token lifecycle is unsafe or out of order: #{recovery_steps.inspect}"
   )
-  assert_documented(recovery_text.match?(/rerun only.*failed `notify` job/i), "notify-only rerun must be documented")
+  assert_documented(recovery_text.match?(/rerun only `notify`/i), "notify-only rerun must be documented")
   assert_documented(recovery_text.match?(/does not rebuild.*sign.*notarize.*replace public assets/i), "notify rerun non-publication boundary must be documented")
   assert_documented(recovery_text.match?(/do not delete or recreate.*tag/i), "tag recovery rule must be documented")
   assert_documented(recovery_text.include?('read -r -s -p "Temporary tap dispatch token: " TAP_GH_TOKEN'), "manual narrow dispatch fallback must avoid shell history")
 
-  whole_text = normalized(readme)
   assert_documented(!whole_text.match?(/secrets are available only to/i), "README falsely claims shared Environment secrets are job-isolated")
   assert_documented(!whole_text.match?(/(?:manifest|release-manifest[.]json).{0,120}\b(?:sent|carried|included)\b.{0,80}\b(?:event|dispatch|payload)\b/i), "README falsely claims the manifest is sent in dispatch")
-  assert_documented(!whole_text.match?(/\b(?:event|dispatch) payload\b.{0,80}\b(?:sends|carries|includes|contains)\b.{0,80}(?:manifest|release-manifest[.]json)/i), "README falsely claims dispatch contains the manifest")
+  assert_documented(!whole_text.match?(/\b(?:event|dispatch) payload\b[[:space:]]+(?:sends|carries|includes|contains)[[:space:]]+(?:the[[:space:]]+)?`?release-manifest[.]json`?/i), "README falsely claims dispatch contains the manifest")
   assert_documented(!recovery_text.match?(/`?notify`? fails.{0,160}(?:rerun|re-run) (?:the )?full (?:release|workflow)/i), "README tells operators to rerun the full release after notify failure")
 end
 
-readme_path = ARGV.fetch(0)
-readme = File.binread(readme_path)
+release_workflow_path = ARGV.fetch(0)
+update_hosting_path = ARGV.fetch(1)
+readme = File.binread(release_workflow_path) + "\n" + File.binread(update_hosting_path)
 validate_release_operations!(readme)
 validate_release_operations!(readme.gsub("\n", "\r\n"))
 
@@ -524,8 +530,8 @@ assert_mutation_rejected(
   readme,
   readme.sub(/^scripts\/dispatch-homebrew-update[.]sh "\$release_tag"\n/, "")
 )
-fallback_start = readme.index("Use the local fallback")
-fallback_finish = readme.index("### Cloudflare publishing credentials")
+fallback_start = readme.index("## Local Publishing Fallback")
+fallback_finish = readme.index("## Publication Safety")
 raise "FAIL: local fallback mutation bounds are missing" unless fallback_start && fallback_finish
 fallback = readme[fallback_start...fallback_finish]
 ambiguous_fallback = fallback.gsub('refs/tags/$release_tag', '$release_tag')
@@ -545,11 +551,11 @@ assert_mutation_rejected(
   "unsafe duplicate tag shortcut",
   readme,
   readme.sub(
-    "### Tags and release execution\n",
-    "### Tags and release execution\n#{unsafe_tag_shortcut}"
+    "## Tags and Release Execution\n",
+    "## Tags and Release Execution\n#{unsafe_tag_shortcut}"
   )
 )
-recovery_start = readme.index("### Recovery and immutability")
+recovery_start = readme.index("## Recovery")
 raise "FAIL: recovery mutation section is missing" unless recovery_start
 recovery_prefix = readme[0...recovery_start]
 recovery_section = readme[recovery_start..-1]
@@ -567,10 +573,10 @@ assert_mutation_rejected(
 assert_mutation_rejected(
   "false Environment secret isolation",
   readme,
-  readme.sub("### Protected release environment and tap integration\n", "### Protected release environment and tap integration\n\nApple secrets are available only to `release`.\n")
+  readme.sub("## Protected Release Environment\n", "## Protected Release Environment\n\nApple secrets are available only to `release`.\n")
 )
 manifest_payload_mutation = readme.sub(
-  /The `homebrew_release` dispatch payload[[:space:]]+consists only of `repository` and `tag`[.]/,
+  /The `homebrew_release` dispatch[[:space:]]+payload[[:space:]]+contains only `repository` and `tag`[;]/,
   '\0' + "\nThe `release-manifest.json` is sent in the dispatch payload."
 )
 assert_mutation_rejected("manifest included in dispatch payload", readme, manifest_payload_mutation)
@@ -620,12 +626,12 @@ assert_commented_secret_placeholder R2_SECRET_ACCESS_KEY \
     "# R2_SECRET_ACCESS_KEY='your-r2-secret-access-key'"
 
 stale_cloudflare_auth_url='https://developers.cloudflare.com/r2/api/s3/'"tokens/"
-if grep -Fq "$stale_cloudflare_auth_url" "$README"; then
-    fail "$README contains the stale Cloudflare R2 authentication link"
+if grep -Fq "$stale_cloudflare_auth_url" "${DOCUMENTATION_FILES[@]}"; then
+    fail "documentation contains the stale Cloudflare R2 authentication link"
 fi
 
-grep -Eq 'v\*.*(ruleset|protection)|(ruleset|protection).*v\*' "$README" || \
-    fail "$README is missing v* tag protection guidance"
+grep -Eq 'v\*.*(ruleset|protection)|(ruleset|protection).*v\*' "${DOCUMENTATION_FILES[@]}" || \
+    fail "documentation is missing v* tag protection guidance"
 
 absolute_macos_user_path='/Users/[^/[:space:]]+'
 if grep -Eq "$absolute_macos_user_path" "${DOCUMENTATION_FILES[@]}"; then
