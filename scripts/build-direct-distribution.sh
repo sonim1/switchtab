@@ -29,7 +29,7 @@ Environment:
   CODESIGN_BIN                   Optional codesign executable. Defaults to /usr/bin/codesign.
   DIRECT_BUILD_ROOT              Optional generated workspace root. Defaults to .build/direct-distribution
   DIRECT_RELEASE_OUTPUT_DIR      Optional release artifact directory. Defaults to .build/direct-distribution/release
-  DEVELOPER_ID_APPLICATION       Required with --release. Example: Developer ID Application: Name (TEAMID)
+  DEVELOPER_ID_APPLICATION       Optional for local trusted signing; required with --release. Example: Developer ID Application: Name (TEAMID)
   NOTARYTOOL_KEYCHAIN_PROFILE    Required with --release. Keychain profile created by xcrun notarytool store-credentials.
   NOTARYTOOL_KEYCHAIN_PATH       Optional Keychain containing the notarytool profile.
 EOF
@@ -53,6 +53,8 @@ sign_code() {
 
         if [[ "$RELEASE" == "1" ]]; then
             codesign_args+=(--timestamp --sign "$DEVELOPER_ID_APPLICATION")
+        elif [[ -n "$DEVELOPER_ID_APPLICATION" ]]; then
+            codesign_args+=(--sign "$DEVELOPER_ID_APPLICATION")
         else
             codesign_args+=(--sign -)
         fi
