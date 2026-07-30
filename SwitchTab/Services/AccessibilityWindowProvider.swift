@@ -52,7 +52,7 @@ public protocol AccessibilityWindowSnapshotProviding {
         ownerProcessIdentifier: Int,
         ownerName: String?,
         includeScreenCaptureIdentifiers: Bool
-    ) -> [AccessibilityWindowSnapshot]
+    ) -> [AccessibilityWindowSnapshot]?
 }
 
 public struct AccessibilityWindowInclusionCandidate: Equatable {
@@ -138,13 +138,13 @@ public struct AccessibilityWindowProvider {
             ownerProcessIdentifier: activeApplication.processIdentifier,
             ownerName: activeApplication.localizedName,
             includeScreenCaptureIdentifiers: includeScreenCaptureIdentifiers
-        )
+        ) ?? []
     }
 
     public func applicationWindows(
         ownerProcessIdentifier: Int,
         ownerName: String?
-    ) -> [WindowItem] {
+    ) -> [WindowItem]? {
         windows(
             ownerProcessIdentifier: ownerProcessIdentifier,
             ownerName: ownerName,
@@ -156,12 +156,14 @@ public struct AccessibilityWindowProvider {
         ownerProcessIdentifier: Int,
         ownerName: String?,
         includeScreenCaptureIdentifiers: Bool
-    ) -> [WindowItem] {
-        let snapshots = windowSnapshotProvider.windows(
+    ) -> [WindowItem]? {
+        guard let snapshots = windowSnapshotProvider.windows(
             ownerProcessIdentifier: ownerProcessIdentifier,
             ownerName: ownerName,
             includeScreenCaptureIdentifiers: includeScreenCaptureIdentifiers
-        )
+        ) else {
+            return nil
+        }
         guard !snapshots.isEmpty else {
             return []
         }
@@ -330,15 +332,15 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
         ownerProcessIdentifier: Int,
         ownerName: String?,
         includeScreenCaptureIdentifiers: Bool
-    ) -> [AccessibilityWindowSnapshot] {
+    ) -> [AccessibilityWindowSnapshot]? {
         let appElement = AXUIElementCreateApplication(pid_t(ownerProcessIdentifier))
         guard let windowElements = attributeReader.windowElements(of: appElement) else {
-            AXWindowElementRegistry.shared.removeAll()
-            return []
+            AXWindowElementRegistry.shared.removeAll(ownerProcessIdentifier: ownerProcessIdentifier)
+            return nil
         }
 
         guard !windowElements.isEmpty else {
-            AXWindowElementRegistry.shared.removeAll()
+            AXWindowElementRegistry.shared.removeAll(ownerProcessIdentifier: ownerProcessIdentifier)
             return []
         }
 
@@ -393,7 +395,10 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
             )
         }
 
-        AXWindowElementRegistry.shared.replace(with: activeWindowElements)
+        AXWindowElementRegistry.shared.replace(
+            ownerProcessIdentifier: ownerProcessIdentifier,
+            with: activeWindowElements
+        )
         return snapshots
     }
 
@@ -566,23 +571,31 @@ final class AXWindowElementRegistry: @unchecked Sendable {
     static let shared = AXWindowElementRegistry()
 
     private let lock = NSLock()
-    private var elements: [Int: AXUIElement] = [:]
+    private var elementsByOwnerProcessIdentifier: [Int: [Int: AXUIElement]] = [:]
 
-    func replace(with activeElements: [Int: AXUIElement]) {
+    func replace(
+        ownerProcessIdentifier: Int,
+        with activeElements: [Int: AXUIElement]
+    ) {
         lock.lock()
         defer { lock.unlock() }
-        elements = activeElements
+        elementsByOwnerProcessIdentifier[ownerProcessIdentifier] = activeElements
     }
 
     func element(for windowIdentifier: Int) -> AXUIElement? {
         lock.lock()
         defer { lock.unlock() }
-        return elements[windowIdentifier]
+        for elements in elementsByOwnerProcessIdentifier.values {
+            if let element = elements[windowIdentifier] {
+                return element
+            }
+        }
+        return nil
     }
 
-    func removeAll() {
+    func removeAll(ownerProcessIdentifier: Int) {
         lock.lock()
         defer { lock.unlock() }
-        elements.removeAll(keepingCapacity: true)
+        elementsByOwnerProcessIdentifier.removeValue(forKey: ownerProcessIdentifier)
     }
 }
