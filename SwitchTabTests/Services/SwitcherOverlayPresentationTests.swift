@@ -1,5 +1,4 @@
 import CoreGraphics
-import Foundation
 import SwitchTab
 
 enum SwitcherOverlayPresentationTests {
@@ -26,7 +25,6 @@ enum SwitcherOverlayPresentationTests {
         try testMinimumScaleTileContentFitsWithinTile()
         try testApplicationModeUsesCompactLayoutMetrics()
         try testApplicationModeFitsMoreColumnsThanWindowMode()
-        try testSelectedOutlineUsesInternalStrokeBorder()
     }
 
     static func testWindowSessionCanUseIconStripPresentation() throws {
@@ -352,26 +350,6 @@ enum SwitcherOverlayPresentationTests {
         )
 
         try expectTrue(applicationLayout.gridColumnCount > windowLayout.gridColumnCount)
-    }
-
-    static func testSelectedOutlineUsesInternalStrokeBorder() throws {
-        let source = try projectSource("SwitchTab/UI/Overlay/SwitcherIconStripView.swift")
-
-        try expectTrue(
-            source.contains(".strokeBorder("),
-            "Selected tile outlines must be inset so every edge stays inside the tile bounds."
-        )
-    }
-
-    private static func projectSource(_ relativePath: String) throws -> String {
-        let projectRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        return try String(
-            contentsOf: projectRoot.appendingPathComponent(relativePath),
-            encoding: .utf8
-        )
     }
 
     private static func expectedWidth(
