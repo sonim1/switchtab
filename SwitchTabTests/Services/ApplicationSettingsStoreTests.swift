@@ -8,12 +8,20 @@ enum ApplicationSettingsStoreTests {
         try testMenuBarIconVisibilityPersists()
         try testMenuBarIconVisibilityChangePostsNotification()
         try testMenuBarIconVisibilityNoOpDoesNotPostNotification()
+        try testReplacesCommandTabDefaultsToDisabled()
+        try testReplacesCommandTabPersists()
+        try testReplacesCommandTabChangePostsExactlyOneNotification()
+        try testReplacesCommandTabChangePostsDedicatedNotification()
+        try testUnrelatedSettingsDoNotPostCmdTabReplacementNotification()
+        try testReplacesCommandTabNoOpDoesNotPostNotification()
         try testOverlaySizeScaleDefaultsToOne()
         try testOverlaySizeScalePersists()
         try testOverlaySizeScaleNoOpDoesNotPostNotification()
         try testOverlaySizeScaleMigratesLegacyPreference()
         try testStoredScaleWinsOverLegacyPreference()
         try testViewModelTogglesMenuBarIconVisibility()
+        try testViewModelInitializesFromStoredCmdTabReplacement()
+        try testViewModelUpdatesCmdTabReplacement()
         try testViewModelUpdatesOverlaySizeScale()
         try testViewModelHidesUpdateControlsWhenUnavailable()
         try testViewModelForwardsManualUpdateChecks()
@@ -73,6 +81,98 @@ enum ApplicationSettingsStoreTests {
         }
 
         store.saveMenuBarIconVisible(true)
+
+        try expectEqual(recorder.postCount, 0)
+    }
+
+    static func testReplacesCommandTabDefaultsToDisabled() throws {
+        let store = ApplicationSettingsStore(userDefaults: makeDefaults())
+
+        try expectFalse(store.replacesCommandTab)
+    }
+
+    static func testReplacesCommandTabPersists() throws {
+        let defaults = makeDefaults()
+        let store = ApplicationSettingsStore(userDefaults: defaults)
+
+        store.saveReplacesCommandTab(true)
+
+        try expectTrue(ApplicationSettingsStore(userDefaults: defaults).replacesCommandTab)
+    }
+
+    static func testReplacesCommandTabChangePostsExactlyOneNotification() throws {
+        let store = ApplicationSettingsStore(userDefaults: makeDefaults())
+        let recorder = NotificationRecorder()
+        let observer = NotificationCenter.default.addObserver(
+            forName: .applicationSettingsDidChange,
+            object: nil,
+            queue: nil
+        ) { _ in
+            recorder.record()
+        }
+        defer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+
+        store.saveReplacesCommandTab(true)
+
+        try expectEqual(recorder.postCount, 1)
+    }
+
+    static func testReplacesCommandTabChangePostsDedicatedNotification() throws {
+        let store = ApplicationSettingsStore(userDefaults: makeDefaults())
+        let recorder = NotificationRecorder()
+        let observer = NotificationCenter.default.addObserver(
+            forName: .commandTabReplacementDidChange,
+            object: nil,
+            queue: nil
+        ) { _ in
+            recorder.record()
+        }
+        defer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+
+        store.saveReplacesCommandTab(true)
+        store.saveReplacesCommandTab(true)
+
+        try expectEqual(recorder.postCount, 1)
+    }
+
+    static func testUnrelatedSettingsDoNotPostCmdTabReplacementNotification() throws {
+        let store = ApplicationSettingsStore(userDefaults: makeDefaults())
+        let recorder = NotificationRecorder()
+        let observer = NotificationCenter.default.addObserver(
+            forName: .commandTabReplacementDidChange,
+            object: nil,
+            queue: nil
+        ) { _ in
+            recorder.record()
+        }
+        defer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+
+        store.saveOverlaySizeScale(OverlaySizeScale(1.2))
+
+        try expectEqual(recorder.postCount, 0)
+    }
+
+    static func testReplacesCommandTabNoOpDoesNotPostNotification() throws {
+        let store = ApplicationSettingsStore(userDefaults: makeDefaults())
+        let recorder = NotificationRecorder()
+        let observer = NotificationCenter.default.addObserver(
+            forName: .applicationSettingsDidChange,
+            object: nil,
+            queue: nil
+        ) { _ in
+            recorder.record()
+        }
+        defer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+
+        store.saveReplacesCommandTab(false)
 
         try expectEqual(recorder.postCount, 0)
     }
@@ -147,6 +247,46 @@ enum ApplicationSettingsStoreTests {
 
         try expectFalse(viewModel.menuBarIconVisible)
         try expectFalse(ApplicationSettingsStore(userDefaults: defaults).menuBarIconVisible)
+    }
+
+    @MainActor
+    static func testViewModelInitializesFromStoredCmdTabReplacement() throws {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: ApplicationSettingsStore.replacesCommandTabKey)
+        let viewModel = ApplicationSettingsViewModel(
+            store: ApplicationSettingsStore(userDefaults: defaults),
+            launchAtLoginService: FakeLaunchAtLoginService()
+        )
+
+        try expectTrue(viewModel.replacesCommandTab)
+    }
+
+    @MainActor
+    static func testViewModelUpdatesCmdTabReplacement() throws {
+        let defaults = makeDefaults()
+        let viewModel = ApplicationSettingsViewModel(
+            store: ApplicationSettingsStore(userDefaults: defaults),
+            launchAtLoginService: FakeLaunchAtLoginService()
+        )
+
+        let recorder = NotificationRecorder()
+        let observer = NotificationCenter.default.addObserver(
+            forName: .applicationSettingsDidChange,
+            object: nil,
+            queue: nil
+        ) { _ in
+            recorder.record()
+        }
+        defer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+
+        viewModel.setReplacesCommandTab(true)
+        viewModel.setReplacesCommandTab(true)
+
+        try expectTrue(viewModel.replacesCommandTab)
+        try expectTrue(ApplicationSettingsStore(userDefaults: defaults).replacesCommandTab)
+        try expectEqual(recorder.postCount, 1)
     }
 
     @MainActor

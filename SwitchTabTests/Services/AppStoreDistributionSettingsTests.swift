@@ -13,7 +13,7 @@ enum AppStoreDistributionSettingsTests {
         try testDirectDistributionScriptRequiresSparklePublicKey()
         try testDirectDistributionScriptRequiresHTTPSUpdateFeedURL()
         try testDirectDistributionScriptAutomatesReleaseArtifacts()
-        try testReadmeDocumentsDirectDistributionBuild()
+        try testDocumentationCoversDirectDistributionBuild()
     }
 
     static func testInfoPlistUsesAppStoreBundleIdentifier() throws {
@@ -141,14 +141,22 @@ enum AppStoreDistributionSettingsTests {
         try expectTrue(contents.contains("shasum -a 256"))
     }
 
-    static func testReadmeDocumentsDirectDistributionBuild() throws {
+    static func testDocumentationCoversDirectDistributionBuild() throws {
         let readmeURL = projectRoot.appendingPathComponent("README.md")
-        let contents = try String(contentsOf: readmeURL, encoding: .utf8)
+        let readmeContents = try String(contentsOf: readmeURL, encoding: .utf8)
+        let guideURL = projectRoot.appendingPathComponent("docs/direct-distribution.md")
+        let guideContents = try String(contentsOf: guideURL, encoding: .utf8)
 
-        try expectTrue(contents.contains("Direct Distribution Build"))
-        try expectTrue(contents.contains("scripts/build-direct-distribution.sh"))
-        try expectTrue(contents.contains("SPARKLE_PUBLIC_ED_KEY"))
-        try expectTrue(contents.contains("SWITCHTAB_UPDATE_FEED_URL"))
+        try expectTrue(readmeContents.contains("AppIcon-256.png"))
+        try expectTrue(readmeContents.contains("docs/development.md"))
+        try expectTrue(readmeContents.contains("docs/direct-distribution.md"))
+        try expectTrue(readmeContents.contains("docs/update-hosting.md"))
+        try expectTrue(readmeContents.contains("docs/release-workflow.md"))
+        try expectTrue(guideContents.contains("Direct Distribution"))
+        try expectTrue(guideContents.contains("scripts/build-direct-distribution.sh"))
+        try expectTrue(guideContents.contains("SPARKLE_PUBLIC_ED_KEY"))
+        try expectTrue(guideContents.contains("SWITCHTAB_UPDATE_FEED_URL"))
+        try expectTrue(guideContents.contains("DEVELOPER_ID_APPLICATION"))
     }
 
     private static var projectRoot: URL {

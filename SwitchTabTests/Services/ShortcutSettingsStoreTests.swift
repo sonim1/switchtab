@@ -12,8 +12,11 @@ enum ShortcutSettingsStoreTests {
         try testSavingUnchangedShortcutDoesNotRewrite()
         try testViewModelDoesNotNotifyWhenShortcutIsUnchanged()
         try testViewModelDoesNotPublishUnchangedValidationError()
+        try testViewModelRejectsReservedApplicationShortcut()
         try testViewModelLoadsRegistrationMessageText()
         try testViewModelCombinesRegistrationMessages()
+        try testViewModelSeparatesRegistrationMessagesByMode()
+        try testPersistedApplicationSwitchingRegistrationMessageUsesRecoveryCopy()
         try testViewModelUpdatesCachedRegistrationMessagesOnRegistrationChange()
         try testViewModelDoesNotPublishUnchangedRegistrationMessages()
         try testSavingEmptyRegistrationMessagesDoesNotWriteWhenAlreadyEmpty()
@@ -179,6 +182,26 @@ enum ShortcutSettingsStoreTests {
         try expectEqual(publishCount, 0)
     }
 
+    static func testViewModelRejectsReservedApplicationShortcut() throws {
+        let store = ShortcutSettingsStore(userDefaults: makeDefaults())
+        let viewModel = ShortcutSettingsViewModel(store: store)
+
+        let didSave = viewModel.save(
+            keyEquivalent: "Tab",
+            keyCode: 48,
+            modifiers: ["command"],
+            isUsable: true
+        )
+
+        try expectFalse(didSave)
+        try expectEqual(viewModel.currentAppWindowShortcut, .defaultCurrentAppWindowSwitching)
+        try expectEqual(store.load(), .defaultCurrentAppWindowSwitching)
+        try expectEqual(
+            viewModel.errorMessage,
+            "Shortcut is already used by another switcher mode."
+        )
+    }
+
     static func testViewModelLoadsRegistrationMessageText() throws {
         let defaults = makeDefaults()
         let store = ShortcutSettingsStore(userDefaults: defaults)
@@ -205,6 +228,47 @@ enum ShortcutSettingsStoreTests {
         try expectEqual(
             viewModel.registrationMessage(),
             "Cmd + ` unavailable Option + ` unavailable Fallback failed"
+        )
+    }
+
+    static func testViewModelSeparatesRegistrationMessagesByMode() throws {
+        let defaults = makeDefaults()
+        let store = ShortcutSettingsStore(userDefaults: defaults)
+        store.saveRegistrationMessages([
+            ShortcutRegistrationMessage(mode: .currentAppWindowSwitching, message: "Window first"),
+            ShortcutRegistrationMessage(mode: .applicationSwitching, message: "Applications first"),
+            ShortcutRegistrationMessage(mode: .currentAppWindowSwitching, message: "Window second"),
+            ShortcutRegistrationMessage(mode: .applicationSwitching, message: "Applications second")
+        ])
+
+        let viewModel = ShortcutSettingsViewModel(store: store)
+
+        try expectEqual(viewModel.registrationMessage(), "Window first Window second")
+        try expectEqual(
+            viewModel.applicationSwitchingRegistrationMessage(),
+            "Applications first Applications second"
+        )
+    }
+
+    static func testPersistedApplicationSwitchingRegistrationMessageUsesRecoveryCopy() throws {
+        let defaults = makeDefaults()
+        let store = ShortcutSettingsStore(userDefaults: defaults)
+        let registrar = ShortcutSettingsApplicationSwitchingFailingRegistrar()
+        let controller = ApplicationSwitchingHotkeyController(
+            hotkeyService: HotkeyService(registrar: registrar)
+        )
+
+        try expectFalse(
+            controller.updateRegistration(enabled: true, forwardHandler: {}, reverseHandler: {})
+        )
+        try expectTrue(store.saveRegistrationMessages(controller.registrationMessageSnapshot()))
+
+        let viewModel = ShortcutSettingsViewModel(store: store)
+
+        try expectEqual(viewModel.registrationMessage(), nil)
+        try expectEqual(
+            viewModel.applicationSwitchingRegistrationMessage(),
+            ApplicationSwitchingHotkeyController.registrationFailureMessage
         )
     }
 
@@ -335,4 +399,12 @@ final class CountingShortcutDefaults: UserDefaults {
         removeCount += 1
         values.removeValue(forKey: defaultName)
     }
+}
+
+private final class ShortcutSettingsApplicationSwitchingFailingRegistrar: HotkeyRegistering {
+    func register(setting: ShortcutSetting, handler: @escaping () -> Void) -> Bool {
+        setting.id == ShortcutSetting.defaultApplicationSwitching.id
+    }
+
+    func unregisterAll() {}
 }

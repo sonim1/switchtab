@@ -304,7 +304,7 @@ enum WindowCloseServiceTests {
             selectedIndex: 0,
             gridColumns: SwitcherIconStripView.gridColumns(columnCount: 1, metrics: metrics),
             layoutMetrics: metrics,
-            showsThumbnails: false,
+            mode: .applicationSwitching,
             hoverEnabled: true,
             scrollToken: 0,
             thumbnailStore: WindowThumbnailStore(),

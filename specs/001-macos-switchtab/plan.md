@@ -7,12 +7,12 @@
 ## Summary
 
 Build a native macOS-only current-app window switcher that opens from a
-configurable keyboard shortcut. macOS keeps ownership of Cmd+Tab app switching;
-SwitchTab focuses on switching between windows belonging to the currently active
-application, showing current window previews when permissions allow. The app is
-a lightweight menu bar utility with a keyboard-first icon-strip overlay,
-configurable window shortcut, explicit permission guidance, and no
-cross-platform scope.
+configurable keyboard shortcut, plus an opt-in application switcher that can
+replace Cmd+Tab while SwitchTab is running. Replacement defaults off, so native
+macOS Cmd+Tab remains the default. The application mode uses a dedicated
+Accessibility-backed EventTap, an application-only MRU, and the existing
+keyboard-first icon-strip overlay; the current-app window mode keeps its
+preview and permission behavior unchanged.
 
 Permission recovery is user-driven. When the user clicks Allow for
 Accessibility or Screen Recording, SwitchTab opens the matching macOS Settings
@@ -31,12 +31,14 @@ script injects a pinned Sparkle package revision only into its generated
 workspace.
 
 **Storage**: UserDefaults for the window shortcut setting, shortcut
-registration messages, app settings, and lightweight window-switching usage
-metrics. No database.
+registration messages, app settings, separate window/application MRU histories,
+and lightweight window-switching usage metrics. No database.
 
 **Testing**: XCTest for pure logic and service boundaries; manual quickstart
-validation for live macOS window focus, permissions, global shortcuts, Screen
-Recording previews, and System Settings recovery.
+validation for live macOS window/application focus, opt-in Cmd+Tab replacement,
+permissions, global shortcuts, Screen Recording previews, and System Settings
+recovery. The eight Finder/Safari/Notes application scenarios are recorded in
+`.build/qa/application-switching/outcomes.md`.
 
 **Target Platform**: macOS 14.0+ only.
 
@@ -46,14 +48,18 @@ Recording previews, and System Settings recovery.
 keyboard selection updates stay responsive for 20 apps and 50 windows; no
 visible idle UI activity or user-noticeable slowdown over 10 minutes idle.
 
-**Constraints**: Keyboard-first interaction, configurable shortcuts, graceful
-handling of Accessibility and Screen Recording permission states, no continuous
-polling for window/application state unless justified by measurement.
-Permission recovery must not synthesize System Settings clicks, drags, or
-toggle changes.
+**Constraints**: Keyboard-first interaction, configurable window shortcut,
+default-off application replacement, graceful handling of Accessibility and
+Screen Recording permission states, and no continuous polling for
+window/application state unless justified by measurement. Application
+replacement uses a separate Accessibility EventTap and does not share the
+window shortcut registrar. Permission recovery must not synthesize System
+Settings clicks, drags, or toggle changes. Screen Recording is not required for
+application icons or names.
 
 **Scale/Scope**: Single-user local desktop utility; the checked-in app covers
-current-app window switching, shortcut settings, permission guidance, menu bar
+current-app window switching, opt-in application switching, independent
+window/application shortcut and MRU state, permission guidance, menu bar
 visibility, overlay sizing, update hooks, and local usage metrics.
 
 ## Constitution Check
@@ -98,6 +104,7 @@ SwitchTab/
 ├── SwitchTabApp.swift
 ├── AppDelegate.swift
 ├── Models/
+│   ├── ApplicationItem.swift
 │   ├── OverlaySizePreference.swift
 │   ├── PermissionState.swift
 │   ├── ShortcutKeyCodeResolver.swift
@@ -108,11 +115,14 @@ SwitchTab/
 │   └── WindowItem.swift
 ├── Services/
 │   ├── AccessibilityWindowProvider.swift
+│   ├── ApplicationActivationService.swift
+│   ├── ApplicationSwitchingHotkeyController.swift
 │   ├── ApplicationIconStore.swift
 │   ├── ApplicationSettingsStore.swift
 │   ├── HotkeyService.swift
 │   ├── PermissionService.swift
 │   ├── PermissionSettingsDestination.swift
+│   ├── RunningApplicationProvider.swift
 │   ├── ShortcutModifierResolver.swift
 │   ├── ShortcutValidationService.swift
 │   ├── ShortcutSettingsStore.swift
@@ -152,10 +162,15 @@ Trigger:
 - Allow opens the relevant System Settings privacy destination.
 - If permission is already granted, the row shows an enabled state and no
   recovery action.
+- Enabling `Replace macOS Cmd-Tab` while Accessibility is missing keeps the
+  setting saved but leaves the application EventTap unregistered; native
+  Cmd+Tab is not consumed.
 
 Components:
 - `PermissionService`: Reads Accessibility and Screen Recording grant state
-  with first-party macOS APIs.
+  with first-party macOS APIs. Accessibility gates current-app window
+  observation/focus and application EventTap interception; Screen Recording
+  gates only current-app window previews.
 - `PermissionState`: Maps grant state to blocked capability copy and Settings
   recovery steps.
 - `PermissionSettingsDestination`: Owns the System Settings URLs for the
@@ -175,8 +190,10 @@ Verification:
 - Unit tests cover permission copy, destination mapping, granted/missing row
   states, and Settings action labels.
 - Manual validation covers real Accessibility and Screen Recording panes,
-  relaunch requirements after granting privacy permissions, window focus, and
-  window previews.
+  relaunch requirements after granting privacy permissions, native Cmd+Tab
+  fallback/recovery, application focus, window focus, and window previews.
+- Application icons and names are validated without Screen Recording; only the
+  current-app window preview path depends on that permission.
 - No System Settings automation, synthetic input, TCC DB mutation, timer, or
   polling loop is part of permission recovery.
 
@@ -198,3 +215,28 @@ No constitution violations.
   (`Timer`, `poll`, `DispatchSource`, `sleep`, or `scheduledTimer`). The
   remaining `while` loops in `AccessibilityWindowProvider` are finite in-memory
   matching loops, not idle polling.
+
+## Application-Switching Manual Verification Contract
+
+The canonical Finder/Safari/Notes acceptance sequence is documented in
+[quickstart.md](quickstart.md#application-switching-manual-acceptance-contract).
+It covers native fallback with replacement off, SwitchTab overlay behavior with
+replacement on, forward/reverse selection, Command-release activation,
+disablement, Accessibility fallback and recovery, relaunch persistence, and
+quit restoration. The exact evidence files are:
+
+| Scenario | Evidence |
+| --- | --- |
+| 01 native behavior with replacement off | `01-native-off.png` |
+| 02 SwitchTab overlay with replacement on | `02-switchtab-on.png` |
+| 03 forward and reverse highlights | `03-forward.png`, `03-reverse.png` |
+| 04 Command-release activation state | `04-activation-state.txt` |
+| 05 native behavior and current-app window shortcut after disabling | `05-disabled-native.png`, `05-window-shortcut-still-active.png` |
+| 06 Accessibility fallback and recovery | `06-permission-fallback.png`, `06-permission-recovered.png` |
+| 07 relaunch persistence | `07-relaunch-persistence.png` |
+| 08 native behavior after quitting | `08-quit-native.png` |
+
+For each scenario, QA records `precondition`, `exact action`, `expected`,
+`actual`, `selected/frontmost app identity`, and `evidence path` in
+`.build/qa/application-switching/outcomes.md`. This plan records the contract,
+not a claim that the live macOS scenarios have already passed.

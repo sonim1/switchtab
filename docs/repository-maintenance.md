@@ -1,11 +1,18 @@
 # Repository Maintenance
 
-Checked: 2026-07-27
+Checked: 2026-07-30
 
 ## Current Source Of Truth
 
-- `README.md`: project overview, local build/test commands, and local/CI direct
-  distribution release operation.
+- `README.md`: user-facing project overview, requirements, quick start, and
+  documentation index.
+- `docs/development.md`: local build, test, and app-target verification.
+- `docs/direct-distribution.md`: generated Sparkle workspace and signed DMG
+  builds.
+- `docs/update-hosting.md`: Cloudflare R2 setup, Sparkle publishing, and local
+  fallback operations.
+- `docs/release-workflow.md`: pull-request versioning, automated releases,
+  Homebrew integration, and recovery.
 - `specs/001-macos-switchtab/plan.md`: current source layout and implementation
   verification notes.
 - `specs/001-macos-switchtab/quickstart.md`: manual macOS validation scenarios
@@ -13,10 +20,11 @@ Checked: 2026-07-27
 - `BLOCKERS.md`: validation that requires user-controlled macOS permissions,
   release credentials, or approval for live external mutations.
 
-The checked-in app currently implements current-app window switching only.
-Older research/task sections that mention app-level switching or drag-overlay
-permission recovery are preserved as historical planning context unless a future
-feature goal updates code, tests, and docs together.
+The checked-in app implements current-app window switching and an optional
+application switcher. `Replace macOS Cmd-Tab` defaults off; enabling it uses a
+dedicated Accessibility-backed EventTap and a separate application MRU. The
+application overlay shows compact icons with names, while window thumbnails and
+their Screen Recording path remain unchanged.
 
 No `gbrain` or similarly named brain/context file was found in the repository
 scan.
@@ -134,9 +142,9 @@ npm ls --depth=0
 git diff --check
 ```
 
-Live focus, thumbnail, and permission-recovery scenarios still require a real
-logged-in macOS session where the user grants Accessibility and Screen Recording
-permissions.
+Live focus, Cmd-Tab replacement, thumbnail, and permission-recovery scenarios
+still require a real logged-in macOS session where the user grants the relevant
+Accessibility and Screen Recording permissions.
 
 ## Last Verification
 
