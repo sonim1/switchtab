@@ -701,10 +701,9 @@ expected_with_keychain="<notarytool>"$'\n'"<submit>"$'\n'"</tmp/SwitchTab.dmg>"$
 [[ "$(<"$NOTARY_LOG")" == "$expected_with_keychain" ]] || \
     fail "nonempty Keychain path was not passed atomically: $(<"$NOTARY_LOG")"
 
-# The default local build must repair every nested Sparkle signature with a
-# trusted identity when one is available, without requesting a timestamp.
-# Keep an explicit ad-hoc fallback for environments without an identity. The
-# release path must keep its Developer ID identity and trusted timestamp.
+# Actual builds must repair every nested Sparkle signature with the required
+# trusted identity. Local signing must explicitly disable timestamps, while
+# the release path must keep its Developer ID identity and trusted timestamp.
 SIGNING_FIXTURE_ROOT="$TEMP_ROOT/direct-signing"
 SIGNING_BIN="$SIGNING_FIXTURE_ROOT/bin"
 SIGNING_LOG="$SIGNING_FIXTURE_ROOT/codesign.log"
@@ -720,6 +719,10 @@ chmod +x "$SIGNING_BIN/codesign"
 cat > "$SIGNING_BIN/xcodebuild" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+
+if [[ -n "${XCODEBUILD_LOG:-}" ]]; then
+    printf 'invoked\n' >> "$XCODEBUILD_LOG"
+fi
 
 derived_data_path=''
 while [[ $# -gt 0 ]]; do
@@ -745,6 +748,44 @@ touch \
 EOF
 chmod +x "$SIGNING_BIN/xcodebuild"
 
+MISSING_IDENTITY_BUILD_ROOT="$SIGNING_FIXTURE_ROOT/missing-identity"
+MISSING_IDENTITY_XCODEBUILD_LOG="$SIGNING_FIXTURE_ROOT/missing-identity-xcodebuild.log"
+set +e
+missing_identity_output="$(
+    CODESIGN_BIN="$SIGNING_BIN/codesign" \
+    CODESIGN_LOG="$SIGNING_LOG" \
+    DIRECT_BUILD_ROOT="$MISSING_IDENTITY_BUILD_ROOT" \
+    SPARKLE_PUBLIC_ED_KEY='fixture-public-key' \
+    DEVELOPER_ID_APPLICATION='' \
+    XCODEBUILD_LOG="$MISSING_IDENTITY_XCODEBUILD_LOG" \
+    PATH="$SIGNING_BIN:$PATH" \
+    CONFIGURATION=Release \
+    bash "$BUILDER_PATH" 2>&1
+)"
+missing_identity_status=$?
+set -e
+[[ "$missing_identity_status" -eq 64 ]] || \
+    fail "actual local build without Developer ID was not rejected: status=$missing_identity_status output=$missing_identity_output"
+[[ "$missing_identity_output" == *"DEVELOPER_ID_APPLICATION is required"* ]] || \
+    fail "missing Developer ID rejection did not identify the required variable: $missing_identity_output"
+[[ ! -e "$MISSING_IDENTITY_XCODEBUILD_LOG" ]] || \
+    fail "missing Developer ID was discovered only after xcodebuild started"
+
+PREPARE_ONLY_ROOT="$SIGNING_FIXTURE_ROOT/prepare-only"
+PREPARE_ONLY_OUTPUT="$(
+    CODESIGN_BIN="$SIGNING_BIN/codesign" \
+    CODESIGN_LOG="$SIGNING_LOG" \
+    DIRECT_BUILD_ROOT="$PREPARE_ONLY_ROOT" \
+    SPARKLE_PUBLIC_ED_KEY='fixture-public-key' \
+    DEVELOPER_ID_APPLICATION='' \
+    XCODEBUILD_LOG="$SIGNING_FIXTURE_ROOT/prepare-only-xcodebuild.log" \
+    PATH="$SIGNING_BIN:$PATH" \
+    CONFIGURATION=Release \
+    bash "$BUILDER_PATH" --prepare-only
+)"
+[[ "$PREPARE_ONLY_OUTPUT" == *"Prepared direct distribution workspace:"* ]] || \
+    fail "prepare-only unexpectedly required a Developer ID identity: $PREPARE_ONLY_OUTPUT"
+
 LOCAL_BUILD_ROOT="$SIGNING_FIXTURE_ROOT/local-build"
 : > "$SIGNING_LOG"
 CODESIGN_BIN="$SIGNING_BIN/codesign" \
@@ -759,18 +800,18 @@ bash "$BUILDER_PATH"
 LOCAL_APP_PATH="$LOCAL_BUILD_ROOT/DerivedData/Build/Products/Release/SwitchTab.app"
 LOCAL_SPARKLE_CURRENT="$LOCAL_APP_PATH/Contents/Frameworks/Sparkle.framework/Versions/Current"
 expected_local_signing=$(cat <<EOF
---force --options runtime --sign Developer ID Application: Fixture (TEAM) $LOCAL_SPARKLE_CURRENT/Autoupdate
---force --options runtime --sign Developer ID Application: Fixture (TEAM) $LOCAL_SPARKLE_CURRENT/Updater.app
---force --options runtime --sign Developer ID Application: Fixture (TEAM) $LOCAL_SPARKLE_CURRENT/XPCServices/Downloader.xpc
---force --options runtime --sign Developer ID Application: Fixture (TEAM) $LOCAL_SPARKLE_CURRENT/XPCServices/Installer.xpc
---force --options runtime --sign Developer ID Application: Fixture (TEAM) $LOCAL_APP_PATH/Contents/Frameworks/Sparkle.framework
---force --options runtime --sign Developer ID Application: Fixture (TEAM) $LOCAL_APP_PATH
+--force --options runtime --timestamp=none --sign Developer ID Application: Fixture (TEAM) $LOCAL_SPARKLE_CURRENT/Autoupdate
+--force --options runtime --timestamp=none --sign Developer ID Application: Fixture (TEAM) $LOCAL_SPARKLE_CURRENT/Updater.app
+--force --options runtime --timestamp=none --sign Developer ID Application: Fixture (TEAM) $LOCAL_SPARKLE_CURRENT/XPCServices/Downloader.xpc
+--force --options runtime --timestamp=none --sign Developer ID Application: Fixture (TEAM) $LOCAL_SPARKLE_CURRENT/XPCServices/Installer.xpc
+--force --options runtime --timestamp=none --sign Developer ID Application: Fixture (TEAM) $LOCAL_APP_PATH/Contents/Frameworks/Sparkle.framework
+--force --options runtime --timestamp=none --sign Developer ID Application: Fixture (TEAM) $LOCAL_APP_PATH
 --verify --deep --strict --verbose=2 $LOCAL_APP_PATH
 EOF
 )
 [[ "$(<"$SIGNING_LOG")" == "$expected_local_signing" ]] || \
     fail "local direct build did not re-sign Sparkle in order: $(<"$SIGNING_LOG")"
-[[ "$(<"$SIGNING_LOG")" != *"--timestamp"* ]] || \
+[[ "$(<"$SIGNING_LOG")" != *"--timestamp --sign"* ]] || \
     fail "local direct build requested a trusted signing timestamp"
 
 SIGNING_FUNCTION_HARNESS="$TEMP_ROOT/signing-functions.sh"
@@ -785,36 +826,6 @@ SIGNING_FUNCTION_HARNESS="$TEMP_ROOT/signing-functions.sh"
     printf '%s\n' 'sign_app_bundle "$APP_PATH"'
 } > "$SIGNING_FUNCTION_HARNESS"
 chmod +x "$SIGNING_FUNCTION_HARNESS"
-
-FALLBACK_APP_PATH="$SIGNING_FIXTURE_ROOT/fallback/SwitchTab.app"
-FALLBACK_SPARKLE_CURRENT="$FALLBACK_APP_PATH/Contents/Frameworks/Sparkle.framework/Versions/Current"
-mkdir -p "$FALLBACK_SPARKLE_CURRENT/XPCServices" "$FALLBACK_SPARKLE_CURRENT/Updater.app"
-touch \
-    "$FALLBACK_SPARKLE_CURRENT/Autoupdate" \
-    "$FALLBACK_SPARKLE_CURRENT/XPCServices/Downloader.xpc" \
-    "$FALLBACK_SPARKLE_CURRENT/XPCServices/Installer.xpc"
-: > "$SIGNING_LOG"
-APP_PATH="$FALLBACK_APP_PATH" \
-RELEASE=0 \
-DEVELOPER_ID_APPLICATION='' \
-CODESIGN_BIN="$SIGNING_BIN/codesign" \
-CODESIGN_LOG="$SIGNING_LOG" \
-bash "$SIGNING_FUNCTION_HARNESS"
-
-expected_fallback_signing=$(cat <<EOF
---force --options runtime --sign - $FALLBACK_SPARKLE_CURRENT/Autoupdate
---force --options runtime --sign - $FALLBACK_SPARKLE_CURRENT/Updater.app
---force --options runtime --sign - $FALLBACK_SPARKLE_CURRENT/XPCServices/Downloader.xpc
---force --options runtime --sign - $FALLBACK_SPARKLE_CURRENT/XPCServices/Installer.xpc
---force --options runtime --sign - $FALLBACK_APP_PATH/Contents/Frameworks/Sparkle.framework
---force --options runtime --sign - $FALLBACK_APP_PATH
---verify --deep --strict --verbose=2 $FALLBACK_APP_PATH
-EOF
-)
-[[ "$(<"$SIGNING_LOG")" == "$expected_fallback_signing" ]] || \
-    fail "identity-free local signing did not preserve the ad-hoc fallback: $(<"$SIGNING_LOG")"
-[[ "$(<"$SIGNING_LOG")" != *"--timestamp"* ]] || \
-    fail "identity-free local signing requested a trusted timestamp"
 
 RELEASE_APP_PATH="$SIGNING_FIXTURE_ROOT/release/SwitchTab.app"
 RELEASE_SPARKLE_CURRENT="$RELEASE_APP_PATH/Contents/Frameworks/Sparkle.framework/Versions/Current"
