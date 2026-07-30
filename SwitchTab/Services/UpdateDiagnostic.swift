@@ -135,3 +135,96 @@ public enum UpdateErrorClassifier {
         return UpdateErrorDescriptor(category: category, domain: error.domain, code: error.code)
     }
 }
+
+public struct UpdateDiagnostic: Equatable, Sendable {
+    public let descriptor: UpdateErrorDescriptor
+    public let appVersion: String
+    public let macOSVersion: String
+    public let architecture: String
+    public let timestamp: Date
+
+    public init(
+        descriptor: UpdateErrorDescriptor,
+        appVersion: String,
+        macOSVersion: String,
+        architecture: String,
+        timestamp: Date
+    ) {
+        self.descriptor = descriptor
+        self.appVersion = appVersion
+        self.macOSVersion = macOSVersion
+        self.architecture = architecture
+        self.timestamp = timestamp
+    }
+
+    public static func make(
+        error: NSError,
+        appVersion: String = ApplicationVersionProvider.currentVersionDisplay(),
+        macOSVersion: String = ProcessInfo.processInfo.operatingSystemVersionString,
+        architecture: String? = nil,
+        timestamp: Date = Date()
+    ) -> UpdateDiagnostic {
+        UpdateDiagnostic(
+            descriptor: UpdateErrorClassifier.classify(error),
+            appVersion: appVersion,
+            macOSVersion: macOSVersion,
+            architecture: architecture ?? currentArchitecture,
+            timestamp: timestamp
+        )
+    }
+
+    public var report: String {
+        let date = ISO8601DateFormatter().string(from: timestamp)
+        return """
+        SwitchTab Update Diagnostic
+        SwitchTab: \(appVersion)
+        macOS: \(macOSVersion)
+        Architecture: \(architecture)
+        Stage: \(descriptor.category.stage)
+        Category: \(descriptor.category.rawValue)
+        Error: \(descriptor.domain) \(descriptor.code)
+        Time: \(date)
+        """
+    }
+
+    private static var currentArchitecture: String {
+        #if arch(arm64)
+        "arm64"
+        #elseif arch(x86_64)
+        "x86_64"
+        #else
+        "unknown"
+        #endif
+    }
+}
+
+public enum UpdateSupportLinks {
+    public static let latestRelease = URL(
+        string: "https://github.com/sonim1/switchtab/releases/latest"
+    )!
+
+    public static func reportIssue(for diagnostic: UpdateDiagnostic) -> URL? {
+        var components = URLComponents(
+            string: "https://github.com/sonim1/switchtab/issues/new"
+        )
+        components?.queryItems = [
+            URLQueryItem(
+                name: "title",
+                value: "Update failure: \(diagnostic.descriptor.category.rawValue)"
+            ),
+            URLQueryItem(
+                name: "body",
+                value: """
+                ## What happened?
+
+                Describe your network, VPN, and the steps that reproduced the error.
+
+                ## Diagnostic information
+
+                \(diagnostic.report)
+                """
+            )
+        ]
+        return components?.url
+    }
+}
