@@ -201,7 +201,7 @@ eight scenarios in the [quickstart acceptance contract](quickstart.md#applicatio
   application replacement EventTap can intercept Cmd+Tab; Screen Recording
   controls only current-app window previews.
 - **Usage Metrics**: Lightweight local counts for today's current-app
-  window-switching shortcut use and application-switching shortcut use.
+  window-switching shortcut use.
 
 ## Success Criteria *(mandatory)*
 

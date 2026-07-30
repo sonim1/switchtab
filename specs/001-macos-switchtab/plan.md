@@ -231,7 +231,7 @@ quit restoration. The exact evidence files are:
 | 02 SwitchTab overlay with replacement on | `02-switchtab-on.png` |
 | 03 forward and reverse highlights | `03-forward.png`, `03-reverse.png` |
 | 04 Command-release activation state | `04-activation-state.txt` |
-| 05 native behavior after disabling | `05-disabled-native.png` |
+| 05 native behavior and current-app window shortcut after disabling | `05-disabled-native.png`, `05-window-shortcut-still-active.png` |
 | 06 Accessibility fallback and recovery | `06-permission-fallback.png`, `06-permission-recovered.png` |
 | 07 relaunch persistence | `07-relaunch-persistence.png` |
 | 08 native behavior after quitting | `08-quit-native.png` |

@@ -201,14 +201,20 @@ Evidence path:
 - **Precondition:** Accessibility is granted; replacement is enabled and
   SwitchTab is running; the current-app window shortcut is configured.
 - **Exact action:** Return to Settings, turn the toggle off, immediately repeat
-  Command-Tab, and capture the native switcher as `05-disabled-native.png`; the
-  window shortcut must remain registered.
-- **Expected:** The application EventTap is torn down, native Cmd+Tab appears,
-  and the configurable current-app window shortcut still works.
+  Command-Tab, and capture the native switcher as `05-disabled-native.png`.
+  Then press the configured current-app window shortcut and capture the
+  SwitchTab window overlay as `05-window-shortcut-still-active.png`; the window
+  shortcut must remain registered and operational.
+- **Expected:** The application EventTap is torn down and native Cmd+Tab
+  appears. The configured current-app window shortcut then opens the SwitchTab
+  window overlay for the active application, preserving the existing window
+  switching and preview-permission behavior.
 - **Actual:** `[record during manual QA]`
 - **Selected/frontmost app identity:** `[record the native switcher's selected
-  app and the frontmost app after release]`
-- **Evidence path:** `.build/qa/application-switching/05-disabled-native.png`
+  app/frontmost app after release, then the window overlay's owning app and
+  selected window]`
+- **Evidence path:** `.build/qa/application-switching/05-disabled-native.png`,
+  `.build/qa/application-switching/05-window-shortcut-still-active.png`
 
 ### 6. Accessibility fallback and recovery
 

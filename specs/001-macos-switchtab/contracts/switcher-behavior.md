@@ -168,7 +168,12 @@ claim these live scenarios have passed.
 | 02 | Enable replacement; repeat Command-Tab; SwitchTab application overlay only | `02-switchtab-on.png` |
 | 03 | Finder active; cycle forward with Tab and reverse with Shift-Tab; match distinct highlights to names | `03-forward.png`, `03-reverse.png` |
 | 04 | Release Command with a non-Finder app highlighted; verify Computer Use frontmost state | `04-activation-state.txt` |
-| 05 | Disable replacement, immediately press Command-Tab; native switcher returns and window shortcut remains registered | `05-disabled-native.png` |
+| 05 | Disable replacement, press Command-Tab for native behavior, then invoke the configured current-app window shortcut and verify its SwitchTab window overlay still appears | `05-disabled-native.png`, `05-window-shortcut-still-active.png` |
 | 06 | Revoke Accessibility, enable replacement, verify native fallback/recovery copy, restore access, retry, verify working overlay/cleared warning | `06-permission-fallback.png`, `06-permission-recovered.png` |
 | 07 | Leave replacement enabled; quit/relaunch QA build; toggle persists and Cmd+Tab opens SwitchTab | `07-relaunch-persistence.png` |
 | 08 | Quit SwitchTab through its menu; press Command-Tab; native behavior restored | `08-quit-native.png` |
+
+For Scenario 05, the `actual` and `selected/frontmost app identity` fields must
+cover both the native application switcher and the subsequent current-app
+window overlay; the supplementary window-overlay capture is required in
+addition to the canonical `05-disabled-native.png` artifact.
