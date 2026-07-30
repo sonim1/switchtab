@@ -2,7 +2,6 @@ import CoreGraphics
 
 public enum SwitcherOverlayChromePolicy {
     public static let usesNativeBlurBackground = true
-    public static let panelPadding: CGFloat = 12
 }
 
 public enum SwitcherOverlayThumbnailPolicy {

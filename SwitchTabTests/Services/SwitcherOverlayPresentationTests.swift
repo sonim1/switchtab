@@ -5,7 +5,6 @@ import SwitchTab
 enum SwitcherOverlayPresentationTests {
     static func run() throws {
         try testWindowSessionCanUseIconStripPresentation()
-        try testOverlayChromeUsesReducedPadding()
         try testOverlayChromeUsesNativeBlurBackground()
         try testWindowModeUsesThumbnailRendering()
         try testIconGridUsesOneRowForFewItems()
@@ -29,7 +28,6 @@ enum SwitcherOverlayPresentationTests {
         try testApplicationModeFitsMoreColumnsThanWindowMode()
         try testApplicationTileUsesIconFirstContent()
         try testWindowTileButtonsExposeExplicitAccessibilityText()
-        try testRootViewUsesLayoutMetricPanelPadding()
     }
 
     static func testWindowSessionCanUseIconStripPresentation() throws {
@@ -42,10 +40,6 @@ enum SwitcherOverlayPresentationTests {
 
         try expectEqual(state.session?.mode, .currentAppWindowSwitching)
         try expectEqual(state.session?.items.first?.id, "finder")
-    }
-
-    static func testOverlayChromeUsesReducedPadding() throws {
-        try expectEqual(SwitcherOverlayChromePolicy.panelPadding, 12)
     }
 
     static func testOverlayChromeUsesNativeBlurBackground() throws {
@@ -375,12 +369,6 @@ enum SwitcherOverlayPresentationTests {
 
         try expectTrue(source.contains(".accessibilityLabel(Text(item.title))"))
         try expectTrue(source.contains(".accessibilityHint(Text(switchAccessibilityHint))"))
-    }
-
-    static func testRootViewUsesLayoutMetricPanelPadding() throws {
-        let source = try projectSource("SwitchTab/UI/Overlay/SwitcherOverlayRootView.swift")
-
-        try expectTrue(source.contains(".padding(layoutMetrics.panelPadding)"))
     }
 
     private static func projectSource(_ relativePath: String) throws -> String {
