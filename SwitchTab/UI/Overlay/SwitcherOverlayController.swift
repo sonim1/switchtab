@@ -207,7 +207,8 @@ final class SwitcherOverlayController {
         removeEventTap()
         let owner = SwitcherOverlayEventTapOwner(
             backend: eventTapBackend,
-            eventSink: eventSink
+            eventSink: eventSink,
+            triggerReleaseModifiers: triggerReleaseModifiers
         ) { @MainActor [weak self] command in
             guard let self else {
                 return
@@ -604,6 +605,7 @@ final class SwitcherOverlayEventTapOwner {
 
     private let backend: any SwitcherOverlayEventTapBackend
     private let eventSink: any SwitcherOverlayEventRecording
+    private let triggerReleaseModifiers: SwitcherShortcutModifiers?
     private let commandHandler: @MainActor (SwitcherCommand) -> Void
     private var connection: (any SwitcherOverlayEventTapConnection)?
     private var session: Session?
@@ -611,10 +613,12 @@ final class SwitcherOverlayEventTapOwner {
     init(
         backend: any SwitcherOverlayEventTapBackend,
         eventSink: any SwitcherOverlayEventRecording,
+        triggerReleaseModifiers: SwitcherShortcutModifiers? = nil,
         commandHandler: @escaping @MainActor (SwitcherCommand) -> Void
     ) {
         self.backend = backend
         self.eventSink = eventSink
+        self.triggerReleaseModifiers = triggerReleaseModifiers
         self.commandHandler = commandHandler
     }
 
@@ -654,13 +658,17 @@ final class SwitcherOverlayEventTapOwner {
             eventType: input.eventType,
             keyCode: input.keyCode,
             isAutorepeat: input.isAutorepeat,
-            modifiers: input.modifiers
+            modifiers: input.modifiers,
+            triggerReleaseModifiers: triggerReleaseModifiers
         ) {
         case .passThrough:
             return false
         case .consume(let command):
             commandHandler(command)
             return true
+        case .handleAndPassThrough(let command):
+            commandHandler(command)
+            return false
         case .consumeWithoutCommand:
             return true
         case .reenable:
@@ -713,7 +721,7 @@ final class SystemSwitcherOverlayEventTapBackend: SwitcherOverlayEventTapBackend
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
-            eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
+            eventsOfInterest: SwitcherOverlayEventTapPolicy.eventMask,
             callback: callback,
             userInfo: contextPointer
         ) else {
