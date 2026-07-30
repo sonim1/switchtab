@@ -701,6 +701,117 @@ expected_with_keychain="<notarytool>"$'\n'"<submit>"$'\n'"</tmp/SwitchTab.dmg>"$
 [[ "$(<"$NOTARY_LOG")" == "$expected_with_keychain" ]] || \
     fail "nonempty Keychain path was not passed atomically: $(<"$NOTARY_LOG")"
 
+# The default local build must repair every nested Sparkle signature after
+# xcodebuild's hardened ad-hoc host signing. The release path must keep its
+# Developer ID identity and trusted timestamp behavior.
+SIGNING_FIXTURE_ROOT="$TEMP_ROOT/direct-signing"
+SIGNING_BIN="$SIGNING_FIXTURE_ROOT/bin"
+SIGNING_LOG="$SIGNING_FIXTURE_ROOT/codesign.log"
+mkdir -p "$SIGNING_BIN"
+
+cat > "$SIGNING_BIN/codesign" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$CODESIGN_LOG"
+EOF
+chmod +x "$SIGNING_BIN/codesign"
+
+cat > "$SIGNING_BIN/xcodebuild" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+derived_data_path=''
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -derivedDataPath)
+            derived_data_path="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+[[ -n "$derived_data_path" ]]
+app_path="$derived_data_path/Build/Products/Release/SwitchTab.app"
+sparkle_current="$app_path/Contents/Frameworks/Sparkle.framework/Versions/Current"
+mkdir -p "$sparkle_current/XPCServices" "$sparkle_current/Updater.app"
+touch \
+    "$sparkle_current/Autoupdate" \
+    "$sparkle_current/XPCServices/Downloader.xpc" \
+    "$sparkle_current/XPCServices/Installer.xpc"
+EOF
+chmod +x "$SIGNING_BIN/xcodebuild"
+
+LOCAL_BUILD_ROOT="$SIGNING_FIXTURE_ROOT/local-build"
+: > "$SIGNING_LOG"
+CODESIGN_BIN="$SIGNING_BIN/codesign" \
+CODESIGN_LOG="$SIGNING_LOG" \
+DIRECT_BUILD_ROOT="$LOCAL_BUILD_ROOT" \
+SPARKLE_PUBLIC_ED_KEY='fixture-public-key' \
+PATH="$SIGNING_BIN:$PATH" \
+CONFIGURATION=Release \
+bash "$BUILDER_PATH"
+
+LOCAL_APP_PATH="$LOCAL_BUILD_ROOT/DerivedData/Build/Products/Release/SwitchTab.app"
+LOCAL_SPARKLE_CURRENT="$LOCAL_APP_PATH/Contents/Frameworks/Sparkle.framework/Versions/Current"
+expected_local_signing=$(cat <<EOF
+--force --options runtime --sign - $LOCAL_SPARKLE_CURRENT/Autoupdate
+--force --options runtime --sign - $LOCAL_SPARKLE_CURRENT/Updater.app
+--force --options runtime --sign - $LOCAL_SPARKLE_CURRENT/XPCServices/Downloader.xpc
+--force --options runtime --sign - $LOCAL_SPARKLE_CURRENT/XPCServices/Installer.xpc
+--force --options runtime --sign - $LOCAL_APP_PATH/Contents/Frameworks/Sparkle.framework
+--force --options runtime --sign - $LOCAL_APP_PATH
+--verify --deep --strict --verbose=2 $LOCAL_APP_PATH
+EOF
+)
+[[ "$(<"$SIGNING_LOG")" == "$expected_local_signing" ]] || \
+    fail "local direct build did not re-sign Sparkle in order: $(<"$SIGNING_LOG")"
+[[ "$(<"$SIGNING_LOG")" != *"--timestamp"* ]] || \
+    fail "local direct build requested a trusted signing timestamp"
+
+SIGNING_FUNCTION_HARNESS="$TEMP_ROOT/signing-functions.sh"
+{
+    printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail'
+    printf '%s\n' 'RELEASE="${RELEASE:-0}"' 'DEVELOPER_ID_APPLICATION="${DEVELOPER_ID_APPLICATION:-}"' 'CODESIGN_BIN="${CODESIGN_BIN:-/usr/bin/codesign}"'
+    /usr/bin/awk '
+        /^sign_code\(\)/ { capture = 1 }
+        capture && /^while \[\[/ { exit }
+        capture { print }
+    ' "$BUILDER_PATH"
+    printf '%s\n' 'sign_app_bundle "$APP_PATH"'
+} > "$SIGNING_FUNCTION_HARNESS"
+chmod +x "$SIGNING_FUNCTION_HARNESS"
+
+RELEASE_APP_PATH="$SIGNING_FIXTURE_ROOT/release/SwitchTab.app"
+RELEASE_SPARKLE_CURRENT="$RELEASE_APP_PATH/Contents/Frameworks/Sparkle.framework/Versions/Current"
+mkdir -p "$RELEASE_SPARKLE_CURRENT/XPCServices" "$RELEASE_SPARKLE_CURRENT/Updater.app"
+touch \
+    "$RELEASE_SPARKLE_CURRENT/Autoupdate" \
+    "$RELEASE_SPARKLE_CURRENT/XPCServices/Downloader.xpc" \
+    "$RELEASE_SPARKLE_CURRENT/XPCServices/Installer.xpc"
+: > "$SIGNING_LOG"
+APP_PATH="$RELEASE_APP_PATH" \
+RELEASE=1 \
+DEVELOPER_ID_APPLICATION='Developer ID Application: Fixture (TEAM)' \
+CODESIGN_BIN="$SIGNING_BIN/codesign" \
+CODESIGN_LOG="$SIGNING_LOG" \
+bash "$SIGNING_FUNCTION_HARNESS"
+
+expected_release_signing=$(cat <<EOF
+--force --options runtime --timestamp --sign Developer ID Application: Fixture (TEAM) $RELEASE_SPARKLE_CURRENT/Autoupdate
+--force --options runtime --timestamp --sign Developer ID Application: Fixture (TEAM) $RELEASE_SPARKLE_CURRENT/Updater.app
+--force --options runtime --timestamp --sign Developer ID Application: Fixture (TEAM) $RELEASE_SPARKLE_CURRENT/XPCServices/Downloader.xpc
+--force --options runtime --timestamp --sign Developer ID Application: Fixture (TEAM) $RELEASE_SPARKLE_CURRENT/XPCServices/Installer.xpc
+--force --options runtime --timestamp --sign Developer ID Application: Fixture (TEAM) $RELEASE_APP_PATH/Contents/Frameworks/Sparkle.framework
+--force --options runtime --timestamp --sign Developer ID Application: Fixture (TEAM) $RELEASE_APP_PATH
+--verify --deep --strict --verbose=2 $RELEASE_APP_PATH
+EOF
+)
+[[ "$(<"$SIGNING_LOG")" == "$expected_release_signing" ]] || \
+    fail "release signing no longer preserves Developer ID/timestamp behavior: $(<"$SIGNING_LOG")"
+
 /usr/bin/ruby -e 'require "yaml"; YAML.safe_load(File.read(ARGV.fetch(0)), permitted_classes: [], permitted_symbols: [], aliases: false)' "$WORKFLOW_PATH"
 bash -n "$BUILDER_PATH"
 bash -n "$0"
