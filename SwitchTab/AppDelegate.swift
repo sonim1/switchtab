@@ -8,6 +8,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private let windowFocusService = WindowFocusService()
     private let windowCloseService = WindowCloseService()
     private let applicationActivationService = ApplicationActivationService()
+    private let applicationTerminationService = ApplicationTerminationService()
+    private let applicationWindowCountLoader = ApplicationWindowCountLoader()
     private let permissionService = PermissionService()
     private let shortcutStore = ShortcutSettingsStore()
     private let applicationSettingsStore = ApplicationSettingsStore()
@@ -31,6 +33,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var applicationDidBecomeActiveObserver: NSObjectProtocol?
     private var applicationSettingsObserver: NSObjectProtocol?
     private var workspaceApplicationActivationObserver: NSObjectProtocol?
+    private var workspaceApplicationTerminationObserver: NSObjectProtocol?
     private var settingsRequestObserver: NSObjectProtocol?
     private var aboutRequestObserver: NSObjectProtocol?
     private var updateCheckRequestObserver: NSObjectProtocol?
@@ -53,6 +56,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         observeApplicationActivation()
         observeApplicationSettingsChanges()
         observeWorkspaceApplicationActivation()
+        observeWorkspaceApplicationTermination()
         observeSettingsRequests()
         observeAboutRequests()
         observeUpdateCheckRequests()
@@ -221,7 +225,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { application in
             application.switcherListItem
         }
-        overlayController.present(
+        guard let presentationID = overlayController.present(
             mode: .applicationSwitching,
             items: snapshot.listItems,
             selectedIndex: ApplicationSwitcherSelectionPolicy.initialSelectedIndex(
@@ -229,6 +233,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 reverse: reverse
             ),
             triggerShortcut: .defaultApplicationSwitching,
+            onQuit: { [weak self] item, _ in
+                guard let self,
+                      let selectedApplication = snapshot.element(withID: item.id) else {
+                    return
+                }
+
+                _ = self.applicationTerminationService.terminate(selectedApplication)
+            },
             onConfirm: { [weak self] item, _ in
                 guard let self,
                       let selectedApplication = snapshot.element(withID: item.id) else {
@@ -241,7 +253,18 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
                 selectionCoordinator.confirm(selectedApplication)
             }
-        )
+        ) else {
+            return
+        }
+
+        applicationWindowCountLoader.load(applications: applications) { [weak self] countedApplications in
+            Task { @MainActor [weak self] in
+                self?.overlayController?.updateApplicationItems(
+                    countedApplications.map(\.switcherListItem),
+                    presentationID: presentationID
+                )
+            }
+        }
     }
 
     private func thumbnailLoaderForRefresh() -> WindowThumbnailLoader {
@@ -336,6 +359,45 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func observeWorkspaceApplicationTermination() {
+        guard workspaceApplicationTerminationObserver == nil else {
+            return
+        }
+
+        workspaceApplicationTerminationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didTerminateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let application = notification.userInfo?[
+                NSWorkspace.applicationUserInfoKey
+            ] as? NSRunningApplication else {
+                return
+            }
+
+            let snapshot = RunningApplicationSnapshot(
+                processIdentifier: Int(application.processIdentifier),
+                bundleIdentifier: application.bundleIdentifier,
+                localizedName: application.localizedName,
+                isRegular: application.activationPolicy == .regular,
+                isTerminated: application.isTerminated,
+                isActive: application.isActive
+            )
+            guard let id = WorkspaceApplicationTerminationPolicy.applicationIdentifier(
+                for: snapshot
+            ) else {
+                return
+            }
+
+            MainActor.assumeIsolated {
+                self?.overlayController?.confirmApplicationTerminated(
+                    id: id,
+                    processIdentifier: snapshot.processIdentifier
+                )
+            }
+        }
+    }
+
     private func observeApplicationActivation() {
         observe(NSApplication.didBecomeActiveNotification, storing: &applicationDidBecomeActiveObserver) { [weak self] in
             guard let self else {
@@ -407,6 +469,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         removeObserver(&applicationDidBecomeActiveObserver)
         removeObserver(&applicationSettingsObserver)
         removeWorkspaceApplicationActivationObserver()
+        removeWorkspaceApplicationTerminationObserver()
         removeObserver(&settingsRequestObserver)
         removeObserver(&aboutRequestObserver)
         removeObserver(&updateCheckRequestObserver)
@@ -428,6 +491,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
         NSWorkspace.shared.notificationCenter.removeObserver(workspaceApplicationActivationObserver)
         self.workspaceApplicationActivationObserver = nil
+    }
+
+    private func removeWorkspaceApplicationTerminationObserver() {
+        guard let workspaceApplicationTerminationObserver else {
+            return
+        }
+
+        NSWorkspace.shared.notificationCenter.removeObserver(workspaceApplicationTerminationObserver)
+        self.workspaceApplicationTerminationObserver = nil
     }
 
     private func showSettingsWindow() {
@@ -624,4 +696,52 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
     }
 
+}
+
+enum ApplicationSwitcherWindowCountPolicy {
+    static func addingCounts(
+        to applications: [ApplicationItem],
+        windowCount: (ApplicationItem) -> Int?
+    ) -> [ApplicationItem] {
+        applications.map { application in
+            application.withWindowCount(windowCount(application))
+        }
+    }
+}
+
+final class ApplicationWindowCountLoader: @unchecked Sendable {
+    typealias LoadCounts = @Sendable ([ApplicationItem]) -> [ApplicationItem]
+
+    private let queue: DispatchQueue
+    private let loadCounts: LoadCounts
+
+    init(
+        queue: DispatchQueue = DispatchQueue(
+            label: "com.royjen.switchtab.application-window-counts",
+            qos: .userInitiated
+        ),
+        loadCounts: @escaping LoadCounts = { applications in
+            let windowProvider = AccessibilityWindowProvider()
+            return ApplicationSwitcherWindowCountPolicy.addingCounts(
+                to: applications
+            ) { application in
+                windowProvider.applicationWindowCount(
+                    ownerProcessIdentifier: application.processIdentifier
+                )
+            }
+        }
+    ) {
+        self.queue = queue
+        self.loadCounts = loadCounts
+    }
+
+    func load(
+        applications: [ApplicationItem],
+        completion: @escaping @Sendable ([ApplicationItem]) -> Void
+    ) {
+        let loadCounts = self.loadCounts
+        queue.async {
+            completion(loadCounts(applications))
+        }
+    }
 }

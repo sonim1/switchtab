@@ -57,6 +57,7 @@ public enum SwitcherOverlayEventMonitorPolicy {
 enum SwitcherOverlayEventTapDecision: Equatable, Sendable {
     case passThrough
     case consume(SwitcherCommand)
+    case handleAndPassThrough(SwitcherCommand)
     /// Swallow the key without acting on it, so a held key cannot repeat a
     /// destructive command while the overlay still owns the keyboard.
     case consumeWithoutCommand
@@ -64,15 +65,27 @@ enum SwitcherOverlayEventTapDecision: Equatable, Sendable {
 }
 
 enum SwitcherOverlayEventTapPolicy {
+    static let eventMask = CGEventMask(1 << CGEventType.keyDown.rawValue)
+        | CGEventMask(1 << CGEventType.flagsChanged.rawValue)
+
     static func decision(
         eventType: CGEventType,
         keyCode: UInt16,
         isAutorepeat: Bool,
-        modifiers: SwitcherShortcutModifiers = []
+        modifiers: SwitcherShortcutModifiers = [],
+        triggerReleaseModifiers: SwitcherShortcutModifiers? = nil
     ) -> SwitcherOverlayEventTapDecision {
         switch eventType {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             return .reenable
+        case .flagsChanged:
+            let decision = SwitcherOverlayExternalEventPolicy.decision(
+                for: .flagsChanged(activeModifiers: modifiers),
+                triggerReleaseModifiers: triggerReleaseModifiers
+            )
+            return decision == .releaseShortcut
+                ? .handleAndPassThrough(.releaseShortcut)
+                : .passThrough
         case .keyDown:
             guard let command = SwitcherCommand(keyCode: keyCode, modifiers: modifiers) else {
                 return .passThrough

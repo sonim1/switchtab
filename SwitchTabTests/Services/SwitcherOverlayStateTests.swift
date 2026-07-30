@@ -14,7 +14,15 @@ enum SwitcherOverlayStateTests {
         try testApplicationModeDoesNotShowThumbnails()
         try testClosePolicyOnlyAllowsWindowMode()
         try testSwitchAccessibilityHintMatchesMode()
+        try testSwitchAccessibilityLabelIncludesApplicationWindowCount()
         try testApplicationModeIgnoresCloseSelected()
+        try testQuitCommandNeedsCommandModifier()
+        try testApplicationModeRequestsQuitWithoutDismissing()
+        try testWindowModeIgnoresQuitSelectedApplication()
+        try testWorkspaceActivationDoesNotCancelApplicationSwitcherWhileCommandIsHeld()
+        try testWorkspaceActivationDoesNotCancelWindowSwitcherWhileOptionIsHeld()
+        try testWorkspaceActivationCancelsAfterTriggerModifiersAreReleased()
+        try testWorkspaceActivationWithoutTriggerModifiersCancels()
         try testGlobalEventMonitorObservesModifierChanges()
         try testApplicationCommandReleaseConfirmsSelection()
         try testHoverSelectionMovesHighlightWithoutConfirming()
@@ -23,6 +31,7 @@ enum SwitcherOverlayStateTests {
         try testRemovingSelectedLastChoosesPreviousItem()
         try testRemovingSelectedFirstChoosesNextItem()
         try testDelayedRemovalKeepsCurrentSelectionByStableIdentity()
+        try testApplicationMetadataRefreshPreservesItemsAndSelection()
     }
 
     static func testArrowKeysMoveSelection() throws {
@@ -212,6 +221,65 @@ enum SwitcherOverlayStateTests {
         )
     }
 
+    static func testSwitchAccessibilityLabelIncludesApplicationWindowCount() throws {
+        let oneWindow = SwitcherListItem(
+            id: "safari",
+            title: "Safari",
+            subtitle: "1"
+        )
+        let noWindows = SwitcherListItem(
+            id: "finder",
+            title: "Finder",
+            subtitle: "0"
+        )
+        let manyWindows = SwitcherListItem(
+            id: "notes",
+            title: "Notes",
+            subtitle: "2"
+        )
+        let unavailable = SwitcherListItem(
+            id: "mail",
+            title: "Mail",
+            subtitle: nil
+        )
+
+        try expectEqual(
+            SwitcherOverlayAccessibilityPolicy.switchLabel(
+                for: oneWindow,
+                mode: .applicationSwitching
+            ),
+            "Safari, 1 window"
+        )
+        try expectEqual(
+            SwitcherOverlayAccessibilityPolicy.switchLabel(
+                for: noWindows,
+                mode: .applicationSwitching
+            ),
+            "Finder, 0 windows"
+        )
+        try expectEqual(
+            SwitcherOverlayAccessibilityPolicy.switchLabel(
+                for: manyWindows,
+                mode: .applicationSwitching
+            ),
+            "Notes, 2 windows"
+        )
+        try expectEqual(
+            SwitcherOverlayAccessibilityPolicy.switchLabel(
+                for: unavailable,
+                mode: .applicationSwitching
+            ),
+            "Mail"
+        )
+        try expectEqual(
+            SwitcherOverlayAccessibilityPolicy.switchLabel(
+                for: oneWindow,
+                mode: .currentAppWindowSwitching
+            ),
+            "Safari"
+        )
+    }
+
     static func testApplicationModeIgnoresCloseSelected() throws {
         let application = SwitcherListItem(
             id: "com.apple.Safari",
@@ -224,6 +292,113 @@ enum SwitcherOverlayStateTests {
         try expectEqual(state.handle(.closeSelected), .none)
         try expectTrue(state.isPresented)
         try expectEqual(state.session?.selectedItem, application)
+    }
+
+    static func testQuitCommandNeedsCommandModifier() throws {
+        try expectEqual(
+            SwitcherCommand(
+                keyCode: SwitcherCommand.quitSelectedApplicationKeyCode,
+                modifiers: .command
+            ),
+            .quitSelectedApplication
+        )
+        try expectEqual(
+            SwitcherCommand(
+                keyCode: SwitcherCommand.quitSelectedApplicationKeyCode,
+                modifiers: [.command, .shift]
+            ),
+            .quitSelectedApplication
+        )
+        try expectEqual(
+            SwitcherCommand(keyCode: SwitcherCommand.quitSelectedApplicationKeyCode),
+            nil
+        )
+        try expectEqual(
+            SwitcherCommand(
+                keyCode: SwitcherCommand.quitSelectedApplicationKeyCode,
+                modifiers: .option
+            ),
+            nil
+        )
+    }
+
+    static func testApplicationModeRequestsQuitWithoutDismissing() throws {
+        let application = SwitcherListItem(
+            id: "com.apple.Safari",
+            title: "Safari",
+            subtitle: "3"
+        )
+        var state = SwitcherOverlayState()
+        state.present(mode: .applicationSwitching, items: [application])
+
+        try expectEqual(
+            state.handle(.quitSelectedApplication),
+            .quitRequested(item: application, index: 0)
+        )
+        try expectTrue(state.isPresented)
+        try expectEqual(state.session?.selectedItem, application)
+    }
+
+    static func testWindowModeIgnoresQuitSelectedApplication() throws {
+        let window = SwitcherListItem(id: "window", title: "Window", subtitle: "Safari")
+        var state = SwitcherOverlayState()
+        state.present(mode: .currentAppWindowSwitching, items: [window])
+
+        try expectEqual(state.handle(.quitSelectedApplication), .none)
+        try expectTrue(state.isPresented)
+        try expectEqual(state.session?.selectedItem, window)
+    }
+
+    static func testWorkspaceActivationDoesNotCancelApplicationSwitcherWhileCommandIsHeld() throws {
+        try expectEqual(
+            SwitcherOverlayWorkspaceActivationPolicy.decision(
+                mode: .applicationSwitching,
+                triggerReleaseModifiers: .command,
+                activeModifiers: [.command, .shift]
+            ),
+            .none
+        )
+    }
+
+    static func testWorkspaceActivationDoesNotCancelWindowSwitcherWhileOptionIsHeld() throws {
+        try expectEqual(
+            SwitcherOverlayWorkspaceActivationPolicy.decision(
+                mode: .currentAppWindowSwitching,
+                triggerReleaseModifiers: .option,
+                activeModifiers: .option
+            ),
+            .none
+        )
+    }
+
+    static func testWorkspaceActivationCancelsAfterTriggerModifiersAreReleased() throws {
+        try expectEqual(
+            SwitcherOverlayWorkspaceActivationPolicy.decision(
+                mode: .applicationSwitching,
+                triggerReleaseModifiers: .command,
+                activeModifiers: []
+            ),
+            .cancel
+        )
+        try expectEqual(
+            SwitcherOverlayWorkspaceActivationPolicy.decision(
+                mode: .currentAppWindowSwitching,
+                triggerReleaseModifiers: .option,
+                activeModifiers: []
+            ),
+            .cancel
+        )
+    }
+
+    static func testWorkspaceActivationWithoutTriggerModifiersCancels() throws {
+        try expectEqual(
+            SwitcherOverlayWorkspaceActivationPolicy.decision(
+                mode: .applicationSwitching,
+                triggerReleaseModifiers: nil,
+                activeModifiers: .command
+            ),
+            .cancel
+        )
     }
 
     static func testGlobalEventMonitorObservesModifierChanges() throws {
@@ -350,5 +525,28 @@ enum SwitcherOverlayStateTests {
             SwitcherListItem(id: "b", title: "B", subtitle: nil),
             SwitcherListItem(id: "c", title: "C", subtitle: nil)
         ]
+    }
+
+    static func testApplicationMetadataRefreshPreservesItemsAndSelection() throws {
+        var state = SwitcherOverlayState()
+        state.present(
+            mode: .applicationSwitching,
+            items: [
+                SwitcherListItem(id: "finder", title: "Finder", subtitle: nil),
+                SwitcherListItem(id: "notes", title: "Notes", subtitle: nil)
+            ],
+            selectedIndex: 1
+        )
+
+        let result = state.updateApplicationItems([
+            SwitcherListItem(id: "finder", title: "Finder", subtitle: "4"),
+            SwitcherListItem(id: "notes", title: "Notes", subtitle: "2"),
+            SwitcherListItem(id: "stale", title: "Stale", subtitle: "1")
+        ])
+
+        try expectEqual(result, .updated)
+        try expectEqual(state.session?.items.map(\.id), ["finder", "notes"])
+        try expectEqual(state.session?.items.map(\.subtitle), ["4", "2"])
+        try expectEqual(state.session?.selectedItem?.id, "notes")
     }
 }

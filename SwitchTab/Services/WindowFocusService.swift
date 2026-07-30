@@ -106,7 +106,10 @@ public final class AXWindowFocuser: WindowFocusing {
 
         let didActivateBeforeRaise = activate(application)
 
-        guard let windowElement = AXWindowElementRegistry.shared.element(for: window.windowIdentifier) else {
+        guard let windowElement = AXWindowElementRegistry.shared.element(
+            ownerProcessIdentifier: window.ownerProcessIdentifier,
+            windowIdentifier: window.windowIdentifier
+        ) else {
             return false
         }
 

@@ -18,6 +18,13 @@ enum ApplicationSwitchingTests {
         try testProviderUsesDeterministicProcessScopedFallbackIdentifiers()
         try testProviderPreservesIncomingSnapshotOrder()
         try testProviderMapsApplicationIconsToProcessIdentifiers()
+        try testApplicationWindowCountPreservesMetadataAndStoresNumericSubtitle()
+        try testApplicationUnknownWindowCountPreservesMetadataAndClearsSubtitle()
+        try testApplicationPresentationMapsKnownZeroAndUnknownWindowCounts()
+        try testWindowCountLoaderDefersWorkFromCaller()
+        try testTerminationServiceReportsAcceptedAndRejectedRequests()
+        try testTerminationIdentityUsesStableBundleOrProcessIdentifier()
+        try testTerminationIdentityRejectsNonRegularOrUnterminatedSnapshots()
         try testActivationSuccessRecordsAndFlushesRecencyOnce()
         try testActivationFailureDoesNotRecordOrFlushRecency()
         try testWorkspaceActivationObserverRecordsExternalRegularActivation()
@@ -466,6 +473,186 @@ enum ApplicationSwitchingTests {
         try expectEqual(applications.map { $0.switcherListItem.id }, applications.map(\.id))
     }
 
+    static func testApplicationWindowCountPreservesMetadataAndStoresNumericSubtitle() throws {
+        let application = ApplicationItem(
+            id: "com.example.editor",
+            processIdentifier: 81,
+            bundleIdentifier: "com.example.editor",
+            isActive: true,
+            switcherListItem: SwitcherListItem(
+                id: "com.example.editor",
+                title: "Editor",
+                subtitle: nil,
+                symbolName: "square.stack.3d.up",
+                thumbnailKey: "editor-thumbnail",
+                appIconProcessIdentifier: 81
+            )
+        )
+
+        let counted = application.withWindowCount(3)
+
+        try expectEqual(counted.id, application.id)
+        try expectEqual(counted.processIdentifier, application.processIdentifier)
+        try expectEqual(counted.bundleIdentifier, application.bundleIdentifier)
+        try expectEqual(counted.isActive, application.isActive)
+        try expectEqual(counted.switcherListItem.id, application.switcherListItem.id)
+        try expectEqual(counted.switcherListItem.title, application.switcherListItem.title)
+        try expectEqual(counted.switcherListItem.subtitle, "3")
+        try expectEqual(counted.switcherListItem.symbolName, application.switcherListItem.symbolName)
+        try expectEqual(counted.switcherListItem.thumbnailKey, application.switcherListItem.thumbnailKey)
+        try expectEqual(
+            counted.switcherListItem.appIconProcessIdentifier,
+            application.switcherListItem.appIconProcessIdentifier
+        )
+    }
+
+    static func testApplicationUnknownWindowCountPreservesMetadataAndClearsSubtitle() throws {
+        let application = ApplicationItem(
+            id: "com.example.editor",
+            processIdentifier: 81,
+            bundleIdentifier: nil,
+            isActive: false,
+            switcherListItem: SwitcherListItem(
+                id: "com.example.editor",
+                title: "Editor",
+                subtitle: "stale",
+                symbolName: "app",
+                thumbnailKey: "editor-thumbnail",
+                appIconProcessIdentifier: 81
+            )
+        )
+
+        let unknown = application.withWindowCount(nil)
+
+        try expectEqual(
+            unknown,
+            ApplicationItem(
+                id: application.id,
+                processIdentifier: application.processIdentifier,
+                bundleIdentifier: application.bundleIdentifier,
+                isActive: application.isActive,
+                switcherListItem: SwitcherListItem(
+                    id: application.switcherListItem.id,
+                    title: application.switcherListItem.title,
+                    subtitle: nil,
+                    symbolName: application.switcherListItem.symbolName,
+                    thumbnailKey: application.switcherListItem.thumbnailKey,
+                    appIconProcessIdentifier: application.switcherListItem.appIconProcessIdentifier
+                )
+            )
+        )
+    }
+
+    static func testApplicationPresentationMapsKnownZeroAndUnknownWindowCounts() throws {
+        let applications = [
+            makeApplication(id: "com.example.one", processIdentifier: 81),
+            makeApplication(id: "com.example.zero", processIdentifier: 82),
+            makeApplication(id: "com.example.unknown", processIdentifier: 83)
+        ]
+        let counts = [81: 4, 82: 0]
+
+        let counted = ApplicationSwitcherWindowCountPolicy.addingCounts(
+            to: applications,
+            windowCount: { counts[$0.processIdentifier] }
+        )
+
+        try expectEqual(counted.map(\.switcherListItem.subtitle), ["4", "0", nil])
+        try expectEqual(counted.map(\.id), applications.map(\.id))
+    }
+
+    static func testWindowCountLoaderDefersWorkFromCaller() throws {
+        let workerQueue = DispatchQueue(label: "ApplicationSwitchingTests.window-count-loader")
+        workerQueue.suspend()
+        let completion = DispatchSemaphore(value: 0)
+        let loader = ApplicationWindowCountLoader(
+            queue: workerQueue,
+            loadCounts: { applications in
+                applications.map { $0.withWindowCount(1) }
+            }
+        )
+
+        loader.load(applications: [
+            makeApplication(id: "com.example.editor", processIdentifier: 84)
+        ]) { _ in
+            completion.signal()
+        }
+
+        let immediateResult = completion.wait(timeout: .now())
+        workerQueue.resume()
+
+        try expectEqual(immediateResult, .timedOut)
+        try expectEqual(completion.wait(timeout: .now() + 1), .success)
+    }
+
+    static func testTerminationServiceReportsAcceptedAndRejectedRequests() throws {
+        let acceptedDriver = FakeApplicationTerminator(result: true)
+        let acceptedService = ApplicationTerminationService(terminator: acceptedDriver)
+        let rejectedDriver = FakeApplicationTerminator(result: false)
+        let rejectedService = ApplicationTerminationService(terminator: rejectedDriver)
+        let application = makeApplication(id: "com.example.editor", processIdentifier: 91)
+
+        try expectEqual(acceptedService.terminate(application), .requestAccepted)
+        try expectEqual(rejectedService.terminate(application), .unavailableTarget)
+        try expectEqual(acceptedDriver.processIdentifiers, [91])
+        try expectEqual(rejectedDriver.processIdentifiers, [91])
+    }
+
+    static func testTerminationIdentityUsesStableBundleOrProcessIdentifier() throws {
+        let bundled = RunningApplicationSnapshot(
+            processIdentifier: 101,
+            bundleIdentifier: " com.example.editor ",
+            localizedName: "Editor",
+            isRegular: true,
+            isTerminated: true,
+            isActive: false
+        )
+        let unbundled = RunningApplicationSnapshot(
+            processIdentifier: 102,
+            bundleIdentifier: " ",
+            localizedName: "Tool",
+            isRegular: true,
+            isTerminated: true,
+            isActive: false
+        )
+
+        try expectEqual(
+            WorkspaceApplicationTerminationPolicy.applicationIdentifier(for: bundled),
+            "com.example.editor"
+        )
+        try expectEqual(
+            WorkspaceApplicationTerminationPolicy.applicationIdentifier(for: unbundled),
+            "pid:102"
+        )
+    }
+
+    static func testTerminationIdentityRejectsNonRegularOrUnterminatedSnapshots() throws {
+        let nonRegular = RunningApplicationSnapshot(
+            processIdentifier: 103,
+            bundleIdentifier: "com.example.helper",
+            localizedName: "Helper",
+            isRegular: false,
+            isTerminated: true,
+            isActive: false
+        )
+        let stillRunning = RunningApplicationSnapshot(
+            processIdentifier: 104,
+            bundleIdentifier: "com.example.running",
+            localizedName: "Running",
+            isRegular: true,
+            isTerminated: false,
+            isActive: false
+        )
+
+        try expectEqual(
+            WorkspaceApplicationTerminationPolicy.applicationIdentifier(for: nonRegular),
+            nil
+        )
+        try expectEqual(
+            WorkspaceApplicationTerminationPolicy.applicationIdentifier(for: stillRunning),
+            nil
+        )
+    }
+
     static func testActivationSuccessRecordsAndFlushesRecencyOnce() throws {
         let sequence = RecordingApplicationSequence()
         let activator = FakeApplicationActivator(result: true, sequence: sequence)
@@ -652,6 +839,20 @@ private final class FakeApplicationActivator: ApplicationActivating {
     func activate(processIdentifier: Int) -> Bool {
         processIdentifiers.append(processIdentifier)
         sequence.append("activate:\(processIdentifier)")
+        return result
+    }
+}
+
+private final class FakeApplicationTerminator: ApplicationTerminating {
+    let result: Bool
+    private(set) var processIdentifiers: [Int] = []
+
+    init(result: Bool) {
+        self.result = result
+    }
+
+    func terminate(processIdentifier: Int) -> Bool {
+        processIdentifiers.append(processIdentifier)
         return result
     }
 }

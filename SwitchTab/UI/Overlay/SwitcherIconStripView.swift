@@ -12,6 +12,7 @@ struct SwitcherIconStripView: View {
     private let onHover: (Int) -> Void
     private let hoverEnabled: Bool
     private let scrollToken: Int
+    private let requiresSelectionScrolling: Bool
     private let thumbnailStore: WindowThumbnailStore
     private let applicationIconStore: ApplicationIconStore
     private let gridColumns: [GridItem]
@@ -27,6 +28,7 @@ struct SwitcherIconStripView: View {
         switchAccessibilityHint: String = "Switch to this window.",
         hoverEnabled: Bool,
         scrollToken: Int,
+        requiresSelectionScrolling: Bool = true,
         thumbnailStore: WindowThumbnailStore,
         applicationIconStore: ApplicationIconStore,
         onConfirm: @escaping (SwitcherListItem, Int) -> Void,
@@ -42,6 +44,7 @@ struct SwitcherIconStripView: View {
         self.switchAccessibilityHint = switchAccessibilityHint
         self.hoverEnabled = hoverEnabled
         self.scrollToken = scrollToken
+        self.requiresSelectionScrolling = requiresSelectionScrolling
         self.thumbnailStore = thumbnailStore
         self.applicationIconStore = applicationIconStore
         self.onConfirm = onConfirm
@@ -102,7 +105,7 @@ struct SwitcherIconStripView: View {
     }
 
     private func scrollToSelected(using proxy: ScrollViewProxy) {
-        guard items.count > 1 else {
+        guard requiresSelectionScrolling, items.count > 1 else {
             return
         }
 
@@ -147,14 +150,16 @@ private struct SwitcherWindowTile: View {
                 .clipShape(RoundedRectangle(cornerRadius: 7))
                 .overlay {
                     RoundedRectangle(cornerRadius: 7)
-                        .stroke(
+                        .strokeBorder(
                             isSelected ? Color.accentColor.opacity(0.95) : Color.clear,
                             lineWidth: 2
                         )
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text(item.title))
+            .accessibilityLabel(
+                Text(SwitcherOverlayAccessibilityPolicy.switchLabel(for: item, mode: mode))
+            )
             .accessibilityHint(Text(switchAccessibilityHint))
 
             if showsCloseControl && (isSelected || isHovered) {
@@ -200,16 +205,32 @@ private struct SwitcherWindowTile: View {
     private func applicationContent(for item: SwitcherListItem) -> some View {
         VStack(alignment: .center, spacing: layoutMetrics.tileContentSpacing) {
             icon(for: item)
-            applicationTitle(for: item)
+            applicationMetadata(for: item)
         }
     }
 
-    private func applicationTitle(for item: SwitcherListItem) -> some View {
-        Text(item.title)
-            .font(.system(size: layoutMetrics.titleFontSize, weight: .medium))
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .frame(width: layoutMetrics.thumbnailSize.width, alignment: .center)
+    private func applicationMetadata(for item: SwitcherListItem) -> some View {
+        return HStack(alignment: .center, spacing: 3) {
+            Text(item.title)
+                .font(.system(size: layoutMetrics.titleFontSize, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .center)
+
+            if let windowCount = item.subtitle {
+                HStack(alignment: .center, spacing: 2) {
+                    Image(systemName: "rectangle.on.rectangle")
+                        .font(.system(size: max(8, layoutMetrics.titleFontSize * 0.75)))
+                        .accessibilityHidden(true)
+                    Text(windowCount)
+                }
+                .font(.system(size: layoutMetrics.titleFontSize * 0.85))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
+            }
+        }
+        .frame(width: layoutMetrics.thumbnailSize.width)
     }
 
     private var closeButton: some View {

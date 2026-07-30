@@ -17,6 +17,7 @@ final class SwitcherOverlayController {
     private var activationObserver: NSObjectProtocol?
     private var onConfirm: ((SwitcherListItem, Int) -> Void)?
     private var onClose: ((SwitcherListItem, UInt64) -> Void)?
+    private var onQuit: ((SwitcherListItem, Int) -> Void)?
     private var presentationID: UInt64 = 0
     private var triggerReleaseModifiers: SwitcherShortcutModifiers?
     var onDismiss: (() -> Void)?
@@ -25,6 +26,7 @@ final class SwitcherOverlayController {
         for: .default,
         mode: .currentAppWindowSwitching
     )
+    private var presentationRequiresSelectionScrolling = false
     private var presentationGridColumns: [GridItem] = []
     private var presentationPointerLocation: CGPoint = .zero
     private let thumbnailStore: WindowThumbnailStore
@@ -59,17 +61,19 @@ final class SwitcherOverlayController {
         presentationModel.scrollToken
     }
 
+    @discardableResult
     func present(
         mode: SwitcherMode,
         items: [SwitcherListItem],
         selectedIndex: Int = 0,
         triggerShortcut: ShortcutSetting? = nil,
         onClose: ((SwitcherListItem, UInt64) -> Void)? = nil,
+        onQuit: ((SwitcherListItem, Int) -> Void)? = nil,
         onConfirm: ((SwitcherListItem, Int) -> Void)? = nil
-    ) {
+    ) -> UInt64? {
         guard !items.isEmpty else {
             dismiss()
-            return
+            return nil
         }
 
         presentationID &+= 1
@@ -88,12 +92,14 @@ final class SwitcherOverlayController {
         )
         self.onConfirm = onConfirm
         self.onClose = onClose
+        self.onQuit = onQuit
         if let triggerShortcut {
             self.triggerReleaseModifiers = SwitcherShortcutModifiers.releaseRelevantModifiers(triggerShortcut)
         } else {
             self.triggerReleaseModifiers = nil
         }
         showPanel()
+        return presentationID
     }
 
     func dismiss() {
@@ -133,6 +139,8 @@ final class SwitcherOverlayController {
             apply(result)
         case .closeRequested(let item, let index):
             closeItem(item, at: index)
+        case .quitRequested(let item, let index):
+            quitItem(item, at: index)
         case .none:
             break
         }
@@ -162,6 +170,7 @@ final class SwitcherOverlayController {
         let presentationLayout = currentPresentationLayout(session: session, screenSize: screenFrame?.size)
         presentationLayoutSize = presentationLayout.size
         presentationLayoutMetrics = presentationLayout.metrics
+        presentationRequiresSelectionScrolling = presentationLayout.requiresSelectionScrolling
         presentationGridColumns = SwitcherIconStripView.gridColumns(
             columnCount: presentationLayout.gridColumnCount,
             metrics: presentationLayout.metrics
@@ -178,6 +187,10 @@ final class SwitcherOverlayController {
         }
 
         onClose(item, presentationID)
+    }
+
+    private func quitItem(_ item: SwitcherListItem, at index: Int) {
+        onQuit?(item, index)
     }
 
     func confirmWindowDisappeared(id: String, presentationID: UInt64) {
@@ -197,9 +210,48 @@ final class SwitcherOverlayController {
             updatePresentationLayout(session: session, panel: panel)
         case .cancelled:
             apply(.cancelled)
-        case .none, .confirmed, .closeRequested:
+        case .none, .confirmed, .closeRequested, .quitRequested:
             break
         }
+    }
+
+    func confirmApplicationTerminated(id: String, processIdentifier: Int) {
+        guard state.isPresented,
+              let session = state.session,
+              session.mode == .applicationSwitching,
+              session.items.contains(where: {
+                  $0.id == id && $0.appIconProcessIdentifier == processIdentifier
+              }) else {
+            return
+        }
+
+        switch state.removeItem(withID: id) {
+        case .updated:
+            guard let session = state.session, let panel else {
+                return
+            }
+
+            presentationModel.setHoverSelectionEnabled(false)
+            presentationPointerLocation = NSEvent.mouseLocation
+            presentationModel.advanceScrollToken()
+            updatePresentationLayout(session: session, panel: panel)
+        case .cancelled:
+            apply(.cancelled)
+        case .none, .confirmed, .closeRequested, .quitRequested:
+            break
+        }
+    }
+
+    func updateApplicationItems(
+        _ items: [SwitcherListItem],
+        presentationID: UInt64
+    ) {
+        guard presentationID == self.presentationID,
+              state.updateApplicationItems(items) == .updated else {
+            return
+        }
+
+        presentationModel.update(state)
     }
 
     @discardableResult
@@ -207,7 +259,8 @@ final class SwitcherOverlayController {
         removeEventTap()
         let owner = SwitcherOverlayEventTapOwner(
             backend: eventTapBackend,
-            eventSink: eventSink
+            eventSink: eventSink,
+            triggerReleaseModifiers: triggerReleaseModifiers
         ) { @MainActor [weak self] command in
             guard let self else {
                 return
@@ -268,6 +321,7 @@ final class SwitcherOverlayController {
             presentationModel: presentationModel,
             layoutSize: layoutSize,
             layoutMetrics: presentationLayoutMetrics,
+            requiresSelectionScrolling: presentationRequiresSelectionScrolling,
             gridColumns: presentationGridColumns,
             thumbnailStore: thumbnailStore,
             applicationIconStore: applicationIconStore,
@@ -366,7 +420,20 @@ final class SwitcherOverlayController {
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.applyExternalDecision(.cancel)
+                guard let self,
+                      let mode = self.state.session?.mode else {
+                    return
+                }
+
+                let activeModifiers = ShortcutModifierResolver.shortcutModifiers(
+                    from: CGEventSource.flagsState(.combinedSessionState)
+                )
+                let decision = SwitcherOverlayWorkspaceActivationPolicy.decision(
+                    mode: mode,
+                    triggerReleaseModifiers: self.triggerReleaseModifiers,
+                    activeModifiers: activeModifiers
+                )
+                self.applyExternalDecision(decision)
             }
         }
     }
@@ -527,7 +594,7 @@ final class SwitcherOverlayController {
         case .cancelled:
             endPresentation()
             clearPresentationCallbacks()
-        case .none, .updated, .closeRequested:
+        case .none, .updated, .closeRequested, .quitRequested:
             break
         }
     }
@@ -535,6 +602,7 @@ final class SwitcherOverlayController {
     private func clearPresentationCallbacks() {
         onConfirm = nil
         onClose = nil
+        onQuit = nil
         triggerReleaseModifiers = nil
     }
 
@@ -604,6 +672,7 @@ final class SwitcherOverlayEventTapOwner {
 
     private let backend: any SwitcherOverlayEventTapBackend
     private let eventSink: any SwitcherOverlayEventRecording
+    private let triggerReleaseModifiers: SwitcherShortcutModifiers?
     private let commandHandler: @MainActor (SwitcherCommand) -> Void
     private var connection: (any SwitcherOverlayEventTapConnection)?
     private var session: Session?
@@ -611,10 +680,12 @@ final class SwitcherOverlayEventTapOwner {
     init(
         backend: any SwitcherOverlayEventTapBackend,
         eventSink: any SwitcherOverlayEventRecording,
+        triggerReleaseModifiers: SwitcherShortcutModifiers? = nil,
         commandHandler: @escaping @MainActor (SwitcherCommand) -> Void
     ) {
         self.backend = backend
         self.eventSink = eventSink
+        self.triggerReleaseModifiers = triggerReleaseModifiers
         self.commandHandler = commandHandler
     }
 
@@ -654,13 +725,17 @@ final class SwitcherOverlayEventTapOwner {
             eventType: input.eventType,
             keyCode: input.keyCode,
             isAutorepeat: input.isAutorepeat,
-            modifiers: input.modifiers
+            modifiers: input.modifiers,
+            triggerReleaseModifiers: triggerReleaseModifiers
         ) {
         case .passThrough:
             return false
         case .consume(let command):
             commandHandler(command)
             return true
+        case .handleAndPassThrough(let command):
+            commandHandler(command)
+            return false
         case .consumeWithoutCommand:
             return true
         case .reenable:
@@ -713,7 +788,7 @@ final class SystemSwitcherOverlayEventTapBackend: SwitcherOverlayEventTapBackend
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
-            eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
+            eventsOfInterest: SwitcherOverlayEventTapPolicy.eventMask,
             callback: callback,
             userInfo: contextPointer
         ) else {
@@ -831,6 +906,7 @@ private extension SwitcherCommand {
         case .releaseShortcut: 4
         case .cancel: 5
         case .closeSelected: 6
+        case .quitSelectedApplication: 7
         }
     }
 }
@@ -843,6 +919,7 @@ private extension SwitcherInteractionResult {
         case .confirmed: 2
         case .cancelled: 3
         case .closeRequested: 4
+        case .quitRequested: 5
         }
     }
 }

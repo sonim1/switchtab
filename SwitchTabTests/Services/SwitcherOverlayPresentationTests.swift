@@ -1,11 +1,9 @@
 import CoreGraphics
-import Foundation
 import SwitchTab
 
 enum SwitcherOverlayPresentationTests {
     static func run() throws {
         try testWindowSessionCanUseIconStripPresentation()
-        try testOverlayChromeUsesReducedPadding()
         try testOverlayChromeUsesNativeBlurBackground()
         try testWindowModeUsesThumbnailRendering()
         try testIconGridUsesOneRowForFewItems()
@@ -13,18 +11,21 @@ enum SwitcherOverlayPresentationTests {
         try testPresentationLayoutCarriesGridColumnCount()
         try testIconGridWrapsToTwoRowsWhenWidthWouldOverflow()
         try testIconGridCapsAtThreeVisibleRows()
+        try testSelectionScrollingOnlyRequiredForOverflowingGrid()
+        try testMaximumScaleWindowGridFitsVisibleScreenHeight()
         try testSingleItemLayoutFitsContentInsteadOfUsingWideMinimum()
         try testTwoItemLayoutFitsTwoColumns()
         try testOverlaySizeScaleScalesLayout()
         try testOverlaySizeScaleScalesMultiRowLayout()
         try testOverlaySizeScaleClampsOutOfRangeValues()
+        try testPanelPaddingBudgetsGridPaddingAcrossModesAndScales()
+        try testDefaultPanelPaddingPreservesWindowInset()
+        try testSelectionScrollingPolicyCoversModesAndScales()
         try testLegacyOverlaySizePreferenceMapsOntoScale()
         try testDefaultThumbnailIsLargerThanRetiredLargePreset()
         try testMinimumScaleTileContentFitsWithinTile()
         try testApplicationModeUsesCompactLayoutMetrics()
         try testApplicationModeFitsMoreColumnsThanWindowMode()
-        try testApplicationTileUsesIconFirstContent()
-        try testWindowTileButtonsExposeExplicitAccessibilityText()
     }
 
     static func testWindowSessionCanUseIconStripPresentation() throws {
@@ -37,10 +38,6 @@ enum SwitcherOverlayPresentationTests {
 
         try expectEqual(state.session?.mode, .currentAppWindowSwitching)
         try expectEqual(state.session?.items.first?.id, "finder")
-    }
-
-    static func testOverlayChromeUsesReducedPadding() throws {
-        try expectEqual(SwitcherOverlayChromePolicy.panelPadding, 12)
     }
 
     static func testOverlayChromeUsesNativeBlurBackground() throws {
@@ -100,6 +97,43 @@ enum SwitcherOverlayPresentationTests {
         )
 
         try expectEqual(layout.size.height, expectedHeight(rowCount: 3))
+    }
+
+    static func testSelectionScrollingOnlyRequiredForOverflowingGrid() throws {
+        let oneRowLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
+            itemCount: 5,
+            screenSize: CGSize(width: 1440, height: 900)
+        )
+        let twoRowLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
+            itemCount: 6,
+            screenSize: CGSize(width: 1000, height: 700)
+        )
+        let threeRowLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
+            itemCount: 9,
+            screenSize: CGSize(width: 1000, height: 700)
+        )
+        let overflowingLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
+            itemCount: 25,
+            screenSize: CGSize(width: 1000, height: 700)
+        )
+
+        try expectFalse(oneRowLayout.requiresSelectionScrolling)
+        try expectFalse(twoRowLayout.requiresSelectionScrolling)
+        try expectFalse(threeRowLayout.requiresSelectionScrolling)
+        try expectTrue(overflowingLayout.requiresSelectionScrolling)
+    }
+
+    static func testMaximumScaleWindowGridFitsVisibleScreenHeight() throws {
+        let screenSize = CGSize(width: 1000, height: 700)
+        let layout = SwitcherOverlayLayoutPolicy.presentationLayout(
+            itemCount: 9,
+            screenSize: screenSize,
+            mode: .currentAppWindowSwitching,
+            scale: OverlaySizeScale(OverlaySizeScale.maximum)
+        )
+
+        try expectTrue(layout.size.height <= screenSize.height)
+        try expectTrue(layout.requiresSelectionScrolling)
     }
 
     static func testSingleItemLayoutFitsContentInsteadOfUsingWideMinimum() throws {
@@ -193,6 +227,76 @@ enum SwitcherOverlayPresentationTests {
         try expectEqual(OverlaySizeScale(1.2).percentageText, "120%")
     }
 
+    static func testPanelPaddingBudgetsGridPaddingAcrossModesAndScales() throws {
+        let scales = [
+            OverlaySizeScale(OverlaySizeScale.minimum),
+            OverlaySizeScale.default,
+            OverlaySizeScale(OverlaySizeScale.maximum)
+        ]
+        let modes: [SwitcherMode] = [
+            .currentAppWindowSwitching,
+            .applicationSwitching
+        ]
+
+        for mode in modes {
+            for scale in scales {
+                let metrics = SwitcherOverlayLayoutMetrics.metrics(for: scale, mode: mode)
+                try expectTrue(metrics.panelPadding * 2 <= metrics.gridPadding)
+            }
+        }
+    }
+
+    static func testDefaultPanelPaddingPreservesWindowInset() throws {
+        let windowMetrics = SwitcherOverlayLayoutMetrics.metrics(
+            for: .default,
+            mode: .currentAppWindowSwitching
+        )
+        let applicationMetrics = SwitcherOverlayLayoutMetrics.metrics(
+            for: .default,
+            mode: .applicationSwitching
+        )
+
+        try expectEqual(windowMetrics.panelPadding, 12)
+        try expectEqual(applicationMetrics.panelPadding * 2, applicationMetrics.gridPadding)
+    }
+
+    static func testSelectionScrollingPolicyCoversModesAndScales() throws {
+        let scales = [
+            OverlaySizeScale(OverlaySizeScale.minimum),
+            OverlaySizeScale.default,
+            OverlaySizeScale(OverlaySizeScale.maximum)
+        ]
+        let modes: [SwitcherMode] = [
+            .currentAppWindowSwitching,
+            .applicationSwitching
+        ]
+
+        for mode in modes {
+            for scale in scales {
+                let boundedLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
+                    itemCount: 9,
+                    screenSize: CGSize(width: 1000, height: 700),
+                    mode: mode,
+                    scale: scale
+                )
+                let overflowingLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
+                    itemCount: 40,
+                    screenSize: CGSize(width: 1000, height: 700),
+                    mode: mode,
+                    scale: scale
+                )
+
+                let heightLimitedWindowLayout = mode == .currentAppWindowSwitching
+                    && scale.value == OverlaySizeScale.maximum
+                try expectEqual(
+                    boundedLayout.requiresSelectionScrolling,
+                    heightLimitedWindowLayout
+                )
+                try expectTrue(overflowingLayout.requiresSelectionScrolling)
+            }
+        }
+    }
+
     static func testLegacyOverlaySizePreferenceMapsOntoScale() throws {
         try expectTrue(OverlaySizePreference.compact.scale.value < OverlaySizePreference.standard.scale.value)
         try expectTrue(OverlaySizePreference.standard.scale.value < OverlaySizePreference.large.scale.value)
@@ -265,33 +369,6 @@ enum SwitcherOverlayPresentationTests {
         )
 
         try expectTrue(applicationLayout.gridColumnCount > windowLayout.gridColumnCount)
-    }
-
-    static func testApplicationTileUsesIconFirstContent() throws {
-        let source = try projectSource("SwitchTab/UI/Overlay/SwitcherIconStripView.swift")
-
-        try expectTrue(source.contains("applicationContent(for: item)"))
-        try expectTrue(source.contains("private func applicationContent(for item: SwitcherListItem)"))
-        try expectTrue(source.contains("icon(for: item)\n            applicationTitle(for: item)"))
-        try expectTrue(source.contains("titleHeader(for: item)"))
-    }
-
-    static func testWindowTileButtonsExposeExplicitAccessibilityText() throws {
-        let source = try projectSource("SwitchTab/UI/Overlay/SwitcherIconStripView.swift")
-
-        try expectTrue(source.contains(".accessibilityLabel(Text(item.title))"))
-        try expectTrue(source.contains(".accessibilityHint(Text(switchAccessibilityHint))"))
-    }
-
-    private static func projectSource(_ relativePath: String) throws -> String {
-        let projectRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        return try String(
-            contentsOf: projectRoot.appendingPathComponent(relativePath),
-            encoding: .utf8
-        )
     }
 
     private static func expectedWidth(

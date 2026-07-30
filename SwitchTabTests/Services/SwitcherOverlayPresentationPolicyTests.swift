@@ -9,7 +9,12 @@ enum SwitcherOverlayPresentationPolicyTests {
         try testSwitcherOverlayCanBecomeKeyWithoutBecomingMain()
         try testSwitcherOverlayCentersPanelInScreen()
         try testLocalEventMonitorSkipsKeyUpEvents()
+        try testEventTapMaskIncludesKeyDownAndFlagsChanged()
         try testEventTapConsumesNavigationKeysAndPassesThroughOtherKeys()
+        try testEventTapHandlesCommandReleaseAndPassesThroughModifierEvent()
+        try testEventTapIgnoresShiftReleaseWhileCommandRemainsHeld()
+        try testEventTapOwnerDispatchesCommandReleaseWithoutConsumingModifierEvent()
+        try testControllerSuppliesTriggerReleaseModifiersToEventTapOwner()
         try testEventTapProducesOneDecisionForEachKeyDownIncludingAutorepeat()
         try testDisabledEventTapRequestsReenableWithoutDispatchingACommand()
         try testEventTapOwnerLifecycleAndExactOnceDispatch()
@@ -52,6 +57,14 @@ enum SwitcherOverlayPresentationPolicyTests {
         try expectTrue(SwitcherOverlayEventMonitorPolicy.localMask.contains(.keyDown))
         try expectTrue(SwitcherOverlayEventMonitorPolicy.localMask.contains(.flagsChanged))
         try expectFalse(SwitcherOverlayEventMonitorPolicy.localMask.contains(.keyUp))
+    }
+
+    static func testEventTapMaskIncludesKeyDownAndFlagsChanged() throws {
+        let keyDownMask = CGEventMask(1 << CGEventType.keyDown.rawValue)
+        let flagsChangedMask = CGEventMask(1 << CGEventType.flagsChanged.rawValue)
+
+        try expectTrue(SwitcherOverlayEventTapPolicy.eventMask & keyDownMask != 0)
+        try expectTrue(SwitcherOverlayEventTapPolicy.eventMask & flagsChangedMask != 0)
     }
 
     static func testEventTapConsumesNavigationKeysAndPassesThroughOtherKeys() throws {
@@ -119,6 +132,87 @@ enum SwitcherOverlayPresentationPolicyTests {
             ),
             .passThrough
         )
+    }
+
+    static func testEventTapHandlesCommandReleaseAndPassesThroughModifierEvent() throws {
+        let decision = SwitcherOverlayEventTapPolicy.decision(
+            eventType: .flagsChanged,
+            keyCode: 0,
+            isAutorepeat: false,
+            modifiers: [],
+            triggerReleaseModifiers: .command
+        )
+
+        try expectEqual(decision, .handleAndPassThrough(.releaseShortcut))
+    }
+
+    static func testEventTapIgnoresShiftReleaseWhileCommandRemainsHeld() throws {
+        let decision = SwitcherOverlayEventTapPolicy.decision(
+            eventType: .flagsChanged,
+            keyCode: 0,
+            isAutorepeat: false,
+            modifiers: .command,
+            triggerReleaseModifiers: .command
+        )
+
+        try expectEqual(decision, .passThrough)
+    }
+
+    static func testEventTapOwnerDispatchesCommandReleaseWithoutConsumingModifierEvent() throws {
+        let backend = RecordingSwitcherOverlayEventTapBackend()
+        let sink = RecordingSwitcherOverlayEventSink()
+        var commands: [SwitcherCommand] = []
+        let owner = SwitcherOverlayEventTapOwner(
+            backend: backend,
+            eventSink: sink,
+            triggerReleaseModifiers: .command,
+            commandHandler: { commands.append($0) }
+        )
+        try expectTrue(owner.install())
+        guard let connection = backend.connections.first else {
+            throw TestFailure.failed("Expected installed event-tap connection")
+        }
+
+        try expectFalse(connection.emit(
+            eventType: .flagsChanged,
+            keyCode: 0,
+            modifiers: []
+        ))
+        try expectEqual(commands, [.releaseShortcut])
+        owner.remove()
+    }
+
+    static func testControllerSuppliesTriggerReleaseModifiersToEventTapOwner() throws {
+        let backend = RecordingSwitcherOverlayEventTapBackend()
+        let controller = SwitcherOverlayController(
+            thumbnailStore: WindowThumbnailStore(),
+            eventTapBackend: backend,
+            eventSink: RecordingSwitcherOverlayEventSink()
+        )
+        let optionTrigger = ShortcutSetting(
+            id: "option-trigger",
+            mode: .currentAppWindowSwitching,
+            keyEquivalent: "Tab",
+            modifiers: ["option"],
+            isUsable: true
+        )
+        var confirmedIDs: [String] = []
+        controller.present(
+            mode: .currentAppWindowSwitching,
+            items: [SwitcherListItem(id: "finder", title: "Finder", subtitle: nil)],
+            triggerShortcut: optionTrigger,
+            onConfirm: { item, _ in confirmedIDs.append(item.id) }
+        )
+        guard let connection = backend.connections.first else {
+            throw TestFailure.failed("Expected controller event-tap connection")
+        }
+
+        try expectFalse(connection.emit(
+            eventType: .flagsChanged,
+            keyCode: 0,
+            modifiers: .command
+        ))
+        try expectEqual(confirmedIDs, ["finder"])
     }
 
     static func testEventTapProducesOneDecisionForEachKeyDownIncludingAutorepeat() throws {
