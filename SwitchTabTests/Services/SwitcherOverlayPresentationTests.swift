@@ -225,7 +225,7 @@ enum SwitcherOverlayPresentationTests {
         let source = try projectSource("SwitchTab/UI/Overlay/SwitcherIconStripView.swift")
 
         try expectTrue(source.contains(".accessibilityLabel(Text(item.title))"))
-        try expectTrue(source.contains(".accessibilityHint(Text(\"Switch to this window.\"))"))
+        try expectTrue(source.contains(".accessibilityHint(Text(switchAccessibilityHint))"))
     }
 
     private static func projectSource(_ relativePath: String) throws -> String {

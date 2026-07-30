@@ -224,7 +224,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayController.present(
             mode: .applicationSwitching,
             items: snapshot.listItems,
-            selectedIndex: snapshot.selectedIndex,
+            selectedIndex: ApplicationSwitcherSelectionPolicy.initialSelectedIndex(
+                applications: applications,
+                reverse: reverse
+            ),
             triggerShortcut: .defaultApplicationSwitching,
             onConfirm: { [weak self] item, _ in
                 guard let self,

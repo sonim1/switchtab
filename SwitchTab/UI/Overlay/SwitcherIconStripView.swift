@@ -6,6 +6,7 @@ struct SwitcherIconStripView: View {
     private let selectedIndex: Int
     private let showsThumbnails: Bool
     private let showsCloseControl: Bool
+    private let switchAccessibilityHint: String
     private let onConfirm: (SwitcherListItem, Int) -> Void
     private let onClose: (SwitcherListItem, Int) -> Void
     private let onHover: (Int) -> Void
@@ -23,6 +24,7 @@ struct SwitcherIconStripView: View {
         layoutMetrics: SwitcherOverlayLayoutMetrics,
         showsThumbnails: Bool,
         showsCloseControl: Bool = true,
+        switchAccessibilityHint: String = "Switch to this window.",
         hoverEnabled: Bool,
         scrollToken: Int,
         thumbnailStore: WindowThumbnailStore,
@@ -37,6 +39,7 @@ struct SwitcherIconStripView: View {
         self.layoutMetrics = layoutMetrics
         self.showsThumbnails = showsThumbnails
         self.showsCloseControl = showsCloseControl
+        self.switchAccessibilityHint = switchAccessibilityHint
         self.hoverEnabled = hoverEnabled
         self.scrollToken = scrollToken
         self.thumbnailStore = thumbnailStore
@@ -60,6 +63,7 @@ struct SwitcherIconStripView: View {
                                 isSelected: index == selectedIndex,
                                 showsThumbnails: showsThumbnails,
                                 showsCloseControl: showsCloseControl,
+                                switchAccessibilityHint: switchAccessibilityHint,
                                 hoverEnabled: hoverEnabled,
                                 layoutMetrics: layoutMetrics,
                                 thumbnailStore: thumbnailStore,
@@ -116,6 +120,7 @@ private struct SwitcherWindowTile: View {
     let isSelected: Bool
     let showsThumbnails: Bool
     let showsCloseControl: Bool
+    let switchAccessibilityHint: String
     let hoverEnabled: Bool
     let layoutMetrics: SwitcherOverlayLayoutMetrics
     let thumbnailStore: WindowThumbnailStore
@@ -153,7 +158,7 @@ private struct SwitcherWindowTile: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text(item.title))
-            .accessibilityHint(Text("Switch to this window."))
+            .accessibilityHint(Text(switchAccessibilityHint))
 
             if showsCloseControl && (isSelected || isHovered) {
                 closeButton

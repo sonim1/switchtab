@@ -10,6 +10,8 @@ enum ApplicationSwitchingTests {
         try testControllerReverseFailureRollsBackForwardRegistration()
         try testControllerTeardownLeavesIndependentWindowServiceRegistered()
         try testApplicationPresentationAppliesMRUThenPinsActiveApplication()
+        try testSelectionPolicyUsesMRUFirstWhenNoApplicationIsActive()
+        try testSelectionPolicySkipsPinnedActiveApplicationForward()
         try testProviderFiltersNonRegularTerminatedAndOwnBundleApplications()
         try testProviderUsesUnknownApplicationForMissingOrBlankNames()
         try testProviderDeduplicatesBundleIdentifiersUsingActiveRepresentative()
@@ -198,6 +200,51 @@ enum ApplicationSwitchingTests {
         try expectEqual(ordered.map(\.id), ["finder", "notes", "safari"])
         try expectEqual(forward.element(at: forward.selectedIndex)?.id, "notes")
         try expectEqual(reverse.element(at: reverse.selectedIndex)?.id, "safari")
+    }
+
+    static func testSelectionPolicyUsesMRUFirstWhenNoApplicationIsActive() throws {
+        let applications = [
+            makeApplication(id: "notes", processIdentifier: 1),
+            makeApplication(id: "safari", processIdentifier: 2)
+        ]
+
+        try expectEqual(
+            ApplicationSwitcherSelectionPolicy.initialSelectedIndex(
+                applications: applications,
+                reverse: false
+            ),
+            0
+        )
+        try expectEqual(
+            ApplicationSwitcherSelectionPolicy.initialSelectedIndex(
+                applications: applications,
+                reverse: true
+            ),
+            1
+        )
+    }
+
+    static func testSelectionPolicySkipsPinnedActiveApplicationForward() throws {
+        let applications = [
+            makeApplication(id: "finder", processIdentifier: 1, isActive: true),
+            makeApplication(id: "notes", processIdentifier: 2),
+            makeApplication(id: "safari", processIdentifier: 3)
+        ]
+
+        try expectEqual(
+            ApplicationSwitcherSelectionPolicy.initialSelectedIndex(
+                applications: applications,
+                reverse: false
+            ),
+            1
+        )
+        try expectEqual(
+            ApplicationSwitcherSelectionPolicy.initialSelectedIndex(
+                applications: applications,
+                reverse: true
+            ),
+            2
+        )
     }
 
     static func testProviderFiltersNonRegularTerminatedAndOwnBundleApplications() throws {

@@ -13,6 +13,7 @@ enum SwitcherOverlayStateTests {
         try testShiftReleaseThenArrowThenCommandReleaseConfirmsSelection()
         try testApplicationModeDoesNotShowThumbnails()
         try testClosePolicyOnlyAllowsWindowMode()
+        try testSwitchAccessibilityHintMatchesMode()
         try testApplicationModeIgnoresCloseSelected()
         try testGlobalEventMonitorObservesModifierChanges()
         try testApplicationCommandReleaseConfirmsSelection()
@@ -197,6 +198,17 @@ enum SwitcherOverlayStateTests {
         )
         try expectFalse(
             SwitcherOverlayClosePolicy.allowsClose(for: .applicationSwitching)
+        )
+    }
+
+    static func testSwitchAccessibilityHintMatchesMode() throws {
+        try expectEqual(
+            SwitcherOverlayAccessibilityPolicy.switchHint(for: .currentAppWindowSwitching),
+            "Switch to this window."
+        )
+        try expectEqual(
+            SwitcherOverlayAccessibilityPolicy.switchHint(for: .applicationSwitching),
+            "Switch to this application."
         )
     }
 

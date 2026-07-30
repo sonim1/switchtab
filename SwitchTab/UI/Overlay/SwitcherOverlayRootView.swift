@@ -64,6 +64,7 @@ struct SwitcherOverlayRootView: View {
                 layoutMetrics: layoutMetrics,
                 showsThumbnails: SwitcherOverlayThumbnailPolicy.showsThumbnails(for: session.mode),
                 showsCloseControl: SwitcherOverlayClosePolicy.allowsClose(for: session.mode),
+                switchAccessibilityHint: SwitcherOverlayAccessibilityPolicy.switchHint(for: session.mode),
                 hoverEnabled: presentationModel.isHoverSelectionEnabled,
                 scrollToken: presentationModel.scrollToken,
                 thumbnailStore: thumbnailStore,
