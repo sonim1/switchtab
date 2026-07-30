@@ -53,10 +53,13 @@ prepare or build the website/DMG distribution variant, use:
 ```bash
 SPARKLE_PUBLIC_ED_KEY="<public-ed25519-key>" \
 SWITCHTAB_UPDATE_FEED_URL="https://updates.switchtab.royjen.com/appcast.xml" \
+DEVELOPER_ID_APPLICATION="Developer ID Application: Your Name (TEAMID)" \
 scripts/build-direct-distribution.sh
 ```
 
-`SWITCHTAB_UPDATE_FEED_URL` must use `https://`.
+`SWITCHTAB_UPDATE_FEED_URL` must use `https://`. Actual direct builds require a
+trusted signing identity so the hardened app can load Sparkle; `--prepare-only`
+does not require that identity.
 
 Use `--prepare-only` to generate the patched workspace without building:
 
