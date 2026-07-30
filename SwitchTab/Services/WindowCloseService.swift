@@ -121,7 +121,10 @@ public final class AXWindowCloseDriver: WindowCloseDriving {
         of window: WindowItem,
         onDestroyed: @escaping @MainActor () -> Void
     ) -> (any WindowCloseObservation)? {
-        guard let windowElement = AXWindowElementRegistry.shared.element(for: window.windowIdentifier) else {
+        guard let windowElement = AXWindowElementRegistry.shared.element(
+            ownerProcessIdentifier: window.ownerProcessIdentifier,
+            windowIdentifier: window.windowIdentifier
+        ) else {
             return nil
         }
 
@@ -157,7 +160,10 @@ public final class AXWindowCloseDriver: WindowCloseDriving {
     }
 
     public func pressCloseButton(of window: WindowItem) -> Bool {
-        guard let windowElement = AXWindowElementRegistry.shared.element(for: window.windowIdentifier) else {
+        guard let windowElement = AXWindowElementRegistry.shared.element(
+            ownerProcessIdentifier: window.ownerProcessIdentifier,
+            windowIdentifier: window.windowIdentifier
+        ) else {
             return false
         }
 
