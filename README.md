@@ -30,6 +30,11 @@ enabled, <kbd>Command</kbd>+<kbd>Tab</kbd> moves forward,
 Command activates the selected app. Turning the setting off or quitting
 SwitchTab restores the native switcher.
 
+Application tiles show each app's window count when Accessibility can provide
+it. Arrow keys move through the same selection grid, and
+<kbd>Command</kbd>+<kbd>Q</kbd> asks the selected app to quit normally while the
+switcher stays open; the tile disappears only after that app exits.
+
 Accessibility permission is required for window focus and the optional Cmd-Tab
 replacement. Screen Recording is required only for window previews, not for
 application icons or names. If Cmd-Tab interception is unavailable, SwitchTab
