@@ -5,6 +5,7 @@ struct SwitcherOverlayRootView: View {
     @ObservedObject private var presentationModel: SwitcherOverlayPresentationModel
     private let layoutSize: CGSize
     private let layoutMetrics: SwitcherOverlayLayoutMetrics
+    private let requiresSelectionScrolling: Bool
     private let onItemClicked: (SwitcherListItem, Int) -> Void
     private let onItemCloseClicked: (SwitcherListItem, Int) -> Void
     private let onItemHovered: (Int) -> Void
@@ -16,6 +17,7 @@ struct SwitcherOverlayRootView: View {
         presentationModel: SwitcherOverlayPresentationModel,
         layoutSize: CGSize,
         layoutMetrics: SwitcherOverlayLayoutMetrics,
+        requiresSelectionScrolling: Bool,
         gridColumns: [GridItem],
         thumbnailStore: WindowThumbnailStore,
         applicationIconStore: ApplicationIconStore,
@@ -26,6 +28,7 @@ struct SwitcherOverlayRootView: View {
         self.presentationModel = presentationModel
         self.layoutSize = layoutSize
         self.layoutMetrics = layoutMetrics
+        self.requiresSelectionScrolling = requiresSelectionScrolling
         self.gridColumns = gridColumns
         self.onItemClicked = onItemClicked
         self.onItemCloseClicked = onItemCloseClicked
@@ -67,6 +70,7 @@ struct SwitcherOverlayRootView: View {
                 switchAccessibilityHint: SwitcherOverlayAccessibilityPolicy.switchHint(for: session.mode),
                 hoverEnabled: presentationModel.isHoverSelectionEnabled,
                 scrollToken: presentationModel.scrollToken,
+                requiresSelectionScrolling: requiresSelectionScrolling,
                 thumbnailStore: thumbnailStore,
                 applicationIconStore: applicationIconStore,
                 onConfirm: onItemClicked,

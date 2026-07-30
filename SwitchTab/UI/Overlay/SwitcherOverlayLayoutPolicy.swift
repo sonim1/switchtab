@@ -3,11 +3,13 @@ import CoreGraphics
 private struct SwitcherIconGridLayout: Equatable {
     let columnCount: Int
     let visibleRowCount: Int
+    let logicalRowCount: Int
 }
 
 public struct SwitcherOverlayPresentationLayout: Equatable {
     public let size: CGSize
     public let gridColumnCount: Int
+    public let requiresSelectionScrolling: Bool
     public let metrics: SwitcherOverlayLayoutMetrics
 }
 
@@ -144,6 +146,7 @@ public enum SwitcherOverlayLayoutPolicy {
             return SwitcherOverlayPresentationLayout(
                 size: smallItemLayoutSize(columnCount: columnCount, screenSize: screenSize, metrics: metrics),
                 gridColumnCount: columnCount,
+                requiresSelectionScrolling: false,
                 metrics: metrics
             )
         }
@@ -152,6 +155,7 @@ public enum SwitcherOverlayLayoutPolicy {
         return SwitcherOverlayPresentationLayout(
             size: presentationSize(gridLayout: gridLayout, screenSize: screenSize, metrics: metrics),
             gridColumnCount: gridLayout.columnCount,
+            requiresSelectionScrolling: gridLayout.logicalRowCount > gridLayout.visibleRowCount,
             metrics: metrics
         )
     }
@@ -175,11 +179,11 @@ public enum SwitcherOverlayLayoutPolicy {
         metrics: SwitcherOverlayLayoutMetrics
     ) -> SwitcherIconGridLayout {
         guard itemCount > 1 else {
-            return SwitcherIconGridLayout(columnCount: 1, visibleRowCount: 1)
+            return SwitcherIconGridLayout(columnCount: 1, visibleRowCount: 1, logicalRowCount: 1)
         }
 
         if itemCount == 2 {
-            return SwitcherIconGridLayout(columnCount: 2, visibleRowCount: 1)
+            return SwitcherIconGridLayout(columnCount: 2, visibleRowCount: 1, logicalRowCount: 1)
         }
 
         let availableWidth = max(iconGridContentWidth(columnCount: 1, metrics: metrics), screenSize.width - screenHorizontalMargin)
@@ -188,10 +192,12 @@ public enum SwitcherOverlayLayoutPolicy {
         let visibleRowCount = min(maximumVisibleIconGridRows, max(1, rowsAtMaxWidth))
         let balancedColumns = ceilDivision(itemCount, by: visibleRowCount)
         let columnCount = min(maxColumns, max(1, balancedColumns))
+        let logicalRowCount = ceilDivision(itemCount, by: columnCount)
 
         return SwitcherIconGridLayout(
             columnCount: columnCount,
-            visibleRowCount: visibleRowCount
+            visibleRowCount: visibleRowCount,
+            logicalRowCount: logicalRowCount
         )
     }
 

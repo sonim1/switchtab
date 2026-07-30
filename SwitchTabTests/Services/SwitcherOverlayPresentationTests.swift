@@ -13,6 +13,7 @@ enum SwitcherOverlayPresentationTests {
         try testPresentationLayoutCarriesGridColumnCount()
         try testIconGridWrapsToTwoRowsWhenWidthWouldOverflow()
         try testIconGridCapsAtThreeVisibleRows()
+        try testSelectionScrollingOnlyRequiredForOverflowingGrid()
         try testSingleItemLayoutFitsContentInsteadOfUsingWideMinimum()
         try testTwoItemLayoutFitsTwoColumns()
         try testOverlaySizeScaleScalesLayout()
@@ -100,6 +101,30 @@ enum SwitcherOverlayPresentationTests {
         )
 
         try expectEqual(layout.size.height, expectedHeight(rowCount: 3))
+    }
+
+    static func testSelectionScrollingOnlyRequiredForOverflowingGrid() throws {
+        let oneRowLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
+            itemCount: 5,
+            screenSize: CGSize(width: 1440, height: 900)
+        )
+        let twoRowLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
+            itemCount: 6,
+            screenSize: CGSize(width: 1000, height: 700)
+        )
+        let threeRowLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
+            itemCount: 9,
+            screenSize: CGSize(width: 1000, height: 700)
+        )
+        let overflowingLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
+            itemCount: 25,
+            screenSize: CGSize(width: 1000, height: 700)
+        )
+
+        try expectFalse(oneRowLayout.requiresSelectionScrolling)
+        try expectFalse(twoRowLayout.requiresSelectionScrolling)
+        try expectFalse(threeRowLayout.requiresSelectionScrolling)
+        try expectTrue(overflowingLayout.requiresSelectionScrolling)
     }
 
     static func testSingleItemLayoutFitsContentInsteadOfUsingWideMinimum() throws {

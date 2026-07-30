@@ -12,6 +12,7 @@ struct SwitcherIconStripView: View {
     private let onHover: (Int) -> Void
     private let hoverEnabled: Bool
     private let scrollToken: Int
+    private let requiresSelectionScrolling: Bool
     private let thumbnailStore: WindowThumbnailStore
     private let applicationIconStore: ApplicationIconStore
     private let gridColumns: [GridItem]
@@ -27,6 +28,7 @@ struct SwitcherIconStripView: View {
         switchAccessibilityHint: String = "Switch to this window.",
         hoverEnabled: Bool,
         scrollToken: Int,
+        requiresSelectionScrolling: Bool = true,
         thumbnailStore: WindowThumbnailStore,
         applicationIconStore: ApplicationIconStore,
         onConfirm: @escaping (SwitcherListItem, Int) -> Void,
@@ -42,6 +44,7 @@ struct SwitcherIconStripView: View {
         self.switchAccessibilityHint = switchAccessibilityHint
         self.hoverEnabled = hoverEnabled
         self.scrollToken = scrollToken
+        self.requiresSelectionScrolling = requiresSelectionScrolling
         self.thumbnailStore = thumbnailStore
         self.applicationIconStore = applicationIconStore
         self.onConfirm = onConfirm
@@ -102,7 +105,7 @@ struct SwitcherIconStripView: View {
     }
 
     private func scrollToSelected(using proxy: ScrollViewProxy) {
-        guard items.count > 1 else {
+        guard requiresSelectionScrolling, items.count > 1 else {
             return
         }
 

@@ -26,6 +26,7 @@ final class SwitcherOverlayController {
         for: .default,
         mode: .currentAppWindowSwitching
     )
+    private var presentationRequiresSelectionScrolling = false
     private var presentationGridColumns: [GridItem] = []
     private var presentationPointerLocation: CGPoint = .zero
     private let thumbnailStore: WindowThumbnailStore
@@ -167,6 +168,7 @@ final class SwitcherOverlayController {
         let presentationLayout = currentPresentationLayout(session: session, screenSize: screenFrame?.size)
         presentationLayoutSize = presentationLayout.size
         presentationLayoutMetrics = presentationLayout.metrics
+        presentationRequiresSelectionScrolling = presentationLayout.requiresSelectionScrolling
         presentationGridColumns = SwitcherIconStripView.gridColumns(
             columnCount: presentationLayout.gridColumnCount,
             metrics: presentationLayout.metrics
@@ -305,6 +307,7 @@ final class SwitcherOverlayController {
             presentationModel: presentationModel,
             layoutSize: layoutSize,
             layoutMetrics: presentationLayoutMetrics,
+            requiresSelectionScrolling: presentationRequiresSelectionScrolling,
             gridColumns: presentationGridColumns,
             thumbnailStore: thumbnailStore,
             applicationIconStore: applicationIconStore,
