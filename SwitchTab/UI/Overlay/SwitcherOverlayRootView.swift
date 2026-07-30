@@ -62,7 +62,7 @@ struct SwitcherOverlayRootView: View {
                 selectedIndex: session.selectedIndex,
                 gridColumns: gridColumns,
                 layoutMetrics: layoutMetrics,
-                showsThumbnails: SwitcherOverlayThumbnailPolicy.showsThumbnails(for: session.mode),
+                mode: session.mode,
                 showsCloseControl: SwitcherOverlayClosePolicy.allowsClose(for: session.mode),
                 switchAccessibilityHint: SwitcherOverlayAccessibilityPolicy.switchHint(for: session.mode),
                 hoverEnabled: presentationModel.isHoverSelectionEnabled,

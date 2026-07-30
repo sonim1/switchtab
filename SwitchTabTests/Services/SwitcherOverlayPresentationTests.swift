@@ -21,6 +21,9 @@ enum SwitcherOverlayPresentationTests {
         try testLegacyOverlaySizePreferenceMapsOntoScale()
         try testDefaultThumbnailIsLargerThanRetiredLargePreset()
         try testMinimumScaleTileContentFitsWithinTile()
+        try testApplicationModeUsesCompactLayoutMetrics()
+        try testApplicationModeFitsMoreColumnsThanWindowMode()
+        try testApplicationTileUsesIconFirstContent()
         try testWindowTileButtonsExposeExplicitAccessibilityText()
     }
 
@@ -219,6 +222,58 @@ enum SwitcherOverlayPresentationTests {
             metrics.tileSize.width >= contentWidth,
             "Minimum-scale tile width must contain the thumbnail and its content padding."
         )
+    }
+
+    static func testApplicationModeUsesCompactLayoutMetrics() throws {
+        let windowMetrics = SwitcherOverlayLayoutMetrics.metrics(
+            for: .default,
+            mode: .currentAppWindowSwitching
+        )
+        let applicationMetrics = SwitcherOverlayLayoutMetrics.metrics(
+            for: .default,
+            mode: .applicationSwitching
+        )
+
+        try expectEqual(windowMetrics.tileSize, CGSize(width: 168, height: 158))
+        try expectEqual(windowMetrics.tileContentSpacing, 6)
+        try expectEqual(windowMetrics.gridSpacing, 14)
+        try expectEqual(windowMetrics.gridPadding, 28)
+        try expectEqual(applicationMetrics.tileSize, CGSize(width: 120, height: 128))
+        try expectEqual(applicationMetrics.fallbackIconSize, CGSize(width: 96, height: 96))
+        try expectEqual(applicationMetrics.gridSpacing, 8)
+        try expectEqual(applicationMetrics.gridPadding, 16)
+        try expectTrue(applicationMetrics.tileSize.width < windowMetrics.tileSize.width)
+        try expectEqual(
+            SwitcherOverlayLayoutMetrics.metrics(
+                for: OverlaySizeScale(OverlaySizeScale.maximum),
+                mode: .currentAppWindowSwitching
+            ).tileContentSpacing,
+            6
+        )
+    }
+
+    static func testApplicationModeFitsMoreColumnsThanWindowMode() throws {
+        let windowLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
+            itemCount: 16,
+            screenSize: CGSize(width: 1440, height: 900),
+            mode: .currentAppWindowSwitching
+        )
+        let applicationLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
+            itemCount: 16,
+            screenSize: CGSize(width: 1440, height: 900),
+            mode: .applicationSwitching
+        )
+
+        try expectTrue(applicationLayout.gridColumnCount > windowLayout.gridColumnCount)
+    }
+
+    static func testApplicationTileUsesIconFirstContent() throws {
+        let source = try projectSource("SwitchTab/UI/Overlay/SwitcherIconStripView.swift")
+
+        try expectTrue(source.contains("applicationContent(for: item)"))
+        try expectTrue(source.contains("private func applicationContent(for item: SwitcherListItem)"))
+        try expectTrue(source.contains("icon(for: item)\n            applicationTitle(for: item)"))
+        try expectTrue(source.contains("titleHeader(for: item)"))
     }
 
     static func testWindowTileButtonsExposeExplicitAccessibilityText() throws {

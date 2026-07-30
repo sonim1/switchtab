@@ -21,7 +21,10 @@ final class SwitcherOverlayController {
     private var triggerReleaseModifiers: SwitcherShortcutModifiers?
     var onDismiss: (() -> Void)?
     private var presentationLayoutSize = SwitcherOverlayLayoutPolicy.defaultSize
-    private var presentationLayoutMetrics = SwitcherOverlayLayoutMetrics.metrics(for: .default)
+    private var presentationLayoutMetrics = SwitcherOverlayLayoutMetrics.metrics(
+        for: .default,
+        mode: .currentAppWindowSwitching
+    )
     private var presentationGridColumns: [GridItem] = []
     private var presentationPointerLocation: CGPoint = .zero
     private let thumbnailStore: WindowThumbnailStore
@@ -294,6 +297,7 @@ final class SwitcherOverlayController {
         SwitcherOverlayLayoutPolicy.presentationLayout(
             itemCount: session.items.count,
             screenSize: screenSize ?? SwitcherOverlayLayoutPolicy.defaultSize,
+            mode: session.mode,
             scale: applicationSettingsStore.overlaySizeScale
         )
     }
