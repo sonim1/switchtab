@@ -32,6 +32,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         let overlayController = SwitcherOverlayController(thumbnailStore: thumbnailStore)
         overlayController.onDismiss = { [weak self] in
             self?.cancelThumbnailLoadingIfNeeded()
+            self?.windowCloseService.cancelAll()
         }
         self.overlayController = overlayController
         menuBarStatusItemController = MenuBarStatusItemController(
@@ -127,16 +128,22 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             items: snapshot.listItems,
             selectedIndex: snapshot.selectedIndex,
             triggerShortcut: windowTriggerShortcut(),
-            onClose: { [weak self] item, _ in
+            onClose: { [weak self, weak overlayController] item, presentationID in
                 guard let self,
                       let window = snapshot.element(withID: item.id) else {
-                    return false
+                    return
                 }
 
-                return self.windowCloseService.close(
+                _ = self.windowCloseService.close(
                     window,
-                    permissionState: permissionState
-                ) == .closed
+                    permissionState: permissionState,
+                    onDestroyed: {
+                        overlayController?.confirmWindowDisappeared(
+                            id: item.id,
+                            presentationID: presentationID
+                        )
+                    }
+                )
             },
             onConfirm: { [weak self] item, _ in
                 guard let self,
@@ -152,7 +159,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.usageMetricsStore.flush()
             }
         )
-        thumbnailLoaderForRefresh().refresh(windows: windows, permissionState: permissionState)
+        let thumbnailPointSize = SwitcherOverlayLayoutMetrics.metrics(
+            for: applicationSettingsStore.overlaySizeScale
+        ).thumbnailSize
+        let viewportPixelSize = WindowThumbnailCaptureSizing.viewportPixelSize(for: thumbnailPointSize)
+        thumbnailLoaderForRefresh().refresh(
+            windows: windows,
+            permissionState: permissionState,
+            viewportPixelSize: viewportPixelSize
+        )
     }
 
     private func thumbnailLoaderForRefresh() -> WindowThumbnailLoader {

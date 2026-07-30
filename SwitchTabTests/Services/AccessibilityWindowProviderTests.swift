@@ -1,5 +1,5 @@
-import Foundation
-import SwitchTab
+import ApplicationServices
+@testable import SwitchTab
 
 enum AccessibilityWindowProviderTests {
     static func run() throws {
@@ -12,7 +12,7 @@ enum AccessibilityWindowProviderTests {
         try testWindowInclusionPolicyUsesResolvedWindowNumberAsStableIdentifier()
         try testWindowInclusionPolicyFallsBackToIndexIdentifierWithoutWindowNumber()
         try testProviderCarriesFocusedWindowFlagThrough()
-        try testAccessibilityProviderAsksForTheFocusedWindow()
+        try testAXSnapshotProviderReadsAndMarksTheFocusedWindow()
     }
 
     static func testProviderReturnsOnlyActiveApplicationWindows() throws {
@@ -175,18 +175,79 @@ enum AccessibilityWindowProviderTests {
         )
     }
 
-    static func testAccessibilityProviderAsksForTheFocusedWindow() throws {
-        let projectRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let source = try String(
-            contentsOf: projectRoot.appendingPathComponent("SwitchTab/Services/AccessibilityWindowProvider.swift"),
-            encoding: .utf8
+    static func testAXSnapshotProviderReadsAndMarksTheFocusedWindow() throws {
+        let firstWindow = AXUIElementCreateApplication(101)
+        let secondWindow = AXUIElementCreateApplication(102)
+        let attributes = RecordingAXWindowAttributeReader(
+            windowElements: [firstWindow, secondWindow],
+            focusedWindowElement: secondWindow
+        )
+        let provider = AXWindowSnapshotProvider(
+            windowNumberResolver: FixedAXWindowNumberResolver(
+                elements: [firstWindow, secondWindow],
+                identifiers: [11, 22]
+            ),
+            attributeReader: attributes
+        )
+        let snapshots = provider.windows(
+            ownerProcessIdentifier: 42,
+            ownerName: "Notes",
+            includeScreenCaptureIdentifiers: false
         )
 
-        try expectTrue(source.contains("kAXFocusedWindowAttribute"))
-        try expectTrue(source.contains("CFEqual($0, windowElement)"))
+        try expectEqual(attributes.focusedWindowReadCount, 1)
+        try expectEqual(snapshots.map(\.windowIdentifier), [11, 22])
+        try expectEqual(snapshots.map(\.isFocused), [false, true])
+    }
+}
+
+private final class RecordingAXWindowAttributeReader: AXWindowAttributeReading {
+    let windowElements: [AXUIElement]
+    let focusedWindowElement: AXUIElement?
+    private(set) var focusedWindowReadCount = 0
+
+    init(windowElements: [AXUIElement], focusedWindowElement: AXUIElement?) {
+        self.windowElements = windowElements
+        self.focusedWindowElement = focusedWindowElement
+    }
+
+    func windowElements(of _: AXUIElement) -> [AXUIElement]? {
+        windowElements
+    }
+
+    func focusedWindowElement(of _: AXUIElement) -> AXUIElement? {
+        focusedWindowReadCount += 1
+        return focusedWindowElement
+    }
+
+    func stringAttribute(_ element: AXUIElement, _ attribute: CFString) -> String? {
+        let attributeName = attribute as String
+        if attributeName == kAXRoleAttribute as String {
+            return kAXWindowRole as String
+        }
+        if attributeName == kAXSubroleAttribute as String {
+            return kAXStandardWindowSubrole as String
+        }
+        if attributeName == kAXTitleAttribute as String {
+            return CFEqual(element, windowElements[0]) ? "First" : "Second"
+        }
+        return nil
+    }
+
+    func boolAttribute(_: AXUIElement, _: CFString) -> Bool {
+        false
+    }
+}
+
+private struct FixedAXWindowNumberResolver: AXWindowNumberResolving {
+    let elements: [AXUIElement]
+    let identifiers: [UInt32]
+
+    func windowNumber(for element: AXUIElement) -> UInt32? {
+        guard let index = elements.firstIndex(where: { CFEqual($0, element) }) else {
+            return nil
+        }
+        return identifiers[index]
     }
 }
 

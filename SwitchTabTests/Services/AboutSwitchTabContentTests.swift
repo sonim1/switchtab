@@ -3,19 +3,32 @@ import SwitchTab
 enum AboutSwitchTabContentTests {
     @MainActor
     static func run() throws {
-        try testFormatsVersionWithBuild()
+        try testFormatsVersionAndBuildSeparately()
+        try testOmitsEmptyBuildNumber()
         try testFormatsUsageSummaryForToday()
         try testAboutWindowControllerDefersContentUntilShown()
     }
 
-    static func testFormatsVersionWithBuild() throws {
+    static func testFormatsVersionAndBuildSeparately() throws {
         let content = AboutSwitchTabContent(
             version: "1.2.3",
             build: "45",
             usageDashboard: .empty
         )
 
-        try expectEqual(content.versionLine, "Version 1.2.3 (45)")
+        try expectEqual(content.versionLine, "Version 1.2.3")
+        try expectEqual(content.buildLine, "Build Number 45")
+    }
+
+    static func testOmitsEmptyBuildNumber() throws {
+        let content = AboutSwitchTabContent(
+            version: "1.2.3",
+            build: "",
+            usageDashboard: .empty
+        )
+
+        try expectEqual(content.versionLine, "Version 1.2.3")
+        try expectEqual(content.buildLine, nil)
     }
 
     static func testFormatsUsageSummaryForToday() throws {

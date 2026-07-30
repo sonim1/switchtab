@@ -246,11 +246,73 @@ public final class PrivateAXWindowNumberResolver: AXWindowNumberResolving {
     }
 }
 
+protocol AXWindowAttributeReading: AnyObject {
+    func windowElements(of applicationElement: AXUIElement) -> [AXUIElement]?
+    func focusedWindowElement(of applicationElement: AXUIElement) -> AXUIElement?
+    func stringAttribute(_ element: AXUIElement, _ attribute: CFString) -> String?
+    func boolAttribute(_ element: AXUIElement, _ attribute: CFString) -> Bool
+}
+
+private final class SystemAXWindowAttributeReader: AXWindowAttributeReading {
+    func windowElements(of applicationElement: AXUIElement) -> [AXUIElement]? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            applicationElement,
+            kAXWindowsAttribute as CFString,
+            &value
+        ) == .success else {
+            return nil
+        }
+        return value as? [AXUIElement]
+    }
+
+    func focusedWindowElement(of applicationElement: AXUIElement) -> AXUIElement? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            applicationElement,
+            kAXFocusedWindowAttribute as CFString,
+            &value
+        ) == .success,
+            let focusedValue = value,
+            CFGetTypeID(focusedValue) == AXUIElementGetTypeID() else {
+            return nil
+        }
+
+        return unsafeDowncast(focusedValue as AnyObject, to: AXUIElement.self)
+    }
+
+    func stringAttribute(_ element: AXUIElement, _ attribute: CFString) -> String? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success else {
+            return nil
+        }
+        return value as? String
+    }
+
+    func boolAttribute(_ element: AXUIElement, _ attribute: CFString) -> Bool {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success else {
+            return false
+        }
+        return (value as? Bool) ?? false
+    }
+}
+
 public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProviding {
     private let windowNumberResolver: any AXWindowNumberResolving
+    private let attributeReader: any AXWindowAttributeReading
 
     public init(windowNumberResolver: any AXWindowNumberResolving = PrivateAXWindowNumberResolver()) {
         self.windowNumberResolver = windowNumberResolver
+        self.attributeReader = SystemAXWindowAttributeReader()
+    }
+
+    init(
+        windowNumberResolver: any AXWindowNumberResolving,
+        attributeReader: any AXWindowAttributeReading
+    ) {
+        self.windowNumberResolver = windowNumberResolver
+        self.attributeReader = attributeReader
     }
 
     public func windows(
@@ -259,10 +321,7 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
         includeScreenCaptureIdentifiers: Bool
     ) -> [AccessibilityWindowSnapshot] {
         let appElement = AXUIElementCreateApplication(pid_t(ownerProcessIdentifier))
-        var value: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &value)
-        guard result == .success,
-              let windowElements = value as? [AXUIElement] else {
+        guard let windowElements = attributeReader.windowElements(of: appElement) else {
             AXWindowElementRegistry.shared.removeAll()
             return []
         }
@@ -284,8 +343,8 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
         let candidates = windowElements.indices.map { index in
             AccessibilityWindowInclusionCandidate(
                 originalIndex: index,
-                role: stringAttribute(windowElements[index], kAXRoleAttribute as CFString),
-                subrole: stringAttribute(windowElements[index], kAXSubroleAttribute as CFString),
+                role: attributeReader.stringAttribute(windowElements[index], kAXRoleAttribute as CFString),
+                subrole: attributeReader.stringAttribute(windowElements[index], kAXSubroleAttribute as CFString),
                 windowNumber: windowNumberResolver.windowNumber(for: windowElements[index])
             )
         }
@@ -293,7 +352,7 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
             ownerProcessIdentifier: ownerProcessIdentifier,
             candidates: candidates
         )
-        let focusedWindowElement = focusedWindowElement(of: appElement)
+        let focusedWindowElement = attributeReader.focusedWindowElement(of: appElement)
 
         // Title-matching heuristic remains only for windows whose CGWindowID
         // the resolver could not produce.
@@ -336,8 +395,8 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
         isFocused: Bool,
         screenCaptureWindowIndex: inout ScreenCaptureWindowIndex?
     ) -> AccessibilityWindowSnapshot {
-        let isMinimized = boolAttribute(windowElement, kAXMinimizedAttribute as CFString)
-        let title = stringAttribute(windowElement, kAXTitleAttribute as CFString) ?? ""
+        let isMinimized = attributeReader.boolAttribute(windowElement, kAXMinimizedAttribute as CFString)
+        let title = attributeReader.stringAttribute(windowElement, kAXTitleAttribute as CFString) ?? ""
         return AccessibilityWindowSnapshot(
             windowIdentifier: windowIdentifier,
             ownerProcessIdentifier: ownerProcessIdentifier,
@@ -351,38 +410,6 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
         )
     }
 
-    private func focusedWindowElement(of appElement: AXUIElement) -> AXUIElement? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(
-            appElement,
-            kAXFocusedWindowAttribute as CFString,
-            &value
-        ) == .success,
-            let focusedValue = value,
-            CFGetTypeID(focusedValue) == AXUIElementGetTypeID() else {
-            return nil
-        }
-
-        return unsafeDowncast(focusedValue as AnyObject, to: AXUIElement.self)
-    }
-
-    private func stringAttribute(_ element: AXUIElement, _ attribute: CFString) -> String? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success else {
-            return nil
-        }
-
-        return value as? String
-    }
-
-    private func boolAttribute(_ element: AXUIElement, _ attribute: CFString) -> Bool {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success else {
-            return false
-        }
-
-        return (value as? Bool) ?? false
-    }
 }
 
 private struct CGWindowInfoSnapshot {

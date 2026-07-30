@@ -91,6 +91,15 @@ public struct SwitcherSession: Equatable, Sendable {
     }
 
     @discardableResult
+    public mutating func removeItem(withID id: String) -> Bool {
+        guard let index = items.firstIndex(where: { $0.id == id }) else {
+            return false
+        }
+
+        return removeItem(at: index)
+    }
+
+    @discardableResult
     public mutating func selectItem(at index: Int) -> Bool {
         guard index >= 0, index < items.count, index != selectedIndex else {
             return false

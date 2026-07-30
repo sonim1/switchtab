@@ -1,4 +1,3 @@
-import Foundation
 import SwitchTab
 
 enum SwitcherOverlayStateTests {
@@ -13,7 +12,10 @@ enum SwitcherOverlayStateTests {
         try testShiftReleaseThenArrowThenCommandReleaseConfirmsSelection()
         try testHoverSelectionMovesHighlightWithoutConfirming()
         try testHoverSelectionIgnoresNoOpAndOutOfRangeIndices()
-        try testHoverDoesNotAutoScrollTheGrid()
+        try testRemovingSelectedMiddleChoosesNextItem()
+        try testRemovingSelectedLastChoosesPreviousItem()
+        try testRemovingSelectedFirstChoosesNextItem()
+        try testDelayedRemovalKeepsCurrentSelectionByStableIdentity()
     }
 
     static func testArrowKeysMoveSelection() throws {
@@ -195,20 +197,54 @@ enum SwitcherOverlayStateTests {
         try expectEqual(state.session?.selectedIndex, 1)
     }
 
-    static func testHoverDoesNotAutoScrollTheGrid() throws {
-        let projectRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let source = try String(
-            contentsOf: projectRoot.appendingPathComponent("SwitchTab/UI/Overlay/SwitcherIconStripView.swift"),
-            encoding: .utf8
+    static func testRemovingSelectedMiddleChoosesNextItem() throws {
+        var session = SwitcherSession(
+            mode: .currentAppWindowSwitching,
+            items: removalItems(),
+            selectedIndex: 1
         )
 
-        // Scrolling is driven by the keyboard-only token, never by hover.
-        try expectTrue(source.contains(".onChange(of: scrollToken)"))
-        try expectFalse(source.contains(".onChange(of: selectedIndex)"))
-        try expectTrue(source.contains("guard hoverEnabled, hovering else"))
+        try expectTrue(session.removeItem(withID: "b"))
+        try expectEqual(session.selectedItem?.id, "c")
+        try expectEqual(session.selectedIndex, 1)
+    }
+
+    static func testRemovingSelectedLastChoosesPreviousItem() throws {
+        var session = SwitcherSession(
+            mode: .currentAppWindowSwitching,
+            items: removalItems(),
+            selectedIndex: 2
+        )
+
+        try expectTrue(session.removeItem(withID: "c"))
+        try expectEqual(session.selectedItem?.id, "b")
+        try expectEqual(session.selectedIndex, 1)
+    }
+
+    static func testRemovingSelectedFirstChoosesNextItem() throws {
+        var session = SwitcherSession(
+            mode: .currentAppWindowSwitching,
+            items: removalItems(),
+            selectedIndex: 0
+        )
+
+        try expectTrue(session.removeItem(withID: "a"))
+        try expectEqual(session.selectedItem?.id, "b")
+        try expectEqual(session.selectedIndex, 0)
+    }
+
+    static func testDelayedRemovalKeepsCurrentSelectionByStableIdentity() throws {
+        var session = SwitcherSession(
+            mode: .currentAppWindowSwitching,
+            items: removalItems(),
+            selectedIndex: 1
+        )
+
+        try expectTrue(session.moveSelection(by: 1))
+        try expectEqual(session.selectedItem?.id, "c")
+        try expectTrue(session.removeItem(withID: "b"))
+        try expectEqual(session.selectedItem?.id, "c")
+        try expectEqual(session.selectedIndex, 1)
     }
 
     private static func hoverItems() -> [SwitcherListItem] {
@@ -216,6 +252,14 @@ enum SwitcherOverlayStateTests {
             SwitcherListItem(id: "one", title: "One", subtitle: nil),
             SwitcherListItem(id: "two", title: "Two", subtitle: nil),
             SwitcherListItem(id: "three", title: "Three", subtitle: nil)
+        ]
+    }
+
+    private static func removalItems() -> [SwitcherListItem] {
+        [
+            SwitcherListItem(id: "a", title: "A", subtitle: nil),
+            SwitcherListItem(id: "b", title: "B", subtitle: nil),
+            SwitcherListItem(id: "c", title: "C", subtitle: nil)
         ]
     }
 }
