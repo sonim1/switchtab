@@ -12,6 +12,7 @@ enum ShortcutSettingsStoreTests {
         try testSavingUnchangedShortcutDoesNotRewrite()
         try testViewModelDoesNotNotifyWhenShortcutIsUnchanged()
         try testViewModelDoesNotPublishUnchangedValidationError()
+        try testViewModelRejectsReservedApplicationShortcut()
         try testViewModelLoadsRegistrationMessageText()
         try testViewModelCombinesRegistrationMessages()
         try testViewModelSeparatesRegistrationMessagesByMode()
@@ -179,6 +180,26 @@ enum ShortcutSettingsStoreTests {
         try expectFalse(secondSave)
         try expectEqual(viewModel.errorMessage, "Shortcut must include at least one modifier.")
         try expectEqual(publishCount, 0)
+    }
+
+    static func testViewModelRejectsReservedApplicationShortcut() throws {
+        let store = ShortcutSettingsStore(userDefaults: makeDefaults())
+        let viewModel = ShortcutSettingsViewModel(store: store)
+
+        let didSave = viewModel.save(
+            keyEquivalent: "Tab",
+            keyCode: 48,
+            modifiers: ["command"],
+            isUsable: true
+        )
+
+        try expectFalse(didSave)
+        try expectEqual(viewModel.currentAppWindowShortcut, .defaultCurrentAppWindowSwitching)
+        try expectEqual(store.load(), .defaultCurrentAppWindowSwitching)
+        try expectEqual(
+            viewModel.errorMessage,
+            "Shortcut is already used by another switcher mode."
+        )
     }
 
     static func testViewModelLoadsRegistrationMessageText() throws {

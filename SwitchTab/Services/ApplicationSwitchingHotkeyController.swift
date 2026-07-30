@@ -6,7 +6,9 @@ public final class ApplicationSwitchingHotkeyController {
     private var registrationMessages: [ShortcutRegistrationMessage] = []
 
     public init() {
-        hotkeyService = HotkeyService(registrar: EventTapHotkeyRegistrar())
+        hotkeyService = HotkeyService(
+            registrar: EventTapHotkeyRegistrar(invokesHandlersForAutorepeat: true)
+        )
     }
 
     public init(hotkeyService: HotkeyService) {

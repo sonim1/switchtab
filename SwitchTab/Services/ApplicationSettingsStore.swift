@@ -3,6 +3,9 @@ import ServiceManagement
 
 public extension Notification.Name {
     static let applicationSettingsDidChange = Notification.Name("SwitchTab.applicationSettingsDidChange")
+    static let commandTabReplacementDidChange = Notification.Name(
+        "SwitchTab.commandTabReplacementDidChange"
+    )
 }
 
 public struct ApplicationSettingsStore {
@@ -42,6 +45,7 @@ public struct ApplicationSettingsStore {
 
         userDefaults.set(enabled, forKey: Self.replacesCommandTabKey)
         NotificationCenter.default.post(name: .applicationSettingsDidChange, object: nil)
+        NotificationCenter.default.post(name: .commandTabReplacementDidChange, object: nil)
     }
 
     public var overlaySizeScale: OverlaySizeScale {

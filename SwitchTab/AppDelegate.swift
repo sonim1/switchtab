@@ -301,7 +301,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func observeApplicationSettingsChanges() {
-        observe(.applicationSettingsDidChange, storing: &applicationSettingsObserver) { [weak self] in
+        observe(.commandTabReplacementDidChange, storing: &applicationSettingsObserver) { [weak self] in
             self?.updateApplicationHotkeyRegistration()
         }
     }

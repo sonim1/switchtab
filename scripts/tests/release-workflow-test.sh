@@ -748,6 +748,29 @@ touch \
 EOF
 chmod +x "$SIGNING_BIN/xcodebuild"
 
+AD_HOC_IDENTITY_BUILD_ROOT="$SIGNING_FIXTURE_ROOT/ad-hoc-identity"
+AD_HOC_IDENTITY_XCODEBUILD_LOG="$SIGNING_FIXTURE_ROOT/ad-hoc-identity-xcodebuild.log"
+set +e
+ad_hoc_identity_output="$(
+    CODESIGN_BIN="$SIGNING_BIN/codesign" \
+    CODESIGN_LOG="$SIGNING_LOG" \
+    DIRECT_BUILD_ROOT="$AD_HOC_IDENTITY_BUILD_ROOT" \
+    SPARKLE_PUBLIC_ED_KEY='fixture-public-key' \
+    DEVELOPER_ID_APPLICATION='-' \
+    XCODEBUILD_LOG="$AD_HOC_IDENTITY_XCODEBUILD_LOG" \
+    PATH="$SIGNING_BIN:$PATH" \
+    CONFIGURATION=Release \
+    bash "$BUILDER_PATH" 2>&1
+)"
+ad_hoc_identity_status=$?
+set -e
+[[ "$ad_hoc_identity_status" -eq 64 ]] || \
+    fail "ad-hoc signing identity was not rejected: status=$ad_hoc_identity_status output=$ad_hoc_identity_output"
+[[ "$ad_hoc_identity_output" == *"DEVELOPER_ID_APPLICATION must name a Developer ID Application certificate"* ]] || \
+    fail "ad-hoc identity rejection did not explain the Developer ID requirement: $ad_hoc_identity_output"
+[[ ! -e "$AD_HOC_IDENTITY_XCODEBUILD_LOG" ]] || \
+    fail "ad-hoc identity was discovered only after xcodebuild started"
+
 MISSING_IDENTITY_BUILD_ROOT="$SIGNING_FIXTURE_ROOT/missing-identity"
 MISSING_IDENTITY_XCODEBUILD_LOG="$SIGNING_FIXTURE_ROOT/missing-identity-xcodebuild.log"
 set +e

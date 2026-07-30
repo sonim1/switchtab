@@ -117,6 +117,10 @@ fi
 
 if [[ "$PREPARE_ONLY" != "1" ]]; then
     require_env "DEVELOPER_ID_APPLICATION" "$DEVELOPER_ID_APPLICATION"
+    if [[ "$DEVELOPER_ID_APPLICATION" != "Developer ID Application:"* ]]; then
+        echo "DEVELOPER_ID_APPLICATION must name a Developer ID Application certificate" >&2
+        exit 64
+    fi
 fi
 
 if [[ "$RELEASE" == "1" ]]; then

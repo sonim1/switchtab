@@ -11,6 +11,8 @@ enum ApplicationSettingsStoreTests {
         try testReplacesCommandTabDefaultsToDisabled()
         try testReplacesCommandTabPersists()
         try testReplacesCommandTabChangePostsExactlyOneNotification()
+        try testReplacesCommandTabChangePostsDedicatedNotification()
+        try testUnrelatedSettingsDoNotPostCmdTabReplacementNotification()
         try testReplacesCommandTabNoOpDoesNotPostNotification()
         try testOverlaySizeScaleDefaultsToOne()
         try testOverlaySizeScalePersists()
@@ -115,6 +117,45 @@ enum ApplicationSettingsStoreTests {
         store.saveReplacesCommandTab(true)
 
         try expectEqual(recorder.postCount, 1)
+    }
+
+    static func testReplacesCommandTabChangePostsDedicatedNotification() throws {
+        let store = ApplicationSettingsStore(userDefaults: makeDefaults())
+        let recorder = NotificationRecorder()
+        let observer = NotificationCenter.default.addObserver(
+            forName: .commandTabReplacementDidChange,
+            object: nil,
+            queue: nil
+        ) { _ in
+            recorder.record()
+        }
+        defer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+
+        store.saveReplacesCommandTab(true)
+        store.saveReplacesCommandTab(true)
+
+        try expectEqual(recorder.postCount, 1)
+    }
+
+    static func testUnrelatedSettingsDoNotPostCmdTabReplacementNotification() throws {
+        let store = ApplicationSettingsStore(userDefaults: makeDefaults())
+        let recorder = NotificationRecorder()
+        let observer = NotificationCenter.default.addObserver(
+            forName: .commandTabReplacementDidChange,
+            object: nil,
+            queue: nil
+        ) { _ in
+            recorder.record()
+        }
+        defer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+
+        store.saveOverlaySizeScale(OverlaySizeScale(1.2))
+
+        try expectEqual(recorder.postCount, 0)
     }
 
     static func testReplacesCommandTabNoOpDoesNotPostNotification() throws {
