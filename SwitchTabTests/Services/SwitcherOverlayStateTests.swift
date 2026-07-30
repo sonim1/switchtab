@@ -14,6 +14,7 @@ enum SwitcherOverlayStateTests {
         try testApplicationModeDoesNotShowThumbnails()
         try testClosePolicyOnlyAllowsWindowMode()
         try testSwitchAccessibilityHintMatchesMode()
+        try testSwitchAccessibilityLabelIncludesApplicationWindowCount()
         try testApplicationModeIgnoresCloseSelected()
         try testQuitCommandNeedsCommandModifier()
         try testApplicationModeRequestsQuitWithoutDismissing()
@@ -212,6 +213,65 @@ enum SwitcherOverlayStateTests {
         try expectEqual(
             SwitcherOverlayAccessibilityPolicy.switchHint(for: .applicationSwitching),
             "Switch to this application."
+        )
+    }
+
+    static func testSwitchAccessibilityLabelIncludesApplicationWindowCount() throws {
+        let oneWindow = SwitcherListItem(
+            id: "safari",
+            title: "Safari",
+            subtitle: "1"
+        )
+        let noWindows = SwitcherListItem(
+            id: "finder",
+            title: "Finder",
+            subtitle: "0"
+        )
+        let manyWindows = SwitcherListItem(
+            id: "notes",
+            title: "Notes",
+            subtitle: "2"
+        )
+        let unavailable = SwitcherListItem(
+            id: "mail",
+            title: "Mail",
+            subtitle: nil
+        )
+
+        try expectEqual(
+            SwitcherOverlayAccessibilityPolicy.switchLabel(
+                for: oneWindow,
+                mode: .applicationSwitching
+            ),
+            "Safari, 1 window"
+        )
+        try expectEqual(
+            SwitcherOverlayAccessibilityPolicy.switchLabel(
+                for: noWindows,
+                mode: .applicationSwitching
+            ),
+            "Finder, 0 windows"
+        )
+        try expectEqual(
+            SwitcherOverlayAccessibilityPolicy.switchLabel(
+                for: manyWindows,
+                mode: .applicationSwitching
+            ),
+            "Notes, 2 windows"
+        )
+        try expectEqual(
+            SwitcherOverlayAccessibilityPolicy.switchLabel(
+                for: unavailable,
+                mode: .applicationSwitching
+            ),
+            "Mail"
+        )
+        try expectEqual(
+            SwitcherOverlayAccessibilityPolicy.switchLabel(
+                for: oneWindow,
+                mode: .currentAppWindowSwitching
+            ),
+            "Safari"
         )
     }
 

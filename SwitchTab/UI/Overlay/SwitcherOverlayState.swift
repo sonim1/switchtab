@@ -25,6 +25,20 @@ public enum SwitcherOverlayAccessibilityPolicy {
             return "Switch to this application."
         }
     }
+
+    public static func switchLabel(
+        for item: SwitcherListItem,
+        mode: SwitcherMode
+    ) -> String {
+        guard mode == .applicationSwitching,
+              let windowCount = item.subtitle,
+              let numericWindowCount = Int(windowCount) else {
+            return item.title
+        }
+
+        let windowNoun = numericWindowCount == 1 ? "window" : "windows"
+        return "\(item.title), \(windowCount) \(windowNoun)"
+    }
 }
 
 public struct SwitcherOverlayState: Equatable, Sendable {

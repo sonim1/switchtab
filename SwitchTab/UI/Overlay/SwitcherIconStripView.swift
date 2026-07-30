@@ -1,28 +1,6 @@
 import AppKit
 import SwiftUI
 
-public struct SwitcherApplicationMetadata: Equatable, Sendable {
-    public let title: String
-    public let windowCount: String?
-
-    public init(title: String, windowCount: String?) {
-        self.title = title
-        self.windowCount = windowCount
-    }
-
-    public var showsWindowCount: Bool {
-        windowCount != nil
-    }
-}
-
-public enum SwitcherApplicationMetadataPolicy {
-    public static let windowCountSymbolName = "rectangle.on.rectangle"
-
-    public static func metadata(for item: SwitcherListItem) -> SwitcherApplicationMetadata {
-        SwitcherApplicationMetadata(title: item.title, windowCount: item.subtitle)
-    }
-}
-
 struct SwitcherIconStripView: View {
     private let items: [SwitcherListItem]
     private let selectedIndex: Int
@@ -179,7 +157,9 @@ private struct SwitcherWindowTile: View {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text(item.title))
+            .accessibilityLabel(
+                Text(SwitcherOverlayAccessibilityPolicy.switchLabel(for: item, mode: mode))
+            )
             .accessibilityHint(Text(switchAccessibilityHint))
 
             if showsCloseControl && (isSelected || isHovered) {
@@ -230,18 +210,16 @@ private struct SwitcherWindowTile: View {
     }
 
     private func applicationMetadata(for item: SwitcherListItem) -> some View {
-        let metadata = SwitcherApplicationMetadataPolicy.metadata(for: item)
-
         return HStack(alignment: .center, spacing: 3) {
-            Text(metadata.title)
+            Text(item.title)
                 .font(.system(size: layoutMetrics.titleFontSize, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .center)
 
-            if let windowCount = metadata.windowCount {
+            if let windowCount = item.subtitle {
                 HStack(alignment: .center, spacing: 2) {
-                    Image(systemName: SwitcherApplicationMetadataPolicy.windowCountSymbolName)
+                    Image(systemName: "rectangle.on.rectangle")
                         .font(.system(size: max(8, layoutMetrics.titleFontSize * 0.75)))
                         .accessibilityHidden(true)
                     Text(windowCount)
