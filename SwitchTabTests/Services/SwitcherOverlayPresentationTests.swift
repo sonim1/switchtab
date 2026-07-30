@@ -26,7 +26,9 @@ enum SwitcherOverlayPresentationTests {
         try testMinimumScaleTileContentFitsWithinTile()
         try testApplicationModeUsesCompactLayoutMetrics()
         try testApplicationModeFitsMoreColumnsThanWindowMode()
+        try testApplicationMetadataPreservesOptionalWindowCount()
         try testApplicationTileUsesIconFirstContent()
+        try testSelectedOutlineUsesInternalStrokeBorder()
         try testWindowTileButtonsExposeExplicitAccessibilityText()
     }
 
@@ -355,13 +357,59 @@ enum SwitcherOverlayPresentationTests {
         try expectTrue(applicationLayout.gridColumnCount > windowLayout.gridColumnCount)
     }
 
+    static func testApplicationMetadataPreservesOptionalWindowCount() throws {
+        let knownZero = SwitcherListItem(
+            id: "finder",
+            title: "Finder",
+            subtitle: "0"
+        )
+        let unavailable = SwitcherListItem(
+            id: "safari",
+            title: "Safari",
+            subtitle: nil
+        )
+        let longName = SwitcherListItem(
+            id: "long-name",
+            title: "A very long application name that needs truncation",
+            subtitle: "12"
+        )
+
+        let knownZeroMetadata = SwitcherApplicationMetadataPolicy.metadata(for: knownZero)
+        let unavailableMetadata = SwitcherApplicationMetadataPolicy.metadata(for: unavailable)
+        let longNameMetadata = SwitcherApplicationMetadataPolicy.metadata(for: longName)
+
+        try expectEqual(knownZeroMetadata.title, "Finder")
+        try expectEqual(knownZeroMetadata.windowCount, "0")
+        try expectTrue(knownZeroMetadata.showsWindowCount)
+        try expectEqual(unavailableMetadata.title, "Safari")
+        try expectTrue(unavailableMetadata.windowCount == nil)
+        try expectFalse(unavailableMetadata.showsWindowCount)
+        try expectEqual(longNameMetadata.title, longName.title)
+        try expectEqual(longNameMetadata.windowCount, "12")
+    }
+
     static func testApplicationTileUsesIconFirstContent() throws {
         let source = try projectSource("SwitchTab/UI/Overlay/SwitcherIconStripView.swift")
 
         try expectTrue(source.contains("applicationContent(for: item)"))
         try expectTrue(source.contains("private func applicationContent(for item: SwitcherListItem)"))
-        try expectTrue(source.contains("icon(for: item)\n            applicationTitle(for: item)"))
+        try expectTrue(source.contains("icon(for: item)\n            applicationMetadata(for: item)"))
+        try expectTrue(source.contains("private func applicationMetadata(for item: SwitcherListItem)"))
+        try expectTrue(source.contains("rectangle.on.rectangle"))
+        try expectTrue(source.contains("Image(systemName: SwitcherApplicationMetadataPolicy.windowCountSymbolName)"))
+        try expectTrue(source.contains("Text(metadata.title)"))
+        try expectTrue(source.contains("if let windowCount = metadata.windowCount"))
+        try expectTrue(source.contains(".lineLimit(1)"))
         try expectTrue(source.contains("titleHeader(for: item)"))
+    }
+
+    static func testSelectedOutlineUsesInternalStrokeBorder() throws {
+        let source = try projectSource("SwitchTab/UI/Overlay/SwitcherIconStripView.swift")
+
+        try expectTrue(
+            source.contains(".strokeBorder("),
+            "Selected tile outlines must be inset so every edge stays inside the tile bounds."
+        )
     }
 
     static func testWindowTileButtonsExposeExplicitAccessibilityText() throws {

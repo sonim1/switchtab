@@ -1,6 +1,28 @@
 import AppKit
 import SwiftUI
 
+public struct SwitcherApplicationMetadata: Equatable, Sendable {
+    public let title: String
+    public let windowCount: String?
+
+    public init(title: String, windowCount: String?) {
+        self.title = title
+        self.windowCount = windowCount
+    }
+
+    public var showsWindowCount: Bool {
+        windowCount != nil
+    }
+}
+
+public enum SwitcherApplicationMetadataPolicy {
+    public static let windowCountSymbolName = "rectangle.on.rectangle"
+
+    public static func metadata(for item: SwitcherListItem) -> SwitcherApplicationMetadata {
+        SwitcherApplicationMetadata(title: item.title, windowCount: item.subtitle)
+    }
+}
+
 struct SwitcherIconStripView: View {
     private let items: [SwitcherListItem]
     private let selectedIndex: Int
@@ -150,7 +172,7 @@ private struct SwitcherWindowTile: View {
                 .clipShape(RoundedRectangle(cornerRadius: 7))
                 .overlay {
                     RoundedRectangle(cornerRadius: 7)
-                        .stroke(
+                        .strokeBorder(
                             isSelected ? Color.accentColor.opacity(0.95) : Color.clear,
                             lineWidth: 2
                         )
@@ -203,16 +225,34 @@ private struct SwitcherWindowTile: View {
     private func applicationContent(for item: SwitcherListItem) -> some View {
         VStack(alignment: .center, spacing: layoutMetrics.tileContentSpacing) {
             icon(for: item)
-            applicationTitle(for: item)
+            applicationMetadata(for: item)
         }
     }
 
-    private func applicationTitle(for item: SwitcherListItem) -> some View {
-        Text(item.title)
-            .font(.system(size: layoutMetrics.titleFontSize, weight: .medium))
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .frame(width: layoutMetrics.thumbnailSize.width, alignment: .center)
+    private func applicationMetadata(for item: SwitcherListItem) -> some View {
+        let metadata = SwitcherApplicationMetadataPolicy.metadata(for: item)
+
+        return HStack(alignment: .center, spacing: 3) {
+            Text(metadata.title)
+                .font(.system(size: layoutMetrics.titleFontSize, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .center)
+
+            if let windowCount = metadata.windowCount {
+                HStack(alignment: .center, spacing: 2) {
+                    Image(systemName: SwitcherApplicationMetadataPolicy.windowCountSymbolName)
+                        .font(.system(size: max(8, layoutMetrics.titleFontSize * 0.75)))
+                        .accessibilityHidden(true)
+                    Text(windowCount)
+                }
+                .font(.system(size: layoutMetrics.titleFontSize * 0.85))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
+            }
+        }
+        .frame(width: layoutMetrics.thumbnailSize.width)
     }
 
     private var closeButton: some View {
