@@ -57,6 +57,7 @@ public final class SparkleUpdateErrorPresenter: NSObject {
 
         stack.addArrangedSubview(summary)
         stack.addArrangedSubview(actions)
+        stack.setFrameSize(stack.fittingSize)
         return stack
     }
 

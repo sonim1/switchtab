@@ -104,6 +104,7 @@ enum AppStoreDistributionSettingsTests {
         try expectTrue(controller.contains("SwitchTabUpdateUserDriver("))
         try expectTrue(controller.contains("didAbortWithError"))
         try expectTrue(controller.contains("UpdateDiagnostic.make"))
+        try expectTrue(controller.contains("sessionInProgress"))
         try expectFalse(controller.contains("SPUStandardUpdaterController("))
 
         let driver = try String(

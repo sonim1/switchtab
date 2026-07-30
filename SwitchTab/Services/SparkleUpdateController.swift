@@ -10,6 +10,7 @@ public final class SparkleUpdateController: NSObject, UpdateChecking, SPUUpdater
     private let errorPresenter: SparkleUpdateErrorPresenter
     private let userDriver: SwitchTabUpdateUserDriver
     private var updater: SPUUpdater!
+    private static let retryPollLimit = 50
 
     public override init() {
         errorPresenter = SparkleUpdateErrorPresenter()
@@ -74,13 +75,26 @@ public final class SparkleUpdateController: NSObject, UpdateChecking, SPUUpdater
     private func handleUpdateAction(_ action: UpdateErrorAlertAction) {
         switch action {
         case .retry:
-            DispatchQueue.main.async { [weak self] in
-                self?.updater.checkForUpdates()
-            }
+            retryUpdateCheck(attemptsRemaining: Self.retryPollLimit)
         case .downloadManually:
             NSWorkspace.shared.open(UpdateSupportLinks.latestRelease)
         case .cancel:
             break
+        }
+    }
+
+    private func retryUpdateCheck(attemptsRemaining: Int) {
+        guard updater.sessionInProgress else {
+            updater.checkForUpdates()
+            return
+        }
+        guard attemptsRemaining > 0 else {
+            logger.error("Timed out waiting for the previous update session to finish")
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.retryUpdateCheck(attemptsRemaining: attemptsRemaining - 1)
         }
     }
 }
