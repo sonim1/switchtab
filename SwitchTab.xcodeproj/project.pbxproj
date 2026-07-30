@@ -88,6 +88,10 @@
 		A00000000000000000000105 /* ApplicationSwitchingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000105 /* ApplicationSwitchingTests.swift */; };
 		A00000000000000000000106 /* ApplicationActivationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000106 /* ApplicationActivationService.swift */; };
 		A00000000000000000000107 /* ApplicationSwitchingHotkeyController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000107 /* ApplicationSwitchingHotkeyController.swift */; };
+		A00000000000000000000108 /* UpdateDiagnostic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000108 /* UpdateDiagnostic.swift */; };
+		A00000000000000000000109 /* SparkleUpdateErrorPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000109 /* SparkleUpdateErrorPresenter.swift */; };
+		A00000000000000000000110 /* SwitchTabUpdateUserDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000110 /* SwitchTabUpdateUserDriver.swift */; };
+		A00000000000000000000111 /* UpdateDiagnosticTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000111 /* UpdateDiagnosticTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -186,6 +190,10 @@
 		B00000000000000000000105 /* ApplicationSwitchingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationSwitchingTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000106 /* ApplicationActivationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationActivationService.swift; sourceTree = "<group>"; };
 		B00000000000000000000107 /* ApplicationSwitchingHotkeyController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationSwitchingHotkeyController.swift; sourceTree = "<group>"; };
+		B00000000000000000000108 /* UpdateDiagnostic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateDiagnostic.swift; sourceTree = "<group>"; };
+		B00000000000000000000109 /* SparkleUpdateErrorPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleUpdateErrorPresenter.swift; sourceTree = "<group>"; };
+		B00000000000000000000110 /* SwitchTabUpdateUserDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchTabUpdateUserDriver.swift; sourceTree = "<group>"; };
+		B00000000000000000000111 /* UpdateDiagnosticTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateDiagnosticTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -260,6 +268,9 @@
 				B00000000000000000000081 /* SwitcherPresentationSnapshot.swift */,
 				B00000000000000000000094 /* UpdateController.swift */,
 				B00000000000000000000096 /* SparkleUpdateController.swift */,
+				B00000000000000000000108 /* UpdateDiagnostic.swift */,
+				B00000000000000000000109 /* SparkleUpdateErrorPresenter.swift */,
+				B00000000000000000000110 /* SwitchTabUpdateUserDriver.swift */,
 				B00000000000000000000068 /* PermissionSettingsDestination.swift */,
 				B00000000000000000000029 /* HotkeyService.swift */,
 				B00000000000000000000035 /* AccessibilityWindowProvider.swift */,
@@ -366,6 +377,7 @@
 				B00000000000000000000087 /* SettingsActivationPolicyTests.swift */,
 				B00000000000000000000091 /* ApplicationSettingsStoreTests.swift */,
 				B00000000000000000000095 /* UpdateControllerTests.swift */,
+				B00000000000000000000111 /* UpdateDiagnosticTests.swift */,
 				B00000000000000000000100 /* WindowCloseServiceTests.swift */,
 			);
 			path = Services;
@@ -538,6 +550,9 @@
 				A00000000000000000000077 /* SwitcherPresentationSnapshot.swift in Sources */,
 				A00000000000000000000090 /* UpdateController.swift in Sources */,
 				A00000000000000000000092 /* SparkleUpdateController.swift in Sources */,
+				A00000000000000000000108 /* UpdateDiagnostic.swift in Sources */,
+				A00000000000000000000109 /* SparkleUpdateErrorPresenter.swift in Sources */,
+				A00000000000000000000110 /* SwitchTabUpdateUserDriver.swift in Sources */,
 				A00000000000000000000064 /* PermissionSettingsDestination.swift in Sources */,
 				A00000000000000000000015 /* SwitcherOverlayState.swift in Sources */,
 				A00000000000000000000016 /* SwitcherOverlayController.swift in Sources */,
@@ -602,6 +617,7 @@
 				A00000000000000000000083 /* SettingsActivationPolicyTests.swift in Sources */,
 				A00000000000000000000087 /* ApplicationSettingsStoreTests.swift in Sources */,
 				A00000000000000000000091 /* UpdateControllerTests.swift in Sources */,
+				A00000000000000000000111 /* UpdateDiagnosticTests.swift in Sources */,
 				A00000000000000000000096 /* WindowCloseServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -707,7 +723,7 @@
 				CODE_SIGN_ENTITLEMENTS = SwitchTab/Resources/SwitchTab.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -716,7 +732,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.royjen.switchtab;
 				PRODUCT_NAME = SwitchTab;
 				SWIFT_VERSION = 5.0;
@@ -731,7 +747,7 @@
 				CODE_SIGN_ENTITLEMENTS = SwitchTab/Resources/SwitchTab.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -740,7 +756,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.royjen.switchtab;
 				PRODUCT_NAME = SwitchTab;
 				SWIFT_VERSION = 5.0;

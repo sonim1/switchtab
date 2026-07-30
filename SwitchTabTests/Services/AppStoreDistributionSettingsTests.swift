@@ -8,6 +8,7 @@ enum AppStoreDistributionSettingsTests {
         try testXcodeProjectUsesAppStoreBundleIdentifier()
         try testAppSandboxIsDisabledForGlobalWindowSwitching()
         try testSparkleAdapterIsDirectDistributionGuarded()
+        try testSparkleErrorUIIsDirectDistributionGuarded()
         try testDirectDistributionScriptGeneratesIsolatedProjectVariant()
         try testDirectDistributionScriptPinsSparkleToExactRevision()
         try testDirectDistributionScriptRequiresSparklePublicKey()
@@ -80,6 +81,54 @@ enum AppStoreDistributionSettingsTests {
         let projectContents = try String(contentsOf: projectURL, encoding: .utf8)
 
         try expectFalse(projectContents.contains("DIRECT_DISTRIBUTION;"))
+    }
+
+    static func testSparkleErrorUIIsDirectDistributionGuarded() throws {
+        for path in [
+            "SwitchTab/Services/SparkleUpdateController.swift",
+            "SwitchTab/Services/SparkleUpdateErrorPresenter.swift",
+            "SwitchTab/Services/SwitchTabUpdateUserDriver.swift"
+        ] {
+            let contents = try String(
+                contentsOf: projectRoot.appendingPathComponent(path),
+                encoding: .utf8
+            )
+            try expectTrue(contents.contains("#if DIRECT_DISTRIBUTION && canImport(Sparkle)"))
+        }
+
+        let controller = try String(
+            contentsOf: projectRoot.appendingPathComponent("SwitchTab/Services/SparkleUpdateController.swift"),
+            encoding: .utf8
+        )
+        try expectTrue(controller.contains("SPUUpdater("))
+        try expectTrue(controller.contains("SwitchTabUpdateUserDriver("))
+        try expectTrue(controller.contains("didAbortWithError"))
+        try expectTrue(controller.contains("UpdateDiagnostic.make"))
+        try expectTrue(controller.contains("sessionInProgress"))
+        try expectFalse(controller.contains("SPUStandardUpdaterController("))
+
+        let driver = try String(
+            contentsOf: projectRoot.appendingPathComponent("SwitchTab/Services/SwitchTabUpdateUserDriver.swift"),
+            encoding: .utf8
+        )
+        guard let acknowledgement = driver.range(of: "acknowledgement()"),
+              let actionCallback = driver.range(of: "didChooseAction?(action)") else {
+            throw TestFailure.failed("Expected acknowledgement before the update action callback")
+        }
+        try expectTrue(acknowledgement.lowerBound < actionCallback.lowerBound)
+
+        let project = try String(
+            contentsOf: projectRoot.appendingPathComponent("SwitchTab.xcodeproj/project.pbxproj"),
+            encoding: .utf8
+        )
+        for file in [
+            "UpdateDiagnostic.swift",
+            "SparkleUpdateErrorPresenter.swift",
+            "SwitchTabUpdateUserDriver.swift",
+            "UpdateDiagnosticTests.swift"
+        ] {
+            try expectTrue(project.contains("/* \(file) in Sources */"))
+        }
     }
 
     static func testDirectDistributionScriptGeneratesIsolatedProjectVariant() throws {
