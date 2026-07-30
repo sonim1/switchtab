@@ -9,7 +9,7 @@ public final class SwitchTabUpdateUserDriver: SPUStandardUserDriver {
 
     public init(
         hostBundle: Bundle = .main,
-        errorPresenter: SparkleUpdateErrorPresenter = SparkleUpdateErrorPresenter()
+        errorPresenter: SparkleUpdateErrorPresenter
     ) {
         self.errorPresenter = errorPresenter
         super.init(hostBundle: hostBundle, delegate: nil)

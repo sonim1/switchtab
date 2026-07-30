@@ -115,6 +115,19 @@ enum AppStoreDistributionSettingsTests {
             throw TestFailure.failed("Expected acknowledgement before the update action callback")
         }
         try expectTrue(acknowledgement.lowerBound < actionCallback.lowerBound)
+
+        let project = try String(
+            contentsOf: projectRoot.appendingPathComponent("SwitchTab.xcodeproj/project.pbxproj"),
+            encoding: .utf8
+        )
+        for file in [
+            "UpdateDiagnostic.swift",
+            "SparkleUpdateErrorPresenter.swift",
+            "SwitchTabUpdateUserDriver.swift",
+            "UpdateDiagnosticTests.swift"
+        ] {
+            try expectTrue(project.contains("/* \(file) in Sources */"))
+        }
     }
 
     static func testDirectDistributionScriptGeneratesIsolatedProjectVariant() throws {
