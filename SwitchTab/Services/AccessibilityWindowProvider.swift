@@ -571,7 +571,9 @@ final class AXWindowElementRegistry: @unchecked Sendable {
     static let shared = AXWindowElementRegistry()
 
     private let lock = NSLock()
-    private var elementsByOwnerProcessIdentifier: [Int: [Int: AXUIElement]] = [:]
+    private var elements: [Int: AXUIElement] = [:]
+    private var ownerProcessIdentifierByWindowIdentifier: [Int: Int] = [:]
+    private var windowIdentifiersByOwnerProcessIdentifier: [Int: Set<Int>] = [:]
 
     func replace(
         ownerProcessIdentifier: Int,
@@ -579,23 +581,50 @@ final class AXWindowElementRegistry: @unchecked Sendable {
     ) {
         lock.lock()
         defer { lock.unlock() }
-        elementsByOwnerProcessIdentifier[ownerProcessIdentifier] = activeElements
+
+        removeElements(ownerProcessIdentifier: ownerProcessIdentifier)
+
+        for (windowIdentifier, element) in activeElements {
+            if let previousOwnerProcessIdentifier = ownerProcessIdentifierByWindowIdentifier[windowIdentifier],
+               previousOwnerProcessIdentifier != ownerProcessIdentifier {
+                windowIdentifiersByOwnerProcessIdentifier[previousOwnerProcessIdentifier]?
+                    .remove(windowIdentifier)
+                if windowIdentifiersByOwnerProcessIdentifier[previousOwnerProcessIdentifier]?.isEmpty == true {
+                    windowIdentifiersByOwnerProcessIdentifier.removeValue(
+                        forKey: previousOwnerProcessIdentifier
+                    )
+                }
+            }
+
+            elements[windowIdentifier] = element
+            ownerProcessIdentifierByWindowIdentifier[windowIdentifier] = ownerProcessIdentifier
+        }
+
+        if !activeElements.isEmpty {
+            windowIdentifiersByOwnerProcessIdentifier[ownerProcessIdentifier] = Set(activeElements.keys)
+        }
     }
 
     func element(for windowIdentifier: Int) -> AXUIElement? {
         lock.lock()
         defer { lock.unlock() }
-        for elements in elementsByOwnerProcessIdentifier.values {
-            if let element = elements[windowIdentifier] {
-                return element
-            }
-        }
-        return nil
+        return elements[windowIdentifier]
     }
 
     func removeAll(ownerProcessIdentifier: Int) {
         lock.lock()
         defer { lock.unlock() }
-        elementsByOwnerProcessIdentifier.removeValue(forKey: ownerProcessIdentifier)
+        removeElements(ownerProcessIdentifier: ownerProcessIdentifier)
+    }
+
+    private func removeElements(ownerProcessIdentifier: Int) {
+        let windowIdentifiers = windowIdentifiersByOwnerProcessIdentifier.removeValue(
+            forKey: ownerProcessIdentifier
+        ) ?? []
+        for windowIdentifier in windowIdentifiers
+            where ownerProcessIdentifierByWindowIdentifier[windowIdentifier] == ownerProcessIdentifier {
+            elements.removeValue(forKey: windowIdentifier)
+            ownerProcessIdentifierByWindowIdentifier.removeValue(forKey: windowIdentifier)
+        }
     }
 }

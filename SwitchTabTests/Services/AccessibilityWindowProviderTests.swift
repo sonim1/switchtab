@@ -18,6 +18,7 @@ enum AccessibilityWindowProviderTests {
         try testProviderCarriesFocusedWindowFlagThrough()
         try testAXSnapshotProviderReadsAndMarksTheFocusedWindow()
         try testAXSnapshotProviderKeepsRegistryEntriesScopedToTheirOwnerProcess()
+        try testRegistryUsesLatestElementForDuplicateIdentifierWithoutStaleOwnership()
     }
 
     static func testProviderReturnsOnlyActiveApplicationWindows() throws {
@@ -371,6 +372,64 @@ enum AccessibilityWindowProviderTests {
         try expectEqual(empty?.count, 0)
         try expectTrue(registry.element(for: 9_101).map { CFEqual($0, firstProcessWindow) } ?? false)
         try expectTrue(registry.element(for: 9_203) == nil)
+    }
+
+    static func testRegistryUsesLatestElementForDuplicateIdentifierWithoutStaleOwnership() throws {
+        let firstProcessOldWindow = AXUIElementCreateApplication(301)
+        let firstProcessNewWindow = AXUIElementCreateApplication(302)
+        let secondProcessWindow = AXUIElementCreateApplication(303)
+        let firstProcessIdentifier = 93
+        let secondProcessIdentifier = 94
+        let sharedWindowIdentifier = 9_901
+        let firstProcessNewWindowIdentifier = 9_902
+        let registry = AXWindowElementRegistry.shared
+        registry.removeAll(ownerProcessIdentifier: firstProcessIdentifier)
+        registry.removeAll(ownerProcessIdentifier: secondProcessIdentifier)
+        defer {
+            registry.removeAll(ownerProcessIdentifier: firstProcessIdentifier)
+            registry.removeAll(ownerProcessIdentifier: secondProcessIdentifier)
+        }
+
+        registry.replace(
+            ownerProcessIdentifier: firstProcessIdentifier,
+            with: [sharedWindowIdentifier: firstProcessOldWindow]
+        )
+        try expectTrue(
+            registry.element(for: sharedWindowIdentifier)
+                .map { CFEqual($0, firstProcessOldWindow) } ?? false
+        )
+
+        registry.replace(
+            ownerProcessIdentifier: secondProcessIdentifier,
+            with: [sharedWindowIdentifier: secondProcessWindow]
+        )
+        try expectTrue(
+            registry.element(for: sharedWindowIdentifier)
+                .map { CFEqual($0, secondProcessWindow) } ?? false
+        )
+
+        registry.replace(
+            ownerProcessIdentifier: firstProcessIdentifier,
+            with: [firstProcessNewWindowIdentifier: firstProcessNewWindow]
+        )
+        try expectTrue(
+            registry.element(for: sharedWindowIdentifier)
+                .map { CFEqual($0, secondProcessWindow) } ?? false
+        )
+        try expectTrue(
+            registry.element(for: firstProcessNewWindowIdentifier)
+                .map { CFEqual($0, firstProcessNewWindow) } ?? false
+        )
+
+        registry.removeAll(ownerProcessIdentifier: firstProcessIdentifier)
+        try expectTrue(registry.element(for: firstProcessNewWindowIdentifier) == nil)
+        try expectTrue(
+            registry.element(for: sharedWindowIdentifier)
+                .map { CFEqual($0, secondProcessWindow) } ?? false
+        )
+
+        registry.removeAll(ownerProcessIdentifier: secondProcessIdentifier)
+        try expectTrue(registry.element(for: sharedWindowIdentifier) == nil)
     }
 }
 
