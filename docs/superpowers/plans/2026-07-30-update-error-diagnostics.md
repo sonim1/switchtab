@@ -861,10 +861,10 @@ SPARKLE_PUBLIC_ED_KEY="$SWITCHTAB_PUBLIC_KEY" \
 SWITCHTAB_UPDATE_FEED_URL="https://127.0.0.1:1/appcast.xml" \
 DEVELOPER_ID_APPLICATION="$SWITCHTAB_SIGNING_IDENTITY" \
 rtk proxy scripts/build-direct-distribution.sh
-rtk proxy open -n .build/direct-distribution/DerivedData/Build/Products/Debug/SwitchTab.app
+rtk proxy open -n .build/direct-distribution/DerivedData/Build/Products/Release/SwitchTab.app
 ```
 
-Expected: the signed Debug app builds and launches as a separate instance. Do not replace `/Applications/SwitchTab.app`.
+Expected: the signed Release app builds and launches as a separate instance. Do not replace `/Applications/SwitchTab.app`.
 
 - [ ] **Step 2: Verify the approved error UX manually**
 
@@ -888,7 +888,7 @@ SPARKLE_PUBLIC_ED_KEY="$SWITCHTAB_PUBLIC_KEY" \
 SWITCHTAB_UPDATE_FEED_URL="https://updates.switchtab.royjen.com/appcast.xml" \
 DEVELOPER_ID_APPLICATION="$SWITCHTAB_SIGNING_IDENTITY" \
 rtk proxy scripts/build-direct-distribution.sh
-rtk proxy open -n .build/direct-distribution/DerivedData/Build/Products/Debug/SwitchTab.app
+rtk proxy open -n .build/direct-distribution/DerivedData/Build/Products/Release/SwitchTab.app
 ```
 
 Expected: Sparkle's existing update-found or up-to-date UI appears normally; the custom error alert does not appear.
