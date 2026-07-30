@@ -41,7 +41,7 @@ struct SwitcherOverlayRootView: View {
         VStack(alignment: .leading, spacing: 12) {
             rows
         }
-        .padding(SwitcherOverlayChromePolicy.panelPadding)
+        .padding(layoutMetrics.panelPadding)
         .frame(width: layoutSize.width, height: layoutSize.height, alignment: .center)
         .background {
             if SwitcherOverlayChromePolicy.usesNativeBlurBackground {

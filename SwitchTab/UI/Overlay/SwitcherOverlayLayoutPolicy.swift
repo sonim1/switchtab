@@ -26,6 +26,7 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
     public let closeButtonHitTargetSize: CGSize
     public let gridSpacing: CGFloat
     public let gridPadding: CGFloat
+    public let panelPadding: CGFloat
 
     // Base geometry at scale 1. Every other size is derived from these so the
     // slider stays continuous instead of snapping to hand-tuned presets.
@@ -69,6 +70,7 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
         let fallbackIconExtent = (thumbnailHeight * fallbackIconThumbnailRatio).rounded()
         let closeButtonSize = scaled(baseCloseButtonSize, by: factor)
         let closeButtonHitTargetExtent = max(24, closeButtonSize + 8)
+        let gridPadding = scaled(baseWindowGridPadding, by: factor)
 
         return SwitcherOverlayLayoutMetrics(
             tileSize: CGSize(
@@ -88,7 +90,8 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
                 height: closeButtonHitTargetExtent
             ),
             gridSpacing: scaled(baseWindowGridSpacing, by: factor),
-            gridPadding: scaled(baseWindowGridPadding, by: factor)
+            gridPadding: gridPadding,
+            panelPadding: gridPadding / 2
         )
     }
 
@@ -97,6 +100,7 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
         let iconExtent = scaled(baseApplicationIconExtent, by: factor)
         let closeButtonSize = scaled(baseCloseButtonSize, by: factor)
         let closeButtonHitTargetExtent = max(24, closeButtonSize + 8)
+        let gridPadding = scaled(baseApplicationGridPadding, by: factor)
 
         return SwitcherOverlayLayoutMetrics(
             tileSize: CGSize(
@@ -119,7 +123,8 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
                 height: closeButtonHitTargetExtent
             ),
             gridSpacing: scaled(baseApplicationGridSpacing, by: factor),
-            gridPadding: scaled(baseApplicationGridPadding, by: factor)
+            gridPadding: gridPadding,
+            panelPadding: gridPadding / 2
         )
     }
 

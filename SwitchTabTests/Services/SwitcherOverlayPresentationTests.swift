@@ -19,6 +19,8 @@ enum SwitcherOverlayPresentationTests {
         try testOverlaySizeScaleScalesLayout()
         try testOverlaySizeScaleScalesMultiRowLayout()
         try testOverlaySizeScaleClampsOutOfRangeValues()
+        try testPanelPaddingBudgetsGridPaddingAcrossModesAndScales()
+        try testSelectionScrollingPolicyCoversModesAndScales()
         try testLegacyOverlaySizePreferenceMapsOntoScale()
         try testDefaultThumbnailIsLargerThanRetiredLargePreset()
         try testMinimumScaleTileContentFitsWithinTile()
@@ -26,6 +28,7 @@ enum SwitcherOverlayPresentationTests {
         try testApplicationModeFitsMoreColumnsThanWindowMode()
         try testApplicationTileUsesIconFirstContent()
         try testWindowTileButtonsExposeExplicitAccessibilityText()
+        try testRootViewUsesLayoutMetricPanelPadding()
     }
 
     static func testWindowSessionCanUseIconStripPresentation() throws {
@@ -218,6 +221,57 @@ enum SwitcherOverlayPresentationTests {
         try expectEqual(OverlaySizeScale(1.2).percentageText, "120%")
     }
 
+    static func testPanelPaddingBudgetsGridPaddingAcrossModesAndScales() throws {
+        let scales = [
+            OverlaySizeScale(OverlaySizeScale.minimum),
+            OverlaySizeScale.default,
+            OverlaySizeScale(OverlaySizeScale.maximum)
+        ]
+        let modes: [SwitcherMode] = [
+            .currentAppWindowSwitching,
+            .applicationSwitching
+        ]
+
+        for mode in modes {
+            for scale in scales {
+                let metrics = SwitcherOverlayLayoutMetrics.metrics(for: scale, mode: mode)
+                try expectEqual(metrics.panelPadding * 2, metrics.gridPadding)
+            }
+        }
+    }
+
+    static func testSelectionScrollingPolicyCoversModesAndScales() throws {
+        let scales = [
+            OverlaySizeScale(OverlaySizeScale.minimum),
+            OverlaySizeScale.default,
+            OverlaySizeScale(OverlaySizeScale.maximum)
+        ]
+        let modes: [SwitcherMode] = [
+            .currentAppWindowSwitching,
+            .applicationSwitching
+        ]
+
+        for mode in modes {
+            for scale in scales {
+                let stationaryLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
+                    itemCount: 9,
+                    screenSize: CGSize(width: 1000, height: 700),
+                    mode: mode,
+                    scale: scale
+                )
+                let overflowingLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
+                    itemCount: 40,
+                    screenSize: CGSize(width: 1000, height: 700),
+                    mode: mode,
+                    scale: scale
+                )
+
+                try expectFalse(stationaryLayout.requiresSelectionScrolling)
+                try expectTrue(overflowingLayout.requiresSelectionScrolling)
+            }
+        }
+    }
+
     static func testLegacyOverlaySizePreferenceMapsOntoScale() throws {
         try expectTrue(OverlaySizePreference.compact.scale.value < OverlaySizePreference.standard.scale.value)
         try expectTrue(OverlaySizePreference.standard.scale.value < OverlaySizePreference.large.scale.value)
@@ -306,6 +360,12 @@ enum SwitcherOverlayPresentationTests {
 
         try expectTrue(source.contains(".accessibilityLabel(Text(item.title))"))
         try expectTrue(source.contains(".accessibilityHint(Text(switchAccessibilityHint))"))
+    }
+
+    static func testRootViewUsesLayoutMetricPanelPadding() throws {
+        let source = try projectSource("SwitchTab/UI/Overlay/SwitcherOverlayRootView.swift")
+
+        try expectTrue(source.contains(".padding(layoutMetrics.panelPadding)"))
     }
 
     private static func projectSource(_ relativePath: String) throws -> String {
