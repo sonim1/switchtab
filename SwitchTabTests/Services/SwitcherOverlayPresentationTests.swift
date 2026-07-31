@@ -25,6 +25,7 @@ enum SwitcherOverlayPresentationTests {
         try testDefaultThumbnailIsLargerThanRetiredLargePreset()
         try testMinimumScaleTileContentFitsWithinTile()
         try testApplicationModeUsesCompactLayoutMetrics()
+        try testApplicationCaptionKeepsPanelHeightStable()
         try testApplicationModeFitsMoreColumnsThanWindowMode()
     }
 
@@ -342,9 +343,15 @@ enum SwitcherOverlayPresentationTests {
         try expectEqual(windowMetrics.tileContentSpacing, 6)
         try expectEqual(windowMetrics.gridSpacing, 14)
         try expectEqual(windowMetrics.gridPadding, 28)
-        try expectEqual(applicationMetrics.tileSize, CGSize(width: 120, height: 128))
+        try expectEqual(applicationMetrics.tileSize, CGSize(width: 104, height: 119))
+        try expectEqual(applicationMetrics.thumbnailSize, CGSize(width: 96, height: 96))
         try expectEqual(applicationMetrics.fallbackIconSize, CGSize(width: 96, height: 96))
-        try expectEqual(applicationMetrics.gridSpacing, 8)
+        try expectEqual(applicationMetrics.selectionContainerSize, CGSize(width: 104, height: 104))
+        try expectEqual(applicationMetrics.selectionCornerRadius, 26)
+        try expectEqual(applicationMetrics.captionHeight, 14)
+        try expectEqual(applicationMetrics.captionMaxWidth, 240)
+        try expectEqual(applicationMetrics.tileContentSpacing, 1)
+        try expectEqual(applicationMetrics.gridSpacing, 4)
         try expectEqual(applicationMetrics.gridPadding, 16)
         try expectTrue(applicationMetrics.tileSize.width < windowMetrics.tileSize.width)
         try expectEqual(
@@ -353,6 +360,22 @@ enum SwitcherOverlayPresentationTests {
                 mode: .currentAppWindowSwitching
             ).tileContentSpacing,
             6
+        )
+    }
+
+    static func testApplicationCaptionKeepsPanelHeightStable() throws {
+        let layout = SwitcherOverlayLayoutPolicy.presentationLayout(
+            itemCount: 8,
+            screenSize: CGSize(width: 1440, height: 900),
+            mode: .applicationSwitching
+        )
+
+        try expectEqual(layout.metrics.tileSize.height, 119)
+        try expectEqual(
+            layout.metrics.selectionContainerSize.height
+                + layout.metrics.tileContentSpacing
+                + layout.metrics.captionHeight,
+            layout.metrics.tileSize.height
         )
     }
 
