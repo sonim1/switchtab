@@ -54,11 +54,16 @@ Preconditions:
   processes are excluded.
 
 Visible result:
-- The existing overlay appears in application mode with application icons and
-  names only.
-- Each application tile contains one application icon, the application name,
-  and, when known, an optional window-count glyph/value.
-- The selected tile has an inset selection outline.
+- The existing overlay appears in application mode with every application icon.
+- Only the selected application shows its centered name directly below its icon.
+- A selected application shows the window-count glyph/value only when its
+  standard window count is two or more. Zero, one, unknown, and unselected
+  counts stay hidden.
+- Every tile reserves the same caption height, so selection movement and
+  asynchronous count refreshes do not resize the panel.
+- The selected icon has a 104-point container around its 96-point icon, equal
+  four-point insets, and a 26-point corner radius. Its background and outline
+  do not extend behind the caption.
 - Fully visible one-, two-, and three-row grids stay stationary. Selection
   scrolling starts only when the logical grid actually overflows the visible
   rows.
@@ -78,7 +83,9 @@ Keyboard behavior:
 - Escape cancels without changing the frontmost application or writing MRU.
 
 Completion:
-- The selected process is activated with all of its windows.
+- Command release and direct mouse selection use the same confirmation path.
+- The active app yields activation to the selected process before that process
+  is activated with all of its windows.
 - Successful activation records the stable application identifier in application
   MRU; an unavailable process does not write history.
 - Overlay closes after confirmation.

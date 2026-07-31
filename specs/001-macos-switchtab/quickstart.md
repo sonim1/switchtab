@@ -118,14 +118,18 @@ Use a QA build with Finder, Safari, and Notes open. Start with Finder active
 unless a scenario says otherwise. The `Replace macOS Cmd-Tab` setting is
 default-off. When it is enabled, Accessibility must be granted so the
 dedicated EventTap can intercept Cmd+Tab and Cmd+Shift+Tab. Application mode
-shows icons and names only, uses application MRU independently from window MRU,
-and does not need Screen Recording. Turning the setting off or quitting
+shows every application icon but reserves its fixed-height caption for the
+selected application only. It uses application MRU independently from window
+MRU and does not need Screen Recording. Turning the setting off or quitting
 SwitchTab must restore native Cmd+Tab.
 
 Application-mode interaction matches the current-app window switcher: repeated
 Tab/Shift-Tab and arrow keys move the selection, releasing Command confirms the
-highlighted app, and the selected tile has an inset outline. Each tile contains
-one app icon, the app name, and (when known) an optional window-count glyph/value.
+highlighted app, and the selected icon has an inset outline. Only the selected
+application shows its centered name below the icon. A selected application with
+two or more standard windows also shows a window-count glyph/value; zero, one,
+or an unknown count shows the name alone. The caption slot remains reserved on
+every tile so selection and asynchronous count updates cannot change panel height.
 One-, two-, and three-row grids remain stationary when fully visible; only a
 grid with real row overflow scrolls to keep the selection visible. Cmd+Q asks
 the selected app to terminate normally; its tile stays until
@@ -169,9 +173,12 @@ Evidence path:
   SwitchTab application overlay as `02-switchtab-on.png`; the native switcher
   must not appear. Repeat with enough regular apps to produce one-, two-,
   three-row, and overflowing grids at the current display size.
-- **Expected:** The SwitchTab application overlay shows only one icon, the
-  application name, and any available window-count glyph/value per tile; the
-  selected tile has an inset outline, and the native switcher is not visible.
+- **Expected:** The SwitchTab application overlay shows every application icon
+  while only the selected icon has a centered name below it. A selected app
+  shows the window glyph/value only for a count of two or more. The 104-point
+  selection container covers the 96-point icon only, uses equal 4-point insets
+  and a 26-point radius, and never covers the caption. The native switcher is
+  not visible.
   Confirm that a fully visible one-, two-, or three-row grid does not move under
   selection, while a grid with actual row overflow scrolls only as needed.
 - **Actual:** `[record during manual QA]`
@@ -210,8 +217,10 @@ Evidence path:
   after the app's didTerminate notification.
 - **Expected:** Workspace activation while the trigger modifier is held does
   not cancel the overlay. Releasing Command confirms the highlighted
-  application, which becomes frontmost, and no window thumbnail or close action
-  is required. Cmd+Q requests normal termination; the tile remains for a save
+  application through cooperative `yieldActivation` followed by
+  `.activateAllWindows`; that application becomes frontmost, and no window
+  thumbnail or close action is required. Clicking an application uses the same
+  confirmation and activation path. Cmd+Q requests normal termination; the tile remains for a save
   dialog or rejected request and is removed only after didTerminate while the
   overlay stays open for remaining apps. Cmd+W and visible close controls have
   no effect in application mode.
