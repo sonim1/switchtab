@@ -6,9 +6,11 @@ enum MenuBarIconAssetTests {
         try testMenuBarIconUsesTemplateRendering()
         try testMenuBarIconUsesMenuBarScaleAssets()
         try testMenuBarIconKeepsVectorSource()
-        try testMenuBarIconMatchesProvidedHGridStructure()
-        try testMenuBarIconKeepsActiveTileInteriorOpen()
-        try testMenuBarIconLeavesGridGuttersOpen()
+        try testMenuBarIconUsesUprightThreeWindowStack()
+        try testMenuBarIconKeepsDetailOnFrontWindowOnly()
+        try testMenuBarIconUsesWideAndNarrowFrontPanes()
+        try testMenuBarIconFillsMenuBarHeightAtRetinaScale()
+        try testMenuBarIconKeepsRetinaEdgesCrisp()
     }
 
     static func testMenuBarIconUsesTemplateRendering() throws {
@@ -21,10 +23,13 @@ enum MenuBarIconAssetTests {
 
     static func testMenuBarIconUsesMenuBarScaleAssets() throws {
         let oneX = try menuBarBitmap(named: "MenuBarIcon.png")
+        let twoX = try menuBarBitmap(named: "MenuBarIcon@2x.png")
         let threeX = try menuBarBitmap(named: "MenuBarIcon@3x.png")
 
         try expectEqual(oneX.pixelsWide, 18)
         try expectEqual(oneX.pixelsHigh, 18)
+        try expectEqual(twoX.pixelsWide, 36)
+        try expectEqual(twoX.pixelsHigh, 36)
         try expectEqual(threeX.pixelsWide, 54)
         try expectEqual(threeX.pixelsHigh, 54)
     }
@@ -33,62 +38,58 @@ enum MenuBarIconAssetTests {
         let sourceURL = resourceRoot.appendingPathComponent("MenuBarIcon.svg")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 
-        try expectTrue(source.contains("viewBox=\"0 0 380 372\""))
-        try expectTrue(source.contains("SwitchTab H icon vectorized from provided image"))
+        try expectTrue(source.contains("viewBox=\"0 0 36 36\""))
+        try expectTrue(source.contains("SwitchTab stacked windows menu bar icon"))
     }
 
-    static func testMenuBarIconMatchesProvidedHGridStructure() throws {
-        let rep = try menuBarBitmap(named: "MenuBarIcon@3x.png")
+    static func testMenuBarIconUsesUprightThreeWindowStack() throws {
+        let source = try vectorSource()
 
-        try expectTrue(
-            opaquePixelCount(in: PixelRegion(x: 4...21, y: 6...24), bitmap: rep) >= 240,
-            "Expected the top-left filled tile from the H reference"
-        )
-        try expectTrue(
-            opaquePixelCount(in: PixelRegion(x: 26...44, y: 6...21), bitmap: rep) >= 210,
-            "Expected the top-right filled tile from the H reference"
-        )
-        try expectTrue(
-            opaquePixelCount(in: PixelRegion(x: 4...21, y: 27...45), bitmap: rep) >= 230,
-            "Expected the bottom-left filled tile from the H reference"
-        )
-        try expectTrue(
-            opaquePixelCount(in: PixelRegion(x: 25...49, y: 23...29), bitmap: rep) >= 54,
-            "Expected the top edge of the active outline tile from the H reference"
-        )
-        try expectTrue(
-            opaquePixelCount(in: PixelRegion(x: 25...49, y: 42...48), bitmap: rep) >= 48,
-            "Expected the bottom edge of the active outline tile from the H reference"
-        )
-        try expectTrue(
-            opaquePixelCount(in: PixelRegion(x: 24...31, y: 24...47), bitmap: rep) >= 54,
-            "Expected the left edge of the active outline tile from the H reference"
-        )
-        try expectTrue(
-            opaquePixelCount(in: PixelRegion(x: 43...50, y: 24...47), bitmap: rep) >= 48,
-            "Expected the right edge of the active outline tile from the H reference"
-        )
+        try expectEqual(occurrenceCount(of: "data-role=\"window-outline\"", in: source), 3)
+        try expectFalse(source.contains("rotate("))
     }
 
-    static func testMenuBarIconKeepsActiveTileInteriorOpen() throws {
+    static func testMenuBarIconKeepsDetailOnFrontWindowOnly() throws {
+        let source = try vectorSource()
+
+        try expectEqual(occurrenceCount(of: "data-role=\"front-status-dot\"", in: source), 1)
+        try expectFalse(source.contains("back-status-dot"))
+        try expectFalse(source.contains("middle-status-dot"))
+    }
+
+    static func testMenuBarIconUsesWideAndNarrowFrontPanes() throws {
+        let source = try vectorSource()
         let rep = try menuBarBitmap(named: "MenuBarIcon@3x.png")
 
+        try expectEqual(occurrenceCount(of: "data-role=\"front-pane\"", in: source), 2)
+        try expectTrue(source.contains("id=\"wide-pane\""))
+        try expectTrue(source.contains("id=\"narrow-pane\""))
         try expectTrue(
-            opaquePixelCount(in: PixelRegion(x: 30...43, y: 30...43), bitmap: rep) <= 30,
-            "Expected the active tile interior to stay open"
+            opaquePixelCount(in: PixelRegion(x: 23...34, y: 32...38), bitmap: rep) >= 60,
+            "Expected one wide filled pane in the front window"
+        )
+        try expectTrue(
+            opaquePixelCount(in: PixelRegion(x: 40...43, y: 32...38), bitmap: rep) >= 20,
+            "Expected one narrow filled pane in the front window"
         )
     }
 
-    static func testMenuBarIconLeavesGridGuttersOpen() throws {
-        let rep = try menuBarBitmap(named: "MenuBarIcon@3x.png")
+    static func testMenuBarIconFillsMenuBarHeightAtRetinaScale() throws {
+        let rep = try menuBarBitmap(named: "MenuBarIcon@2x.png")
 
         try expectTrue(
-            opaquePixelCount(in: PixelRegion(x: 22...25, y: 6...45), bitmap: rep) <= 70,
-            "Expected the vertical gutter between H reference columns to stay open"
+            contentHeight(in: rep) >= 30,
+            "Expected the icon to use at least 30 of 36 vertical pixels"
         )
+    }
+
+    static func testMenuBarIconKeepsRetinaEdgesCrisp() throws {
+        let rep = try menuBarBitmap(named: "MenuBarIcon@2x.png")
+        let counts = alphaCounts(in: rep)
+
         try expectTrue(
-            opaquePixelCount(in: PixelRegion(x: 4...50, y: 25...26), bitmap: rep) <= 42,
-            "Expected the horizontal gutter between H reference rows to stay open"
+            counts.partial * 4 <= counts.solid * 3,
+            "Expected partial-alpha pixels to stay below 75% of solid pixels"
         )
     }
 
@@ -107,6 +108,15 @@ enum MenuBarIconAssetTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("SwitchTab/Resources")
+    }
+
+    private static func vectorSource() throws -> String {
+        let sourceURL = resourceRoot.appendingPathComponent("MenuBarIcon.svg")
+        return try String(contentsOf: sourceURL, encoding: .utf8)
+    }
+
+    private static func occurrenceCount(of value: String, in source: String) -> Int {
+        source.components(separatedBy: value).count - 1
     }
 
     private static func menuBarBitmap(named filename: String) throws -> NSBitmapImageRep {
@@ -129,6 +139,39 @@ enum MenuBarIconAssetTests {
             }
         }
         return count
+    }
+
+    private static func contentHeight(in bitmap: NSBitmapImageRep) -> Int {
+        var minimumY = bitmap.pixelsHigh
+        var maximumY = -1
+
+        for y in 0..<bitmap.pixelsHigh {
+            for x in 0..<bitmap.pixelsWide
+            where (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.01 {
+                minimumY = min(minimumY, y)
+                maximumY = max(maximumY, y)
+            }
+        }
+
+        return maximumY >= minimumY ? maximumY - minimumY + 1 : 0
+    }
+
+    private static func alphaCounts(in bitmap: NSBitmapImageRep) -> (solid: Int, partial: Int) {
+        var solid = 0
+        var partial = 0
+
+        for y in 0..<bitmap.pixelsHigh {
+            for x in 0..<bitmap.pixelsWide {
+                let alpha = bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0
+                if alpha >= 0.99 {
+                    solid += 1
+                } else if alpha > 0.01 {
+                    partial += 1
+                }
+            }
+        }
+
+        return (solid, partial)
     }
 
 }
