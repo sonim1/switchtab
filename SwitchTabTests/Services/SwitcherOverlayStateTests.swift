@@ -15,6 +15,8 @@ enum SwitcherOverlayStateTests {
         try testClosePolicyOnlyAllowsWindowMode()
         try testSwitchAccessibilityHintMatchesMode()
         try testSwitchAccessibilityLabelIncludesApplicationWindowCount()
+        try testApplicationMetadataOnlyShowsForSelection()
+        try testApplicationMetadataOnlyShowsMultipleWindowCount()
         try testApplicationModeIgnoresCloseSelected()
         try testQuitCommandNeedsCommandModifier()
         try testApplicationModeRequestsQuitWithoutDismissing()
@@ -278,6 +280,33 @@ enum SwitcherOverlayStateTests {
             ),
             "Safari"
         )
+    }
+
+    static func testApplicationMetadataOnlyShowsForSelection() throws {
+        let hidden = ApplicationSwitcherMetadataPolicy.presentation(
+            isSelected: false,
+            windowCountText: "3"
+        )
+        let selected = ApplicationSwitcherMetadataPolicy.presentation(
+            isSelected: true,
+            windowCountText: "3"
+        )
+
+        try expectEqual(hidden, .hidden)
+        try expectTrue(selected.showsTitle)
+        try expectEqual(selected.windowCountText, "3")
+    }
+
+    static func testApplicationMetadataOnlyShowsMultipleWindowCount() throws {
+        let inputs: [String?] = [nil, "unknown", "0", "1", "2", "7"]
+        let outputs = inputs.map {
+            ApplicationSwitcherMetadataPolicy.presentation(
+                isSelected: true,
+                windowCountText: $0
+            ).windowCountText
+        }
+
+        try expectEqual(outputs, [nil, nil, nil, nil, "2", "7"])
     }
 
     static func testApplicationModeIgnoresCloseSelected() throws {

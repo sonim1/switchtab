@@ -63,6 +63,7 @@ struct SwitcherIconStripView: View {
                             SwitcherWindowTile(
                                 item: item,
                                 index: index,
+                                gridColumnCount: gridColumns.count,
                                 isSelected: index == selectedIndex,
                                 mode: mode,
                                 showsCloseControl: showsCloseControl,
@@ -120,6 +121,7 @@ struct SwitcherIconStripView: View {
 private struct SwitcherWindowTile: View {
     let item: SwitcherListItem
     let index: Int
+    let gridColumnCount: Int
     let isSelected: Bool
     let mode: SwitcherMode
     let showsCloseControl: Bool
@@ -141,20 +143,6 @@ private struct SwitcherWindowTile: View {
                 onConfirm(item, index)
             } label: {
                 tileContent(for: item)
-                .padding(layoutMetrics.tileContentPadding)
-                .frame(
-                    width: layoutMetrics.tileSize.width,
-                    height: layoutMetrics.tileSize.height
-                )
-                .background(isSelected ? Color.accentColor.opacity(0.28) : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 7))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 7)
-                        .strokeBorder(
-                            isSelected ? Color.accentColor.opacity(0.95) : Color.clear,
-                            lineWidth: 2
-                        )
-                }
             }
             .buttonStyle(.plain)
             .accessibilityLabel(
@@ -200,29 +188,94 @@ private struct SwitcherWindowTile: View {
             titleHeader(for: item)
             icon(for: item)
         }
-    }
-
-    private func applicationContent(for item: SwitcherListItem) -> some View {
-        VStack(alignment: .center, spacing: layoutMetrics.tileContentSpacing) {
-            icon(for: item)
-            applicationMetadata(for: item)
+        .padding(layoutMetrics.tileContentPadding)
+        .frame(
+            width: layoutMetrics.tileSize.width,
+            height: layoutMetrics.tileSize.height
+        )
+        .background(isSelected ? Color.accentColor.opacity(0.28) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 7))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7)
+                .strokeBorder(
+                    isSelected ? Color.accentColor.opacity(0.95) : Color.clear,
+                    lineWidth: 2
+                )
         }
     }
 
-    private func applicationMetadata(for item: SwitcherListItem) -> some View {
-        return HStack(alignment: .center, spacing: 3) {
+    private func applicationContent(for item: SwitcherListItem) -> some View {
+        let metadata = ApplicationSwitcherMetadataPolicy.presentation(
+            isSelected: isSelected,
+            windowCountText: item.subtitle
+        )
+        let captionWidth = ApplicationSwitcherCaptionLayoutPolicy.width(
+            columnCount: gridColumnCount,
+            metrics: layoutMetrics
+        )
+        let captionAlignment = ApplicationSwitcherCaptionLayoutPolicy.alignment(
+            index: index,
+            columnCount: gridColumnCount
+        )
+
+        return VStack(alignment: .center, spacing: layoutMetrics.tileContentSpacing) {
+            applicationIconSelection(for: item)
+
+            Color.clear
+                .frame(height: layoutMetrics.captionHeight)
+                .overlay(alignment: swiftUIAlignment(for: captionAlignment)) {
+                    if metadata.showsTitle {
+                        applicationMetadata(
+                            for: item,
+                            windowCountText: metadata.windowCountText,
+                            width: captionWidth
+                        )
+                    }
+                }
+        }
+        .frame(
+            width: layoutMetrics.tileSize.width,
+            height: layoutMetrics.tileSize.height
+        )
+    }
+
+    private func applicationIconSelection(for item: SwitcherListItem) -> some View {
+        icon(for: item)
+            .frame(
+                width: layoutMetrics.selectionContainerSize.width,
+                height: layoutMetrics.selectionContainerSize.height
+            )
+            .background(isSelected ? Color.accentColor.opacity(0.28) : Color.clear)
+            .clipShape(
+                RoundedRectangle(cornerRadius: layoutMetrics.selectionCornerRadius)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: layoutMetrics.selectionCornerRadius)
+                    .strokeBorder(
+                        isSelected ? Color.accentColor.opacity(0.95) : Color.clear,
+                        lineWidth: 2
+                    )
+            }
+    }
+
+    private func applicationMetadata(
+        for item: SwitcherListItem,
+        windowCountText: String?,
+        width: CGFloat
+    ) -> some View {
+        HStack(alignment: .center, spacing: 3) {
             Text(item.title)
                 .font(.system(size: layoutMetrics.titleFontSize, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .center)
+                .layoutPriority(1)
 
-            if let windowCount = item.subtitle {
+            if let windowCountText {
                 HStack(alignment: .center, spacing: 2) {
                     Image(systemName: "rectangle.on.rectangle")
                         .font(.system(size: max(8, layoutMetrics.titleFontSize * 0.75)))
                         .accessibilityHidden(true)
-                    Text(windowCount)
+                    Text(windowCountText)
                 }
                 .font(.system(size: layoutMetrics.titleFontSize * 0.85))
                 .foregroundStyle(.secondary)
@@ -230,7 +283,20 @@ private struct SwitcherWindowTile: View {
                 .layoutPriority(1)
             }
         }
-        .frame(width: layoutMetrics.thumbnailSize.width)
+        .frame(width: width)
+    }
+
+    private func swiftUIAlignment(
+        for alignment: ApplicationSwitcherCaptionAlignment
+    ) -> Alignment {
+        switch alignment {
+        case .leading:
+            .leading
+        case .center:
+            .center
+        case .trailing:
+            .trailing
+        }
     }
 
     private var closeButton: some View {

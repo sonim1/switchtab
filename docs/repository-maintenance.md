@@ -1,6 +1,6 @@
 # Repository Maintenance
 
-Checked: 2026-07-30
+Checked: 2026-07-31
 
 ## Current Source Of Truth
 
@@ -23,8 +23,8 @@ Checked: 2026-07-30
 The checked-in app implements current-app window switching and an optional
 application switcher. `Replace macOS Cmd-Tab` defaults off; enabling it uses a
 dedicated Accessibility-backed EventTap and a separate application MRU. The
-application overlay shows compact icons with names, while window thumbnails and
-their Screen Recording path remain unchanged.
+application overlay shows compact icons with metadata only for the selected
+app, while window thumbnails and their Screen Recording path remain unchanged.
 
 No `gbrain` or similarly named brain/context file was found in the repository
 scan.
