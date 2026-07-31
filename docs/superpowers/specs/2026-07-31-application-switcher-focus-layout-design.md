@@ -68,15 +68,18 @@ Command 키 릴리즈와 마우스 클릭은 이미 오버레이의 공통 확�
 수정한다.
 
 현재 구현은 대상 `NSRunningApplication`에 `.activateAllWindows` 활성화만
-요청한다. 하지만 최신 AppKit의 cooperative activation은 현재 활성 앱이
-대상 앱에 활성화 권한을 넘긴 뒤 대상 앱이 활성화를 요청해야 한다.
+요청한다. SwitchTab은 non-activating 패널이므로 자체 `NSApp`에서 양도할 수
+없다. 대신 최신 AppKit의 coordinated activation API에 실제 frontmost 앱을
+출처로 명시해 대상 앱이 그 활성 상태를 이어받도록 요청한다.
 
 확정 순서는 다음과 같다.
 
 1. 오버레이를 닫고 Event Tap과 이벤트 모니터를 제거한다.
 2. 프로세스 ID로 종료되지 않은 대상 앱을 찾는다.
-3. `NSApp.yieldActivation(to: target)`을 호출한다.
-4. `target.activate(options: .activateAllWindows)`를 호출한다.
+3. `NSWorkspace.shared.frontmostApplication`의 프로세스 ID를 캡처한다.
+4. `target.activate(from: frontmostApplication, options: .activateAllWindows)`를
+   호출한다. frontmost 앱을 찾지 못했거나 대상과 같으면 일반
+   `target.activate(options: .activateAllWindows)`로 폴백한다.
 5. 활성화 요청이 성공한 경우에만 앱 MRU를 기록한다.
 
 기존 앱 식별 모델은 유지한다. AppKit이 대상 앱의 main/key 창을 앞으로
@@ -102,7 +105,8 @@ Command 키 릴리즈와 마우스 클릭은 이미 오버레이의 공통 확�
 - 선택 이동과 비동기 창 개수 갱신 전후에 앱 타일과 패널 높이가 고정된다.
 - 아이콘 96pt, 아이콘 주위 동일한 4pt 패딩, 앱 사이 4pt 간격, 아이콘만
   덮는 radius 26pt 선택 컨테이너를 사용한다.
-- 활성화 드라이버 호출 순서가 `yield -> activate(.activateAllWindows)`다.
+- 활성화 드라이버가 실제 frontmost 앱을 coordinated activation 출처로
+  전달하고 `.activateAllWindows`를 요청한다.
 - Command 릴리즈와 마우스 확정이 같은 활성화 coordinator에 도달한다.
 - 활성화 요청 성공 후에만 MRU를 기록한다.
 - 현재 앱의 창 전환 레이아웃과 동작은 바뀌지 않는다.

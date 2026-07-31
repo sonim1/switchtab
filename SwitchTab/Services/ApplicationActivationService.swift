@@ -149,14 +149,14 @@ public enum WorkspaceApplicationTerminationPolicy {
 protocol ApplicationActivationTarget: AnyObject {
     var isTerminated: Bool { get }
     @MainActor
-    func yieldActivation()
-    @MainActor
-    func activateAllWindows() -> Bool
+    func activateAllWindows(from processIdentifier: Int?) -> Bool
 }
 
 protocol ApplicationActivationTargetProviding {
     @MainActor
     func target(processIdentifier: Int) -> (any ApplicationActivationTarget)?
+    @MainActor
+    func frontmostApplicationProcessIdentifier() -> Int?
 }
 
 struct NSRunningApplicationActivationTargetProvider: ApplicationActivationTargetProviding {
@@ -168,6 +168,10 @@ struct NSRunningApplicationActivationTargetProvider: ApplicationActivationTarget
         }
 
         return NSRunningApplicationActivationTarget(application: application)
+    }
+
+    func frontmostApplicationProcessIdentifier() -> Int? {
+        NSWorkspace.shared.frontmostApplication.map { Int($0.processIdentifier) }
     }
 }
 
@@ -182,12 +186,19 @@ final class NSRunningApplicationActivationTarget: ApplicationActivationTarget {
         application.isTerminated
     }
 
-    func yieldActivation() {
-        NSApp.yieldActivation(to: application)
-    }
+    func activateAllWindows(from processIdentifier: Int?) -> Bool {
+        if let processIdentifier,
+           processIdentifier != Int(application.processIdentifier),
+           let frontmostApplication = NSRunningApplication(
+               processIdentifier: pid_t(processIdentifier)
+           ) {
+            return application.activate(
+                from: frontmostApplication,
+                options: .activateAllWindows
+            )
+        }
 
-    func activateAllWindows() -> Bool {
-        application.activate(options: .activateAllWindows)
+        return application.activate(options: .activateAllWindows)
     }
 }
 
@@ -207,8 +218,9 @@ struct NSRunningApplicationActivator: ApplicationActivating {
             return false
         }
 
-        target.yieldActivation()
-        return target.activateAllWindows()
+        return target.activateAllWindows(
+            from: targetProvider.frontmostApplicationProcessIdentifier()
+        )
     }
 }
 

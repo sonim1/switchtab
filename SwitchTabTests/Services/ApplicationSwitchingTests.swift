@@ -26,10 +26,11 @@ enum ApplicationSwitchingTests {
         try testTerminationServiceReportsAcceptedAndRejectedRequests()
         try testTerminationIdentityUsesStableBundleOrProcessIdentifier()
         try testTerminationIdentityRejectsNonRegularOrUnterminatedSnapshots()
-        try testSystemActivatorYieldsBeforeActivatingAllWindows()
-        try testSystemActivatorRejectsTerminatedTargetBeforeYield()
+        try testSystemActivatorUsesFrontmostApplicationAsActivationSource()
+        try testSystemActivatorRejectsTerminatedTargetBeforeActivation()
         try testSystemActivatorRejectsMissingTarget()
-        try testSystemActivatorReturnsActivationFailureAfterYield()
+        try testSystemActivatorFallsBackWhenFrontmostApplicationIsMissing()
+        try testSystemActivatorReturnsCoordinatedActivationFailure()
         try testActivationSuccessRecordsAndFlushesRecencyOnce()
         try testActivationFailureDoesNotRecordOrFlushRecency()
         try testWorkspaceActivationObserverRecordsExternalRegularActivation()
@@ -658,19 +659,22 @@ enum ApplicationSwitchingTests {
         )
     }
 
-    static func testSystemActivatorYieldsBeforeActivatingAllWindows() throws {
+    static func testSystemActivatorUsesFrontmostApplicationAsActivationSource() throws {
         let target = FakeApplicationActivationTarget(activationResult: true)
-        let provider = FakeApplicationActivationTargetProvider(target: target)
+        let provider = FakeApplicationActivationTargetProvider(
+            target: target,
+            frontmostProcessIdentifier: 73
+        )
         let activator = NSRunningApplicationActivator(targetProvider: provider)
 
         let result = activator.activate(processIdentifier: 404)
 
         try expectTrue(result)
         try expectEqual(provider.processIdentifiers, [404])
-        try expectEqual(target.events, ["yield", "activateAllWindows"])
+        try expectEqual(target.events, ["activateAllWindowsFrom:73"])
     }
 
-    static func testSystemActivatorRejectsTerminatedTargetBeforeYield() throws {
+    static func testSystemActivatorRejectsTerminatedTargetBeforeActivation() throws {
         let target = FakeApplicationActivationTarget(
             isTerminated: true,
             activationResult: true
@@ -691,14 +695,27 @@ enum ApplicationSwitchingTests {
         try expectEqual(provider.processIdentifiers, [406])
     }
 
-    static func testSystemActivatorReturnsActivationFailureAfterYield() throws {
+    static func testSystemActivatorFallsBackWhenFrontmostApplicationIsMissing() throws {
+        let target = FakeApplicationActivationTarget(activationResult: true)
+        let activator = NSRunningApplicationActivator(
+            targetProvider: FakeApplicationActivationTargetProvider(
+                target: target,
+                frontmostProcessIdentifier: nil
+            )
+        )
+
+        try expectTrue(activator.activate(processIdentifier: 408))
+        try expectEqual(target.events, ["activateAllWindows"])
+    }
+
+    static func testSystemActivatorReturnsCoordinatedActivationFailure() throws {
         let target = FakeApplicationActivationTarget(activationResult: false)
         let activator = NSRunningApplicationActivator(
             targetProvider: FakeApplicationActivationTargetProvider(target: target)
         )
 
         try expectTrue(!activator.activate(processIdentifier: 407))
-        try expectEqual(target.events, ["yield", "activateAllWindows"])
+        try expectEqual(target.events, ["activateAllWindowsFrom:73"])
     }
 
     static func testActivationSuccessRecordsAndFlushesRecencyOnce() throws {
@@ -904,27 +921,36 @@ private final class FakeApplicationActivationTarget: ApplicationActivationTarget
         self.activationResult = activationResult
     }
 
-    func yieldActivation() {
-        events.append("yield")
-    }
-
-    func activateAllWindows() -> Bool {
-        events.append("activateAllWindows")
+    func activateAllWindows(from processIdentifier: Int?) -> Bool {
+        if let processIdentifier {
+            events.append("activateAllWindowsFrom:\(processIdentifier)")
+        } else {
+            events.append("activateAllWindows")
+        }
         return activationResult
     }
 }
 
 private final class FakeApplicationActivationTargetProvider: ApplicationActivationTargetProviding {
     let targetValue: (any ApplicationActivationTarget)?
+    let frontmostProcessIdentifier: Int?
     private(set) var processIdentifiers: [Int] = []
 
-    init(target: (any ApplicationActivationTarget)?) {
+    init(
+        target: (any ApplicationActivationTarget)?,
+        frontmostProcessIdentifier: Int? = 73
+    ) {
         self.targetValue = target
+        self.frontmostProcessIdentifier = frontmostProcessIdentifier
     }
 
     func target(processIdentifier: Int) -> (any ApplicationActivationTarget)? {
         processIdentifiers.append(processIdentifier)
         return targetValue
+    }
+
+    func frontmostApplicationProcessIdentifier() -> Int? {
+        frontmostProcessIdentifier
     }
 }
 

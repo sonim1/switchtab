@@ -4,7 +4,7 @@
 
 **목표:** 선택된 앱만 고정 높이 캡션을 표시하는 촘촘한 앱 스위처를 만들고, Command 키 릴리즈와 마우스 클릭 모두 선택 앱의 창을 실제로 앞으로 가져오게 한다.
 
-**구조:** `SwitcherOverlayState` 옆에 순수 메타데이터 표시 정책을 두고, `SwitcherOverlayLayoutMetrics`가 앱 타일의 모든 고정 치수를 제공한다. SwiftUI 타일은 창 모드의 기존 렌더링을 그대로 유지하면서 앱 모드에서 아이콘 선택 컨테이너와 캡션을 분리한다. 활성화 경계는 대상 조회, cooperative activation 양도, `.activateAllWindows` 요청을 작은 AppKit 어댑터에서 순서대로 수행한다.
+**구조:** `SwitcherOverlayState` 옆에 순수 메타데이터 표시 정책을 두고, `SwitcherOverlayLayoutMetrics`가 앱 타일의 모든 고정 치수를 제공한다. SwiftUI 타일은 창 모드의 기존 렌더링을 그대로 유지하면서 앱 모드에서 아이콘 선택 컨테이너와 캡션을 분리한다. 활성화 경계는 대상과 실제 frontmost 앱을 조회하고, coordinated activation의 출처를 명시한 `.activateAllWindows` 요청을 작은 AppKit 어댑터에서 수행한다.
 
 **기술:** Swift 5.10+, SwiftUI, AppKit, XCTest 호환 커스텀 테스트 러너, Xcode macOS 앱 타깃
 
@@ -321,7 +321,7 @@ rtk git commit -m "feat: focus application switcher metadata"
 
 ---
 
-### 작업 4: cooperative activation 순서를 테스트로 재현하고 수정
+### 작업 4: coordinated activation 출처를 테스트로 재현하고 수정
 
 **파일:**
 
@@ -333,23 +333,26 @@ rtk git commit -m "feat: focus application switcher metadata"
 실제 `NSRunningApplication`을 테스트에서 만들지 않도록 내부 대상 경계를 사용한다. 가짜 대상은 호출 순서를 기록한다.
 
 ```swift
-static func testSystemActivatorYieldsBeforeActivatingAllWindows() throws {
+static func testSystemActivatorUsesFrontmostApplicationAsActivationSource() throws {
     let target = FakeApplicationActivationTarget(activationResult: true)
-    let provider = FakeApplicationActivationTargetProvider(target: target)
+    let provider = FakeApplicationActivationTargetProvider(
+        target: target,
+        frontmostProcessIdentifier: 73
+    )
     let activator = NSRunningApplicationActivator(targetProvider: provider)
 
     let result = activator.activate(processIdentifier: 404)
 
     try expectTrue(result)
     try expectEqual(provider.processIdentifiers, [404])
-    try expectEqual(target.events, ["yield", "activateAllWindows"])
+    try expectEqual(target.events, ["activateAllWindowsFrom:73"])
 }
 ```
 
 종료된 대상은 양도나 활성화를 호출하지 않고 실패해야 한다.
 
 ```swift
-static func testSystemActivatorRejectsTerminatedTargetBeforeYield() throws {
+static func testSystemActivatorRejectsTerminatedTargetBeforeActivation() throws {
     let target = FakeApplicationActivationTarget(
         isTerminated: true,
         activationResult: true
@@ -378,16 +381,16 @@ static func testSystemActivatorRejectsTerminatedTargetBeforeYield() throws {
 ```swift
 protocol ApplicationActivationTarget: AnyObject {
     var isTerminated: Bool { get }
-    func yieldActivation()
-    func activateAllWindows() -> Bool
+    func activateAllWindows(from processIdentifier: Int?) -> Bool
 }
 
 protocol ApplicationActivationTargetProviding {
     func target(processIdentifier: Int) -> (any ApplicationActivationTarget)?
+    func frontmostApplicationProcessIdentifier() -> Int?
 }
 ```
 
-시스템 래퍼는 같은 `NSRunningApplication` 인스턴스에 대해 cooperative handoff 후 전체 창 활성화를 호출한다.
+시스템 래퍼는 frontmost 프로세스를 실제 AppKit 출처로 복원해 전체 창 활성화를 호출한다.
 
 ```swift
 final class NSRunningApplicationActivationTarget: ApplicationActivationTarget {
@@ -399,12 +402,14 @@ final class NSRunningApplicationActivationTarget: ApplicationActivationTarget {
 
     var isTerminated: Bool { application.isTerminated }
 
-    func yieldActivation() {
-        NSApp.yieldActivation(to: application)
-    }
+    func activateAllWindows(from processIdentifier: Int?) -> Bool {
+        if let processIdentifier,
+           processIdentifier != Int(application.processIdentifier),
+           let source = NSRunningApplication(processIdentifier: pid_t(processIdentifier)) {
+            return application.activate(from: source, options: .activateAllWindows)
+        }
 
-    func activateAllWindows() -> Bool {
-        application.activate(options: .activateAllWindows)
+        return application.activate(options: .activateAllWindows)
     }
 }
 ```
@@ -428,8 +433,9 @@ struct NSRunningApplicationActivator: ApplicationActivating {
             return false
         }
 
-        target.yieldActivation()
-        return target.activateAllWindows()
+        return target.activateAllWindows(
+            from: targetProvider.frontmostApplicationProcessIdentifier()
+        )
     }
 }
 ```
@@ -445,7 +451,7 @@ rtk swift test
 rtk xcodebuild -project SwitchTab.xcodeproj -scheme SwitchTab -configuration Debug -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO build
 ```
 
-예상: `yield → activateAllWindows → record → flush` 순서, 실패 시 MRU 미기록, 전체 테스트 통과, 앱 빌드 성공.
+예상: `frontmost source → activateAllWindows → record → flush` 순서, 실패 시 MRU 미기록, 전체 테스트 통과, 앱 빌드 성공.
 
 - [ ] **5단계: 커밋**
 

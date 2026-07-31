@@ -84,8 +84,8 @@ Keyboard behavior:
 
 Completion:
 - Command release and direct mouse selection use the same confirmation path.
-- The active app yields activation to the selected process before that process
-  is activated with all of its windows.
+- The selected process requests coordinated activation from the actual
+  frontmost application and brings all of its windows forward.
 - Successful activation records the stable application identifier in application
   MRU; an unavailable process does not write history.
 - Overlay closes after confirmation.

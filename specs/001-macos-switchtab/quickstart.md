@@ -217,8 +217,8 @@ Evidence path:
   after the app's didTerminate notification.
 - **Expected:** Workspace activation while the trigger modifier is held does
   not cancel the overlay. Releasing Command confirms the highlighted
-  application through cooperative `yieldActivation` followed by
-  `.activateAllWindows`; that application becomes frontmost, and no window
+  application through coordinated `activate(from:options:)` using the actual
+  frontmost app and `.activateAllWindows`; that application becomes frontmost, and no window
   thumbnail or close action is required. Clicking an application uses the same
   confirmation and activation path. Cmd+Q requests normal termination; the tile remains for a save
   dialog or rejected request and is removed only after didTerminate while the
