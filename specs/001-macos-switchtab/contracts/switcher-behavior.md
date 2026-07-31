@@ -61,6 +61,8 @@ Visible result:
   counts stay hidden.
 - Every tile reserves the same caption height, so selection movement and
   asynchronous count refreshes do not resize the panel.
+- The selected caption uses up to 240 points and aligns toward the grid interior
+  at edge columns, so long names tail-truncate instead of clipping at the panel.
 - The selected icon has a 104-point container around its 96-point icon, equal
   four-point insets, and a 26-point corner radius. Its background and outline
   do not extend behind the caption.

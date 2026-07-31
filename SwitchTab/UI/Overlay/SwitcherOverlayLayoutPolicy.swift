@@ -149,6 +149,45 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
     }
 }
 
+public enum ApplicationSwitcherCaptionAlignment: Equatable, Sendable {
+    case leading
+    case center
+    case trailing
+}
+
+public enum ApplicationSwitcherCaptionLayoutPolicy {
+    public static func width(
+        columnCount: Int,
+        metrics: SwitcherOverlayLayoutMetrics
+    ) -> CGFloat {
+        guard columnCount > 1 else {
+            return metrics.captionMaxWidth
+        }
+
+        let gridSpan = CGFloat(columnCount) * metrics.tileSize.width
+            + CGFloat(columnCount - 1) * metrics.gridSpacing
+        return min(metrics.captionMaxWidth, gridSpan)
+    }
+
+    public static func alignment(
+        index: Int,
+        columnCount: Int
+    ) -> ApplicationSwitcherCaptionAlignment {
+        guard columnCount > 1 else {
+            return .center
+        }
+
+        switch index % columnCount {
+        case 0:
+            return .leading
+        case columnCount - 1:
+            return .trailing
+        default:
+            return .center
+        }
+    }
+}
+
 public enum SwitcherOverlayLayoutPolicy {
     public static let defaultSize = CGSize(width: 560, height: 420)
 
@@ -276,7 +315,12 @@ public enum SwitcherOverlayLayoutPolicy {
         metrics: SwitcherOverlayLayoutMetrics
     ) -> CGSize {
         let availableWidth = max(180, screenSize.width - screenHorizontalMargin)
-        let width = min(iconGridContentWidth(columnCount: columnCount, metrics: metrics), availableWidth)
+        let gridWidth = iconGridContentWidth(columnCount: columnCount, metrics: metrics)
+        let captionSafeWidth = metrics.captionMaxWidth + metrics.gridPadding
+        let desiredWidth = columnCount == 1 && metrics.captionHeight > 0
+            ? max(gridWidth, captionSafeWidth)
+            : gridWidth
+        let width = min(desiredWidth, availableWidth)
         let height = min(
             iconGridContentHeight(rowCount: 1, metrics: metrics),
             availableScreenHeight(screenSize: screenSize)

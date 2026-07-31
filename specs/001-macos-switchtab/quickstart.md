@@ -177,8 +177,9 @@ Evidence path:
   while only the selected icon has a centered name below it. A selected app
   shows the window glyph/value only for a count of two or more. The 104-point
   selection container covers the 96-point icon only, uses equal 4-point insets
-  and a 26-point radius, and never covers the caption. The native switcher is
-  not visible.
+  and a 26-point radius, and never covers the caption. Long selected names use
+  up to 240 points and tail-truncate without clipping at a panel edge. The
+  native switcher is not visible.
   Confirm that a fully visible one-, two-, or three-row grid does not move under
   selection, while a grid with actual row overflow scrolls only as needed.
 - **Actual:** `[record during manual QA]`

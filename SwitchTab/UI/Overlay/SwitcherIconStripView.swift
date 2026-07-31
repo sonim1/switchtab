@@ -63,6 +63,7 @@ struct SwitcherIconStripView: View {
                             SwitcherWindowTile(
                                 item: item,
                                 index: index,
+                                gridColumnCount: gridColumns.count,
                                 isSelected: index == selectedIndex,
                                 mode: mode,
                                 showsCloseControl: showsCloseControl,
@@ -120,6 +121,7 @@ struct SwitcherIconStripView: View {
 private struct SwitcherWindowTile: View {
     let item: SwitcherListItem
     let index: Int
+    let gridColumnCount: Int
     let isSelected: Bool
     let mode: SwitcherMode
     let showsCloseControl: Bool
@@ -207,17 +209,26 @@ private struct SwitcherWindowTile: View {
             isSelected: isSelected,
             windowCountText: item.subtitle
         )
+        let captionWidth = ApplicationSwitcherCaptionLayoutPolicy.width(
+            columnCount: gridColumnCount,
+            metrics: layoutMetrics
+        )
+        let captionAlignment = ApplicationSwitcherCaptionLayoutPolicy.alignment(
+            index: index,
+            columnCount: gridColumnCount
+        )
 
         return VStack(alignment: .center, spacing: layoutMetrics.tileContentSpacing) {
             applicationIconSelection(for: item)
 
             Color.clear
                 .frame(height: layoutMetrics.captionHeight)
-                .overlay {
+                .overlay(alignment: swiftUIAlignment(for: captionAlignment)) {
                     if metadata.showsTitle {
                         applicationMetadata(
                             for: item,
-                            windowCountText: metadata.windowCountText
+                            windowCountText: metadata.windowCountText,
+                            width: captionWidth
                         )
                     }
                 }
@@ -249,7 +260,8 @@ private struct SwitcherWindowTile: View {
 
     private func applicationMetadata(
         for item: SwitcherListItem,
-        windowCountText: String?
+        windowCountText: String?,
+        width: CGFloat
     ) -> some View {
         HStack(alignment: .center, spacing: 3) {
             Text(item.title)
@@ -271,7 +283,20 @@ private struct SwitcherWindowTile: View {
                 .layoutPriority(1)
             }
         }
-        .frame(width: layoutMetrics.captionMaxWidth)
+        .frame(width: width)
+    }
+
+    private func swiftUIAlignment(
+        for alignment: ApplicationSwitcherCaptionAlignment
+    ) -> Alignment {
+        switch alignment {
+        case .leading:
+            .leading
+        case .center:
+            .center
+        case .trailing:
+            .trailing
+        }
     }
 
     private var closeButton: some View {
