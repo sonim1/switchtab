@@ -540,4 +540,3 @@ rtk git status --short --branch
 - [ ] **5단계: 자동 릴리스와 배포 후 검증**
 
 main push가 만든 annotated `v1.1.4` 태그와 `release.yml` 실행을 확인한다. GitHub Release, notarized DMG, checksum/manifest, Sparkle appcast, 공개 다운로드 URL, Homebrew 연동 결과를 저장소 계약에 따라 검증한다. 실패하면 원인과 재시도 가능한 안전 단계만 수행하고, 기존 릴리스 자산을 덮어쓰지 않는다.
-
