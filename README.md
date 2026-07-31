@@ -41,6 +41,16 @@ application icons or names. If Cmd-Tab interception is unavailable, SwitchTab
 keeps the setting saved, shows recovery guidance, and leaves native Cmd-Tab
 working.
 
+## Free Forever
+
+SwitchTab is free, and it stays free. There are no ads, no in-app purchases, no
+subscription, and no paid Pro tier — every feature is available to everyone,
+with nothing held back behind a paywall.
+
+The app bundles no advertising SDK and has no third-party runtime dependency
+other than Sparkle, which is present only in the direct-distribution build so it
+can deliver updates.
+
 ## Requirements
 
 - macOS 14.0 or later
