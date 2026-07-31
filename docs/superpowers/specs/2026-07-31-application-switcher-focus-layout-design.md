@@ -1,132 +1,120 @@
-# Application Switcher Focus and Compact Layout Design
+# 앱 스위처 포커스 및 컴팩트 레이아웃 설계
 
-**Date:** 2026-07-31
-**Status:** Approved for implementation
+**날짜:** 2026-07-31  
+**상태:** 구현 승인
 
-## Goal
+## 목표
 
-Make the optional Cmd-Tab replacement activate the selected application's
-windows reliably from both Command release and mouse confirmation. Tighten the
-application overlay so only the selected app shows metadata, without changing
-panel height as selection moves.
+선택한 앱을 Command 키 릴리즈와 마우스 클릭 모두에서 안정적으로
+활성화하고 해당 앱의 창을 앞으로 가져온다. 앱 스위처는 선택된 앱만
+메타데이터를 보여주도록 압축하되, 선택이 이동할 때 패널 높이는 변하지
+않아야 한다.
 
-## Scope
+## 범위
 
-This change affects application-switching mode only. Current-application window
-switching keeps its existing title headers, thumbnails, close controls,
-keyboard behavior, and layout metrics.
+이 변경은 앱 전환 모드에만 적용한다. 현재 앱의 창 전환 모드는 기존 제목,
+미리보기, 닫기 컨트롤, 키보드 동작, 레이아웃 수치를 그대로 유지한다.
 
-## Application Tile Presentation
+## 앱 타일 표시
 
-- Every running regular application keeps its large application icon.
-- Unselected applications show only their icon.
-- The selected application shows its title directly below and horizontally
-  centered on its own icon.
-- Every tile reserves one minimal, fixed-height caption line. Hiding an
-  unselected title changes visibility only; it never changes tile or panel
-  geometry.
-- The caption uses a single line with approximately 1 point of separation from
-  the icon selection area and no independent vertical padding.
-- A known standard-window count greater than one adds the existing window glyph
-  and number beside the selected title.
-- Counts of zero or one, and unavailable counts, show the title alone.
-- A long selected title may extend beyond the icon width without affecting grid
-  layout. It remains a single line and truncates only when the available panel
-  boundary cannot contain it.
+- 실행 중인 일반 앱은 모두 큰 앱 아이콘을 유지한다.
+- 선택되지 않은 앱은 아이콘만 표시한다.
+- 선택된 앱만 해당 아이콘 바로 아래 중앙에 앱 이름을 표시한다.
+- 모든 타일은 최소 높이의 고정 캡션 한 줄을 확보한다. 선택되지 않은 앱의
+  제목은 보이지만 않을 뿐 타일이나 패널 크기를 바꾸지 않는다.
+- 캡션은 아이콘 선택 영역에서 약 1pt 떨어지며 별도의 위아래 패딩을 두지
+  않는다.
+- 표준 창 개수가 2개 이상일 때만 선택된 앱 이름 옆에 창 아이콘과 숫자를
+  표시한다.
+- 창 개수가 0개, 1개 또는 알 수 없는 경우 앱 이름만 표시한다.
+- 긴 앱 이름은 그리드 배치에 영향을 주지 않으면서 아이콘 폭보다 넓게
+  표시할 수 있다. 한 줄을 유지하며 패널 경계 안에서도 담을 수 없을 때만
+  말줄임표를 사용한다.
 
-## Geometry and Visual Treatment
+## 크기와 시각 처리
 
-At scale 1, application icons remain 96 points. The icon selection container is
-104 by 104 points, providing equal 4-point padding around the icon. Application
-grid spacing becomes 4 points. The caption line is approximately 14 points
-high. All values continue to follow the existing continuous overlay-size scale.
+기본 배율에서 앱 아이콘은 96pt를 유지한다. 아이콘 선택 컨테이너는
+104×104pt이며 아이콘 주위에 동일한 4pt 패딩을 둔다. 앱 사이 간격은
+4pt로 줄이고 캡션 줄 높이는 약 14pt로 유지한다. 모든 값은 기존 오버레이
+크기 슬라이더의 연속 배율을 따른다.
 
-The selected fill and blue outline cover only the icon selection container;
-they never extend behind the caption. The app icon uses its native visual
-corner treatment. The selection container uses a 26-point radius around the
-96-point icon, matching the icon's approximately 22-point radius plus its
-4-point inset so the two curves remain visually concentric.
+선택 배경과 파란 아웃라인은 아이콘 선택 컨테이너만 덮으며 캡션 뒤까지
+확장하지 않는다. 앱 아이콘의 시각적 radius는 약 22pt다. 선택 컨테이너는
+아이콘보다 사방으로 4pt 크므로 radius를 26pt로 사용해 두 곡선이 동심으로
+보이게 한다.
 
-The panel retains SwitchTab's native dark blur material and compact inset. The
-attached native Cmd-Tab reference informs icon scale, dense horizontal rhythm,
-selected-title placement, and panel balance. It does not replace SwitchTab's
-approved blue selection treatment, and application-owned notification badges
-remain distinct from SwitchTab's window-count metadata.
+패널은 SwitchTab의 어두운 네이티브 blur 재질과 컴팩트 inset을 유지한다.
+첨부된 기본 Cmd-Tab 참고 이미지는 아이콘 크기, 촘촘한 좌우 리듬, 선택된
+앱의 제목 위치, 패널 균형에 반영한다. 승인된 파란 선택 표현은 유지하며,
+앱 자체 알림 배지는 SwitchTab의 창 개수 메타데이터와 구분한다.
 
-## Selection and Metadata Flow
+## 선택 및 메타데이터 흐름
 
-`SwitcherOverlayState` remains the source of the selected index. Application
-tiles derive three independent presentation decisions from the current session:
+`SwitcherOverlayState`가 선택 인덱스의 단일 기준이다. 앱 타일은 현재
+세션에서 다음 세 가지를 독립적으로 계산한다.
 
-1. whether the icon selection container is highlighted;
-2. whether the title is visible;
-3. whether a window-count glyph and number are visible.
+1. 아이콘 선택 컨테이너를 강조할지 여부
+2. 앱 이름을 표시할지 여부
+3. 창 아이콘과 개수를 표시할지 여부
 
-Asynchronous Accessibility window counts may change selected caption content,
-but they do not trigger a new layout size. Hover, Tab, Shift-Tab, and arrow-key
-selection all use the same rules.
+Accessibility에서 비동기로 창 개수가 도착하면 선택된 캡션 내용만 바뀐다.
+레이아웃 크기는 다시 계산하지 않는다. hover, Tab, Shift-Tab, 방향키 선택은
+모두 같은 표시 규칙을 사용한다.
 
-## Application Activation
+## 앱 활성화
 
-Both Command release and mouse click already converge on the overlay's
-confirmation callback. The fix stays in their shared application activation
-boundary rather than adding input-specific behavior.
+Command 키 릴리즈와 마우스 클릭은 이미 오버레이의 공통 확정 콜백으로
+합류한다. 따라서 입력별 우회 처리를 추가하지 않고 공통 앱 활성화 경계를
+수정한다.
 
-The current implementation asks the target `NSRunningApplication` to activate
-with `.activateAllWindows`, but it does not first transfer activation context
-from SwitchTab. Modern AppKit cooperative activation requires the active app to
-yield to the target before the target requests activation.
+현재 구현은 대상 `NSRunningApplication`에 `.activateAllWindows` 활성화만
+요청한다. 하지만 최신 AppKit의 cooperative activation은 현재 활성 앱이
+대상 앱에 활성화 권한을 넘긴 뒤 대상 앱이 활성화를 요청해야 한다.
 
-The confirmation sequence is:
+확정 순서는 다음과 같다.
 
-1. Dismiss the overlay and remove its Event Tap and monitors.
-2. Resolve the non-terminated target by process identifier.
-3. Call `NSApp.yieldActivation(to: target)`.
-4. Call `target.activate(options: .activateAllWindows)`.
-5. Record application MRU only when the activation request succeeds.
+1. 오버레이를 닫고 Event Tap과 이벤트 모니터를 제거한다.
+2. 프로세스 ID로 종료되지 않은 대상 앱을 찾는다.
+3. `NSApp.yieldActivation(to: target)`을 호출한다.
+4. `target.activate(options: .activateAllWindows)`를 호출한다.
+5. 활성화 요청이 성공한 경우에만 앱 MRU를 기록한다.
 
-This keeps the existing application identity model and makes AppKit bring the
-target application's main/key windows forward. It avoids the deprecated
-`activateIgnoringOtherApps` option and does not add polling or synthetic mouse
-or keyboard input.
+기존 앱 식별 모델은 유지한다. AppKit이 대상 앱의 main/key 창을 앞으로
+가져오게 하며, deprecated된 `activateIgnoringOtherApps`, polling, 합성 마우스
+또는 키보드 입력은 사용하지 않는다.
 
-## Error Handling
+## 오류 처리
 
-- A missing or terminated target returns `unavailableTarget` and does not write
-  application MRU.
-- A rejected activation request returns `unavailableTarget` and does not write
-  application MRU.
-- An unavailable window count leaves the selected title visible without count
-  metadata.
-- A stale asynchronous count update remains guarded by presentation identity.
-- Application activation failure does not affect current-app window switching.
+- 대상 앱을 찾을 수 없거나 이미 종료된 경우 `unavailableTarget`을 반환하고
+  앱 MRU를 기록하지 않는다.
+- 활성화 요청이 거부된 경우 `unavailableTarget`을 반환하고 앱 MRU를
+  기록하지 않는다.
+- 창 개수를 가져오지 못해도 선택된 앱 이름은 그대로 표시한다.
+- 오래된 비동기 창 개수 응답은 기존 presentation ID 검사를 유지한다.
+- 앱 활성화 실패가 현재 앱의 창 전환 기능에 영향을 주지 않는다.
 
-## Verification
+## 검증
 
-Automated tests will cover:
+자동화 테스트는 다음을 확인한다.
 
-- titles visible only for the selected application;
-- window count hidden for zero, one, and unknown, and visible for two or more;
-- fixed application tile and panel height across selection changes and async
-  count updates;
-- 96-point icon, equal 4-point icon padding, 4-point grid spacing, and the
-  icon-only 26-point-radius selection container;
-- the activation driver sequence `yield -> activate(.activateAllWindows)`;
-- both Command-release and mouse-confirm paths reaching the same activation
-  coordinator;
-- MRU writes only after a successful activation request;
-- unchanged current-app window-mode geometry and behavior.
+- 선택된 앱만 제목을 표시한다.
+- 창 개수가 0개, 1개, 알 수 없음이면 숫자를 숨기고 2개 이상이면 표시한다.
+- 선택 이동과 비동기 창 개수 갱신 전후에 앱 타일과 패널 높이가 고정된다.
+- 아이콘 96pt, 아이콘 주위 동일한 4pt 패딩, 앱 사이 4pt 간격, 아이콘만
+  덮는 radius 26pt 선택 컨테이너를 사용한다.
+- 활성화 드라이버 호출 순서가 `yield -> activate(.activateAllWindows)`다.
+- Command 릴리즈와 마우스 확정이 같은 활성화 coordinator에 도달한다.
+- 활성화 요청 성공 후에만 MRU를 기록한다.
+- 현재 앱의 창 전환 레이아웃과 동작은 바뀌지 않는다.
 
-Live macOS acceptance will use at least Finder, Safari, and TextEdit. It will
-verify forward and reverse Cmd-Tab selection, Command release, direct mouse
-selection, hidden/minimized targets where available, selected/frontmost app
-identity, compact visual geometry, window-count visibility, and unchanged
-current-app window switching.
+실제 macOS 검증은 Finder, Safari, TextEdit를 최소 대상으로 사용한다.
+정방향/역방향 Cmd-Tab 선택, Command 릴리즈, 직접 마우스 선택, 가능한 경우
+숨김/최소화된 대상, 선택된 앱과 실제 frontmost 앱의 일치, 컴팩트 시각
+레이아웃, 창 개수 표시, 기존 현재 앱 창 전환 동작을 확인한다.
 
-## Release
+## 릴리즈
 
-Implementation starts from the latest `origin/main` in an isolated worktree so
-the user's existing dirty-worktree changes remain untouched. After automated
-and live verification, the repository release workflow will create the next
-patch version, update release metadata, publish the branch and pull request,
-and complete the configured release checks.
+사용자의 현재 dirty worktree 변경을 보존하기 위해 최신 `origin/main`에서
+격리된 worktree를 만든다. 자동화 및 실제 동작 검증을 통과한 뒤 저장소의
+릴리즈 워크플로로 다음 patch 버전, 릴리즈 메타데이터, 브랜치와 PR,
+설정된 배포 후 검증까지 완료한다.
