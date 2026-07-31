@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import SwitchTab
 
 enum SwitcherOverlayPresentationTests {
@@ -26,6 +27,7 @@ enum SwitcherOverlayPresentationTests {
         try testMinimumScaleTileContentFitsWithinTile()
         try testApplicationModeUsesCompactLayoutMetrics()
         try testApplicationCaptionKeepsPanelHeightStable()
+        try testApplicationTileSeparatesSelectionContainerFromCaption()
         try testApplicationModeFitsMoreColumnsThanWindowMode()
     }
 
@@ -379,6 +381,17 @@ enum SwitcherOverlayPresentationTests {
         )
     }
 
+    static func testApplicationTileSeparatesSelectionContainerFromCaption() throws {
+        let sourceURL = projectRoot
+            .appendingPathComponent("SwitchTab/UI/Overlay/SwitcherIconStripView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        try expectTrue(source.contains("applicationIconSelection(for: item)"))
+        try expectTrue(source.contains("ApplicationSwitcherMetadataPolicy.presentation("))
+        try expectTrue(source.contains(".frame(height: layoutMetrics.captionHeight)"))
+        try expectTrue(source.contains("cornerRadius: layoutMetrics.selectionCornerRadius"))
+    }
+
     static func testApplicationModeFitsMoreColumnsThanWindowMode() throws {
         let windowLayout = SwitcherOverlayLayoutPolicy.presentationLayout(
             itemCount: 16,
@@ -412,5 +425,12 @@ enum SwitcherOverlayPresentationTests {
         return CGFloat(rowCount) * metrics.tileSize.height
             + CGFloat(rowCount - 1) * metrics.gridSpacing
             + metrics.gridPadding
+    }
+
+    private static var projectRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 }

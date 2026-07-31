@@ -141,20 +141,6 @@ private struct SwitcherWindowTile: View {
                 onConfirm(item, index)
             } label: {
                 tileContent(for: item)
-                .padding(layoutMetrics.tileContentPadding)
-                .frame(
-                    width: layoutMetrics.tileSize.width,
-                    height: layoutMetrics.tileSize.height
-                )
-                .background(isSelected ? Color.accentColor.opacity(0.28) : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 7))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 7)
-                        .strokeBorder(
-                            isSelected ? Color.accentColor.opacity(0.95) : Color.clear,
-                            lineWidth: 2
-                        )
-                }
             }
             .buttonStyle(.plain)
             .accessibilityLabel(
@@ -200,29 +186,84 @@ private struct SwitcherWindowTile: View {
             titleHeader(for: item)
             icon(for: item)
         }
-    }
-
-    private func applicationContent(for item: SwitcherListItem) -> some View {
-        VStack(alignment: .center, spacing: layoutMetrics.tileContentSpacing) {
-            icon(for: item)
-            applicationMetadata(for: item)
+        .padding(layoutMetrics.tileContentPadding)
+        .frame(
+            width: layoutMetrics.tileSize.width,
+            height: layoutMetrics.tileSize.height
+        )
+        .background(isSelected ? Color.accentColor.opacity(0.28) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 7))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7)
+                .strokeBorder(
+                    isSelected ? Color.accentColor.opacity(0.95) : Color.clear,
+                    lineWidth: 2
+                )
         }
     }
 
-    private func applicationMetadata(for item: SwitcherListItem) -> some View {
-        return HStack(alignment: .center, spacing: 3) {
+    private func applicationContent(for item: SwitcherListItem) -> some View {
+        let metadata = ApplicationSwitcherMetadataPolicy.presentation(
+            isSelected: isSelected,
+            windowCountText: item.subtitle
+        )
+
+        return VStack(alignment: .center, spacing: layoutMetrics.tileContentSpacing) {
+            applicationIconSelection(for: item)
+
+            Color.clear
+                .frame(height: layoutMetrics.captionHeight)
+                .overlay {
+                    if metadata.showsTitle {
+                        applicationMetadata(
+                            for: item,
+                            windowCountText: metadata.windowCountText
+                        )
+                    }
+                }
+        }
+        .frame(
+            width: layoutMetrics.tileSize.width,
+            height: layoutMetrics.tileSize.height
+        )
+    }
+
+    private func applicationIconSelection(for item: SwitcherListItem) -> some View {
+        icon(for: item)
+            .frame(
+                width: layoutMetrics.selectionContainerSize.width,
+                height: layoutMetrics.selectionContainerSize.height
+            )
+            .background(isSelected ? Color.accentColor.opacity(0.28) : Color.clear)
+            .clipShape(
+                RoundedRectangle(cornerRadius: layoutMetrics.selectionCornerRadius)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: layoutMetrics.selectionCornerRadius)
+                    .strokeBorder(
+                        isSelected ? Color.accentColor.opacity(0.95) : Color.clear,
+                        lineWidth: 2
+                    )
+            }
+    }
+
+    private func applicationMetadata(
+        for item: SwitcherListItem,
+        windowCountText: String?
+    ) -> some View {
+        HStack(alignment: .center, spacing: 3) {
             Text(item.title)
                 .font(.system(size: layoutMetrics.titleFontSize, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .center)
+                .layoutPriority(1)
 
-            if let windowCount = item.subtitle {
+            if let windowCountText {
                 HStack(alignment: .center, spacing: 2) {
                     Image(systemName: "rectangle.on.rectangle")
                         .font(.system(size: max(8, layoutMetrics.titleFontSize * 0.75)))
                         .accessibilityHidden(true)
-                    Text(windowCount)
+                    Text(windowCountText)
                 }
                 .font(.system(size: layoutMetrics.titleFontSize * 0.85))
                 .foregroundStyle(.secondary)
@@ -230,7 +271,7 @@ private struct SwitcherWindowTile: View {
                 .layoutPriority(1)
             }
         }
-        .frame(width: layoutMetrics.thumbnailSize.width)
+        .frame(width: layoutMetrics.captionMaxWidth)
     }
 
     private var closeButton: some View {
