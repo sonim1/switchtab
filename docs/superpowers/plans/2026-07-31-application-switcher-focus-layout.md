@@ -274,12 +274,13 @@ private func applicationContent(for item: SwitcherListItem) -> some View {
 
 - [ ] **3단계: 선택 앱 캡션을 아이콘 중앙 아래에 표시**
 
-캡션은 한 줄, 중앙 정렬, 최대 240pt이며 그리드 셀 폭에는 영향을 주지 않도록 고정 높이 슬롯의 overlay로 렌더링한다.
+캡션은 한 줄, 최대 240pt이며 그리드 셀 폭에는 영향을 주지 않도록 고정 높이 슬롯의 overlay로 렌더링한다. 한 개 앱 패널은 최대 캡션 폭을 확보하고, 여러 열의 가장자리 캡션은 그리드 안쪽으로 정렬한다.
 
 ```swift
 private func applicationMetadata(
     for item: SwitcherListItem,
-    windowCountText: String?
+    windowCountText: String?,
+    width: CGFloat
 ) -> some View {
     HStack(alignment: .center, spacing: 3) {
         Text(item.title)
@@ -295,7 +296,7 @@ private func applicationMetadata(
         }
     }
     .font(.system(size: layoutMetrics.titleFontSize, weight: .medium))
-    .frame(width: layoutMetrics.captionMaxWidth)
+    .frame(width: width)
 }
 ```
 
