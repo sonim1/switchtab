@@ -28,6 +28,8 @@ enum ApplicationSwitchingTests {
         try testTerminationIdentityRejectsNonRegularOrUnterminatedSnapshots()
         try testSystemActivatorYieldsBeforeActivatingAllWindows()
         try testSystemActivatorRejectsTerminatedTargetBeforeYield()
+        try testSystemActivatorRejectsMissingTarget()
+        try testSystemActivatorReturnsActivationFailureAfterYield()
         try testActivationSuccessRecordsAndFlushesRecencyOnce()
         try testActivationFailureDoesNotRecordOrFlushRecency()
         try testWorkspaceActivationObserverRecordsExternalRegularActivation()
@@ -679,6 +681,24 @@ enum ApplicationSwitchingTests {
 
         try expectTrue(!activator.activate(processIdentifier: 405))
         try expectEqual(target.events, [])
+    }
+
+    static func testSystemActivatorRejectsMissingTarget() throws {
+        let provider = FakeApplicationActivationTargetProvider(target: nil)
+        let activator = NSRunningApplicationActivator(targetProvider: provider)
+
+        try expectTrue(!activator.activate(processIdentifier: 406))
+        try expectEqual(provider.processIdentifiers, [406])
+    }
+
+    static func testSystemActivatorReturnsActivationFailureAfterYield() throws {
+        let target = FakeApplicationActivationTarget(activationResult: false)
+        let activator = NSRunningApplicationActivator(
+            targetProvider: FakeApplicationActivationTargetProvider(target: target)
+        )
+
+        try expectTrue(!activator.activate(processIdentifier: 407))
+        try expectEqual(target.events, ["yield", "activateAllWindows"])
     }
 
     static func testActivationSuccessRecordsAndFlushesRecencyOnce() throws {
