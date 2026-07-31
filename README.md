@@ -17,7 +17,7 @@ SwitchTab provides two focused switching modes:
 - Press <kbd>Command</kbd>+<kbd>`</kbd> to move between windows in the current
   application, with live previews when Screen Recording permission is available.
 - Optionally enable `Replace macOS Cmd-Tab` in Settings > Shortcut to move
-  between applications with a compact icon-and-name switcher.
+  between applications with compact icons and a caption for the selected app.
 
 The current-app window shortcut is configurable. If macOS refuses the reserved
 default shortcut, SwitchTab falls back to
@@ -30,8 +30,9 @@ enabled, <kbd>Command</kbd>+<kbd>Tab</kbd> moves forward,
 Command activates the selected app. Turning the setting off or quitting
 SwitchTab restores the native switcher.
 
-Application tiles show each app's window count when Accessibility can provide
-it. Arrow keys move through the same selection grid, and
+Only the selected application shows its name. When Accessibility reports two or
+more standard windows for that app, the caption also shows the window count.
+Arrow keys move through the same selection grid, and
 <kbd>Command</kbd>+<kbd>Q</kbd> asks the selected app to quit normally while the
 switcher stays open; the tile disappears only after that app exits.
 

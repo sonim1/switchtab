@@ -4,11 +4,11 @@
 
 **Created**: 2026-06-17
 
-**Status**: Current implementation scope as of 2026-07-29
+**Status**: Current implementation scope as of 2026-07-31
 
 **Input**: User description: "A window-switcher app that uses a configurable keyboard shortcut to find and quickly switch between open macOS apps and windows. For example, Cmd+Tab switches between apps and displays app icons, while Cmd+` switches between windows in the current app only and shows previews of their current on-screen content. The app should provide this simple functionality."
 
-> Current repository note (2026-07-29): the checked-in app target implements
+> Current repository note (2026-07-31): the checked-in app target implements
 > current-app window switching and an opt-in application-switching mode
 > (`SwitcherMode.applicationSwitching`). The `Replace macOS Cmd-Tab` setting is
 > off by default. Native macOS Cmd+Tab remains available while it is disabled,
@@ -103,9 +103,10 @@ restored.
 5. **Given** Accessibility is missing, **When** replacement is enabled, **Then**
    the setting remains saved, the EventTap is not active, native Cmd+Tab is not
    consumed, and Settings shows application-specific recovery guidance.
-6. **Given** application switching is active, **When** the user views an
-   application item, **Then** its icon and name are shown without window
-   thumbnails or close controls, and Screen Recording is not required.
+6. **Given** application switching is active, **When** the user views the
+   overlay, **Then** every application icon is shown, only the selected app
+   shows its name and a window count of two or more, no window thumbnails or
+   close controls appear, and Screen Recording is not required.
 
 The exact Finder/Safari/Notes manual checks and evidence filenames are the
 eight scenarios in the [quickstart acceptance contract](quickstart.md#application-switching-manual-acceptance-contract).
@@ -174,9 +175,11 @@ eight scenarios in the [quickstart acceptance contract](quickstart.md#applicatio
 - **FR-019**: Application switching MUST order applications with an MRU history
   stored separately from window MRU history and MUST record history only after
   successful activation.
-- **FR-020**: Application-mode rows MUST show application icons and names without
-  window thumbnails or close controls; Screen Recording permission MUST NOT be
-  required for those icons.
+- **FR-020**: Application-mode rows MUST show every application icon, reserve a
+  stable caption height, and show the name only for the selected app. The
+  selected caption MUST show a standard-window count only when it is two or
+  more. Window thumbnails and close controls MUST remain hidden, and Screen
+  Recording permission MUST NOT be required for application icons or names.
 - **FR-021**: Accessibility guidance MUST identify the EventTap requirement for
   application replacement while preserving the existing Accessibility and
   Screen Recording recovery behavior for current-app windows and previews.
