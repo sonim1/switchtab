@@ -16,6 +16,35 @@ public enum SwitcherOverlayClosePolicy {
     }
 }
 
+public struct ApplicationSwitcherMetadataPresentation: Equatable, Sendable {
+    public let showsTitle: Bool
+    public let windowCountText: String?
+
+    public static let hidden = ApplicationSwitcherMetadataPresentation(
+        showsTitle: false,
+        windowCountText: nil
+    )
+}
+
+public enum ApplicationSwitcherMetadataPolicy {
+    public static func presentation(
+        isSelected: Bool,
+        windowCountText: String?
+    ) -> ApplicationSwitcherMetadataPresentation {
+        guard isSelected else {
+            return .hidden
+        }
+
+        let visibleWindowCount = windowCountText
+            .flatMap(Int.init)
+            .flatMap { $0 >= 2 ? String($0) : nil }
+        return ApplicationSwitcherMetadataPresentation(
+            showsTitle: true,
+            windowCountText: visibleWindowCount
+        )
+    }
+}
+
 public enum SwitcherOverlayAccessibilityPolicy {
     public static func switchHint(for mode: SwitcherMode) -> String {
         switch mode {
