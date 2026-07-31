@@ -1,6 +1,7 @@
 import Foundation
 @testable import SwitchTab
 
+@MainActor
 enum ApplicationSwitchingTests {
     static func run() throws {
         try testDefaultApplicationSwitchingShortcutsAreFixed()
@@ -25,6 +26,8 @@ enum ApplicationSwitchingTests {
         try testTerminationServiceReportsAcceptedAndRejectedRequests()
         try testTerminationIdentityUsesStableBundleOrProcessIdentifier()
         try testTerminationIdentityRejectsNonRegularOrUnterminatedSnapshots()
+        try testSystemActivatorYieldsBeforeActivatingAllWindows()
+        try testSystemActivatorRejectsTerminatedTargetBeforeYield()
         try testActivationSuccessRecordsAndFlushesRecencyOnce()
         try testActivationFailureDoesNotRecordOrFlushRecency()
         try testWorkspaceActivationObserverRecordsExternalRegularActivation()
@@ -653,6 +656,31 @@ enum ApplicationSwitchingTests {
         )
     }
 
+    static func testSystemActivatorYieldsBeforeActivatingAllWindows() throws {
+        let target = FakeApplicationActivationTarget(activationResult: true)
+        let provider = FakeApplicationActivationTargetProvider(target: target)
+        let activator = NSRunningApplicationActivator(targetProvider: provider)
+
+        let result = activator.activate(processIdentifier: 404)
+
+        try expectTrue(result)
+        try expectEqual(provider.processIdentifiers, [404])
+        try expectEqual(target.events, ["yield", "activateAllWindows"])
+    }
+
+    static func testSystemActivatorRejectsTerminatedTargetBeforeYield() throws {
+        let target = FakeApplicationActivationTarget(
+            isTerminated: true,
+            activationResult: true
+        )
+        let activator = NSRunningApplicationActivator(
+            targetProvider: FakeApplicationActivationTargetProvider(target: target)
+        )
+
+        try expectTrue(!activator.activate(processIdentifier: 405))
+        try expectEqual(target.events, [])
+    }
+
     static func testActivationSuccessRecordsAndFlushesRecencyOnce() throws {
         let sequence = RecordingApplicationSequence()
         let activator = FakeApplicationActivator(result: true, sequence: sequence)
@@ -840,6 +868,43 @@ private final class FakeApplicationActivator: ApplicationActivating {
         processIdentifiers.append(processIdentifier)
         sequence.append("activate:\(processIdentifier)")
         return result
+    }
+}
+
+private final class FakeApplicationActivationTarget: ApplicationActivationTarget {
+    let isTerminated: Bool
+    let activationResult: Bool
+    private(set) var events: [String] = []
+
+    init(
+        isTerminated: Bool = false,
+        activationResult: Bool
+    ) {
+        self.isTerminated = isTerminated
+        self.activationResult = activationResult
+    }
+
+    func yieldActivation() {
+        events.append("yield")
+    }
+
+    func activateAllWindows() -> Bool {
+        events.append("activateAllWindows")
+        return activationResult
+    }
+}
+
+private final class FakeApplicationActivationTargetProvider: ApplicationActivationTargetProviding {
+    let targetValue: (any ApplicationActivationTarget)?
+    private(set) var processIdentifiers: [Int] = []
+
+    init(target: (any ApplicationActivationTarget)?) {
+        self.targetValue = target
+    }
+
+    func target(processIdentifier: Int) -> (any ApplicationActivationTarget)? {
+        processIdentifiers.append(processIdentifier)
+        return targetValue
     }
 }
 

@@ -6,6 +6,7 @@ public enum ApplicationActivationResult: Equatable, Sendable {
     case unavailableTarget
 }
 
+@MainActor
 public protocol ApplicationActivating {
     func activate(processIdentifier: Int) -> Bool
 }
@@ -37,6 +38,7 @@ public struct ApplicationTerminationService {
     }
 }
 
+@MainActor
 public protocol ApplicationActivationServicing {
     func activate(_ application: ApplicationItem) -> ApplicationActivationResult
 }
@@ -57,6 +59,7 @@ public struct ApplicationActivationService: ApplicationActivationServicing {
         self.activator = activator
     }
 
+    @MainActor
     public func activate(_ application: ApplicationItem) -> ApplicationActivationResult {
         activator.activate(processIdentifier: application.processIdentifier)
             ? .activated
@@ -77,6 +80,7 @@ public struct ApplicationSelectionCoordinator {
     }
 
     @discardableResult
+    @MainActor
     public func confirm(_ application: ApplicationItem) -> ApplicationActivationResult {
         let result = activationService.activate(application)
         guard result == .activated else {
@@ -142,15 +146,69 @@ public enum WorkspaceApplicationTerminationPolicy {
     }
 }
 
-private struct NSRunningApplicationActivator: ApplicationActivating {
-    func activate(processIdentifier: Int) -> Bool {
+protocol ApplicationActivationTarget: AnyObject {
+    var isTerminated: Bool { get }
+    @MainActor
+    func yieldActivation()
+    @MainActor
+    func activateAllWindows() -> Bool
+}
+
+protocol ApplicationActivationTargetProviding {
+    @MainActor
+    func target(processIdentifier: Int) -> (any ApplicationActivationTarget)?
+}
+
+struct NSRunningApplicationActivationTargetProvider: ApplicationActivationTargetProviding {
+    func target(processIdentifier: Int) -> (any ApplicationActivationTarget)? {
         guard let application = NSRunningApplication(
             processIdentifier: pid_t(processIdentifier)
-        ), !application.isTerminated else {
+        ) else {
+            return nil
+        }
+
+        return NSRunningApplicationActivationTarget(application: application)
+    }
+}
+
+final class NSRunningApplicationActivationTarget: ApplicationActivationTarget {
+    private let application: NSRunningApplication
+
+    init(application: NSRunningApplication) {
+        self.application = application
+    }
+
+    var isTerminated: Bool {
+        application.isTerminated
+    }
+
+    func yieldActivation() {
+        NSApp.yieldActivation(to: application)
+    }
+
+    func activateAllWindows() -> Bool {
+        application.activate(options: .activateAllWindows)
+    }
+}
+
+struct NSRunningApplicationActivator: ApplicationActivating {
+    let targetProvider: any ApplicationActivationTargetProviding
+
+    init(
+        targetProvider: any ApplicationActivationTargetProviding =
+            NSRunningApplicationActivationTargetProvider()
+    ) {
+        self.targetProvider = targetProvider
+    }
+
+    func activate(processIdentifier: Int) -> Bool {
+        guard let target = targetProvider.target(processIdentifier: processIdentifier),
+              !target.isTerminated else {
             return false
         }
 
-        return application.activate(options: .activateAllWindows)
+        target.yieldActivation()
+        return target.activateAllWindows()
     }
 }
 
