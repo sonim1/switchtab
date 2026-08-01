@@ -1,4 +1,11 @@
 import Foundation
+import XCTest
+
+final class AppSettingsCommandRoutingTests: XCTestCase {
+    func testCommandCommaRoutesToCustomSettingsWindow() throws {
+        try AppStoreDistributionSettingsTests.testAppSettingsCommandRoutesToCustomSettingsWindow()
+    }
+}
 
 enum AppStoreDistributionSettingsTests {
     static func run() throws {
@@ -52,6 +59,15 @@ enum AppStoreDistributionSettingsTests {
         try expectTrue(scriptContents.contains("SwitchTab.xcodeproj/project.pbxproj"))
         try expectFalse(scriptContents.contains("WindowSwitcher.xcodeproj/project.pbxproj"))
         try expectFalse(packageContents.contains("WindowSwitcher"))
+    }
+
+    static func testAppSettingsCommandRoutesToCustomSettingsWindow() throws {
+        let appURL = projectRoot.appendingPathComponent("SwitchTab/SwitchTabApp.swift")
+        let contents = try String(contentsOf: appURL, encoding: .utf8)
+
+        try expectTrue(contents.contains("CommandGroup(replacing: .appSettings)"))
+        try expectTrue(contents.contains("NotificationCenter.default.post(name: .showSettingsWindow"))
+        try expectTrue(contents.contains(".keyboardShortcut(\",\", modifiers: .command)"))
     }
 
     static func testXcodeProjectUsesAppStoreBundleIdentifier() throws {
