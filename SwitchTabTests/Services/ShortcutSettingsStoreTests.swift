@@ -13,6 +13,12 @@ enum ShortcutSettingsStoreTests {
         try testCompatibilityWrappersMigrateIntoUnifiedPayload()
         try testSavingIncompleteConfigurationsThrows()
         try testSavingDuplicateConfigurationsThrows()
+        try testFuturePayloadIsNotOverwrittenDuringLoad()
+        try testFuturePayloadRejectsSaveWithoutChangingBytes()
+        try testSavingModeMismatchThrows()
+        try testLoadingModeMismatchMigratesInsteadOfAccepting()
+        try testCompatibilitySaveRejectsApplicationShortcutInWindowSlot()
+        try testUsageOnlyLegacyFootprintDisablesApplicationSwitching()
         try testInvalidSaveKeepsLastPersistedShortcut()
         try testRegistrationFailureKeepsLastPersistedShortcut()
         try testSavingDefaultShortcutDoesNotPersistWhenAlreadyImplicit()
@@ -177,6 +183,116 @@ enum ShortcutSettingsStoreTests {
         } catch let error as ShortcutSettingsStoreError {
             try expectEqual(error, .duplicateMode(.applicationSwitching))
         }
+    }
+
+    static func testFuturePayloadIsNotOverwrittenDuringLoad() throws {
+        let defaults = makeDefaults()
+        let futureData = try makeStoredConfigurationsData(
+            version: 2,
+            configurations: [
+                .defaultCurrentAppWindows,
+                .defaultApplicationSwitching
+            ]
+        )
+        defaults.set(futureData, forKey: "SwitchTab.shortcut.configurations")
+
+        let configurations = ShortcutSettingsStore(userDefaults: defaults).loadConfigurations()
+
+        try expectEqual(configurations, [.defaultCurrentAppWindows, .defaultApplicationSwitching])
+        try expectEqual(defaults.data(forKey: "SwitchTab.shortcut.configurations"), futureData)
+    }
+
+    static func testFuturePayloadRejectsSaveWithoutChangingBytes() throws {
+        let defaults = makeDefaults()
+        let futureData = try makeStoredConfigurationsData(
+            version: 2,
+            configurations: [
+                .defaultCurrentAppWindows,
+                .defaultApplicationSwitching
+            ]
+        )
+        defaults.set(futureData, forKey: "SwitchTab.shortcut.configurations")
+        let store = ShortcutSettingsStore(userDefaults: defaults)
+
+        do {
+            try store.saveConfigurations([
+                .defaultCurrentAppWindows,
+                .defaultApplicationSwitching
+            ])
+            throw TestFailure.failed("Expected future payload to reject a v1 save")
+        } catch let error as ShortcutSettingsStoreError {
+            try expectEqual(error, .unsupportedVersion(2))
+        }
+
+        do {
+            try store.save(.defaultCurrentAppWindowSwitching)
+            throw TestFailure.failed("Expected compatibility save to reject a future payload")
+        } catch let error as ShortcutSettingsStoreError {
+            try expectEqual(error, .unsupportedVersion(2))
+        }
+
+        try expectEqual(defaults.data(forKey: "SwitchTab.shortcut.configurations"), futureData)
+    }
+
+    static func testSavingModeMismatchThrows() throws {
+        let store = ShortcutSettingsStore(userDefaults: makeDefaults())
+        let mismatched = SwitcherShortcutConfiguration(
+            mode: .currentAppWindowSwitching,
+            isEnabled: true,
+            shortcut: .defaultApplicationSwitching
+        )
+
+        do {
+            try store.saveConfigurations([mismatched, .defaultApplicationSwitching])
+            throw TestFailure.failed("Expected mode mismatch to be rejected")
+        } catch let error as ShortcutSettingsStoreError {
+            try expectEqual(
+                error,
+                .modeMismatch(expected: .currentAppWindowSwitching, actual: .applicationSwitching)
+            )
+        }
+    }
+
+    static func testLoadingModeMismatchMigratesInsteadOfAccepting() throws {
+        let defaults = makeDefaults()
+        let mismatched = SwitcherShortcutConfiguration(
+            mode: .currentAppWindowSwitching,
+            isEnabled: true,
+            shortcut: .defaultApplicationSwitching
+        )
+        let mismatchedData = try makeStoredConfigurationsData(
+            version: 1,
+            configurations: [mismatched, .defaultApplicationSwitching]
+        )
+        defaults.set(mismatchedData, forKey: "SwitchTab.shortcut.configurations")
+
+        let configurations = ShortcutSettingsStore(userDefaults: defaults).loadConfigurations()
+
+        try expectEqual(configurations, [.defaultCurrentAppWindows, .defaultApplicationSwitching])
+        try expectFalse(configurations.contains { $0.shortcut.mode != $0.mode })
+    }
+
+    static func testCompatibilitySaveRejectsApplicationShortcutInWindowSlot() throws {
+        let store = ShortcutSettingsStore(userDefaults: makeDefaults())
+
+        do {
+            try store.save(.defaultApplicationSwitching)
+            throw TestFailure.failed("Expected compatibility save to reject application shortcut")
+        } catch let error as ShortcutSettingsStoreError {
+            try expectEqual(
+                error,
+                .modeMismatch(expected: .currentAppWindowSwitching, actual: .applicationSwitching)
+            )
+        }
+    }
+
+    static func testUsageOnlyLegacyFootprintDisablesApplicationSwitching() throws {
+        let defaults = makeDefaults()
+        defaults.set(1, forKey: "SwitchTab.usage.2026-08-02.currentAppWindowSwitching")
+
+        let configurations = ShortcutSettingsStore(userDefaults: defaults).loadConfigurations()
+
+        try expectFalse(configurations[1].isEnabled)
     }
 
     static func testInvalidSaveKeepsLastPersistedShortcut() throws {
@@ -510,12 +626,26 @@ enum ShortcutSettingsStoreTests {
         try expectEqual(store.load(), .defaultCurrentAppWindowSwitching)
     }
 
+    private static func makeStoredConfigurationsData(
+        version: Int,
+        configurations: [SwitcherShortcutConfiguration]
+    ) throws -> Data {
+        try JSONEncoder().encode(
+            TestStoredConfigurations(version: version, configurations: configurations)
+        )
+    }
+
     private static func makeDefaults() -> UserDefaults {
         let suiteName = "SwitchTabTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
     }
+}
+
+private struct TestStoredConfigurations: Codable {
+    let version: Int
+    let configurations: [SwitcherShortcutConfiguration]
 }
 
 final class CountingShortcutDefaults: UserDefaults {

@@ -3,6 +3,8 @@ import Foundation
 public enum ShortcutSettingsStoreError: Error, Equatable, Sendable {
     case missingMode(SwitcherMode)
     case duplicateMode(SwitcherMode)
+    case unsupportedVersion(Int)
+    case modeMismatch(expected: SwitcherMode, actual: SwitcherMode)
 }
 
 public struct ShortcutSettingsStore {
@@ -15,6 +17,16 @@ public struct ShortcutSettingsStore {
     private struct StoredConfigurations: Codable {
         let version: Int
         let configurations: [SwitcherShortcutConfiguration]
+    }
+
+    private struct StoredVersion: Decodable {
+        let version: Int
+    }
+
+    private enum PersistedConfigurationsResult {
+        case valid([SwitcherShortcutConfiguration])
+        case unsupportedVersion(Int)
+        case unavailable
     }
 
     private let userDefaults: UserDefaults
@@ -57,8 +69,13 @@ public struct ShortcutSettingsStore {
     }
 
     public func loadConfigurations() -> [SwitcherShortcutConfiguration] {
-        if let configurations = persistedConfigurations() {
+        switch persistedConfigurations() {
+        case .valid(let configurations):
             return configurations
+        case .unsupportedVersion:
+            return migratedConfigurations()
+        case .unavailable:
+            break
         }
 
         let migrated = migratedConfigurations()
@@ -66,18 +83,27 @@ public struct ShortcutSettingsStore {
         return migrated
     }
 
-    private func persistedConfigurations() -> [SwitcherShortcutConfiguration]? {
+    private func persistedConfigurations() -> PersistedConfigurationsResult {
         guard let data = userDefaults.data(forKey: Self.configurationsStorageKey),
+              let version = try? decoder.decode(StoredVersion.self, from: data) else {
+            return .unavailable
+        }
+        guard version.version <= Self.currentPayloadVersion else {
+            return .unsupportedVersion(version.version)
+        }
+        guard version.version == Self.currentPayloadVersion,
               let payload = try? decoder.decode(StoredConfigurations.self, from: data),
-              payload.version == Self.currentPayloadVersion,
               isComplete(payload.configurations) else {
-            return nil
+            return .unavailable
         }
 
-        return orderedConfigurations(payload.configurations)
+        return .valid(orderedConfigurations(payload.configurations))
     }
 
     public func saveConfigurations(_ configurations: [SwitcherShortcutConfiguration]) throws {
+        if let version = unsupportedPersistedVersion() {
+            throw ShortcutSettingsStoreError.unsupportedVersion(version)
+        }
         try validate(configurations)
         let payload = StoredConfigurations(
             version: Self.currentPayloadVersion,
@@ -91,7 +117,24 @@ public struct ShortcutSettingsStore {
         userDefaults.set(data, forKey: Self.configurationsStorageKey)
     }
 
+    private func unsupportedPersistedVersion() -> Int? {
+        guard let data = userDefaults.data(forKey: Self.configurationsStorageKey),
+              let version = try? decoder.decode(StoredVersion.self, from: data),
+              version.version > Self.currentPayloadVersion else {
+            return nil
+        }
+
+        return version.version
+    }
+
     private func validate(_ configurations: [SwitcherShortcutConfiguration]) throws {
+        for configuration in configurations where configuration.mode != configuration.shortcut.mode {
+            throw ShortcutSettingsStoreError.modeMismatch(
+                expected: configuration.mode,
+                actual: configuration.shortcut.mode
+            )
+        }
+
         for mode in SwitcherMode.allCases {
             let matchingCount = configurations.reduce(into: 0) { count, configuration in
                 if configuration.mode == mode {
@@ -113,6 +156,10 @@ public struct ShortcutSettingsStore {
             return false
         }
 
+        guard configurations.allSatisfy({ $0.mode == $0.shortcut.mode }) else {
+            return false
+        }
+
         let modeValues = Set(configurations.map { $0.mode.rawValue })
         let expectedModeValues = Set(SwitcherMode.allCases.map { $0.rawValue })
         return modeValues == expectedModeValues
@@ -127,10 +174,13 @@ public struct ShortcutSettingsStore {
     }
 
     private func migratedConfigurations() -> [SwitcherShortcutConfiguration] {
-        let legacyWindow = load(
+        let persistedLegacyWindow = load(
             key: Self.legacyWindowShortcutStorageKey,
             defaultSetting: .defaultCurrentAppWindowSwitching
         )
+        let legacyWindow = persistedLegacyWindow.mode == .currentAppWindowSwitching
+            ? persistedLegacyWindow
+            : .defaultCurrentAppWindowSwitching
         let explicitApplicationState = userDefaults.object(
             forKey: ApplicationSettingsStore.replacesCommandTabKey
         ) as? Bool
@@ -151,7 +201,7 @@ public struct ShortcutSettingsStore {
     }
 
     private var hasLegacyFootprint: Bool {
-        [
+        let knownKeys = [
             Self.legacyWindowShortcutStorageKey,
             Self.registrationMessagesKey,
             ApplicationSettingsStore.menuBarIconVisibleKey,
@@ -159,7 +209,11 @@ public struct ShortcutSettingsStore {
             ApplicationSettingsStore.overlaySizeKey,
             "SwitchTab.recency.currentAppWindowSwitching",
             "SwitchTab.recency.applicationSwitching"
-        ].contains { userDefaults.object(forKey: $0) != nil }
+        ]
+        return knownKeys.contains { userDefaults.object(forKey: $0) != nil }
+            || userDefaults.dictionaryRepresentation().keys.contains {
+                $0.hasPrefix("SwitchTab.usage.")
+            }
     }
 
     public func loadRegistrationMessages() -> [ShortcutRegistrationMessage] {
