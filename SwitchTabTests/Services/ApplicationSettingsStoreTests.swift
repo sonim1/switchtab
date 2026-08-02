@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 import SwitchTab
 
@@ -9,11 +8,6 @@ enum ApplicationSettingsStoreTests {
         try testMenuBarIconVisibilityPersists()
         try testMenuBarIconVisibilityChangePostsNotification()
         try testMenuBarIconVisibilityNoOpDoesNotPostNotification()
-        try testReplacesCommandTabBridgeLoadsDefaultAndMigratedValue()
-        try testReplacesCommandTabBridgePersistsUnifiedConfiguration()
-        try testReplacesCommandTabViewModelForwardsSuccessfulChange()
-        try testReplacesCommandTabBridgeNoOpDoesNotWriteNotifyOrPublish()
-        try testReplacesCommandTabBridgeRejectsFuturePayload()
         try testOverlaySizeScaleDefaultsToOne()
         try testOverlaySizeScalePersists()
         try testOverlaySizeScaleNoOpDoesNotPostNotification()
@@ -81,196 +75,6 @@ enum ApplicationSettingsStoreTests {
         store.saveMenuBarIconVisible(true)
 
         try expectEqual(recorder.postCount, 0)
-    }
-
-    static func testReplacesCommandTabBridgeLoadsDefaultAndMigratedValue() throws {
-        let freshDefaults = makeDefaults()
-        try expectTrue(ApplicationSettingsStore(userDefaults: freshDefaults).replacesCommandTab)
-
-        let legacyDefaults = makeDefaults()
-        legacyDefaults.set(false, forKey: ApplicationSettingsStore.replacesCommandTabKey)
-        let legacyStore = ApplicationSettingsStore(userDefaults: legacyDefaults)
-
-        try expectFalse(legacyStore.replacesCommandTab)
-        try expectFalse(
-            ShortcutSettingsStore(userDefaults: legacyDefaults)
-                .loadConfigurations()
-                .first { $0.mode == .applicationSwitching }?
-                .isEnabled ?? true
-        )
-    }
-
-    static func testReplacesCommandTabBridgePersistsUnifiedConfiguration() throws {
-        let defaults = makeDefaults()
-        let store = ApplicationSettingsStore(userDefaults: defaults)
-        let settingsRecorder = NotificationRecorder()
-        let commandTabRecorder = NotificationRecorder()
-        let settingsObserver = NotificationCenter.default.addObserver(
-            forName: .applicationSettingsDidChange,
-            object: nil,
-            queue: nil
-        ) { _ in
-            settingsRecorder.record()
-        }
-        let commandTabObserver = NotificationCenter.default.addObserver(
-            forName: .commandTabReplacementDidChange,
-            object: nil,
-            queue: nil
-        ) { _ in
-            commandTabRecorder.record()
-        }
-        defer {
-            NotificationCenter.default.removeObserver(settingsObserver)
-            NotificationCenter.default.removeObserver(commandTabObserver)
-        }
-
-        let didSave = store.saveReplacesCommandTab(false)
-
-        try expectTrue(didSave)
-        try expectFalse(store.replacesCommandTab)
-        try expectFalse(
-            ShortcutSettingsStore(userDefaults: defaults)
-                .loadConfigurations()
-                .first { $0.mode == .applicationSwitching }?
-                .isEnabled ?? true
-        )
-        try expectTrue(defaults.object(forKey: ApplicationSettingsStore.replacesCommandTabKey) == nil)
-        try expectEqual(settingsRecorder.postCount, 1)
-        try expectEqual(commandTabRecorder.postCount, 1)
-    }
-
-    @MainActor
-    static func testReplacesCommandTabViewModelForwardsSuccessfulChange() throws {
-        let defaults = makeDefaults()
-        let viewModel = ApplicationSettingsViewModel(
-            store: ApplicationSettingsStore(userDefaults: defaults),
-            launchAtLoginService: FakeLaunchAtLoginService()
-        )
-        var publishCount = 0
-        let cancellable = viewModel.objectWillChange.sink {
-            publishCount += 1
-        }
-        defer { cancellable.cancel() }
-
-        let didSave = viewModel.setReplacesCommandTab(false)
-
-        try expectTrue(didSave)
-        try expectFalse(viewModel.replacesCommandTab)
-        try expectFalse(
-            ShortcutSettingsStore(userDefaults: defaults)
-                .loadConfigurations()
-                .first { $0.mode == .applicationSwitching }?
-                .isEnabled ?? true
-        )
-        try expectEqual(viewModel.errorMessage, nil)
-        try expectEqual(publishCount, 1)
-    }
-
-    @MainActor
-    static func testReplacesCommandTabBridgeNoOpDoesNotWriteNotifyOrPublish() throws {
-        let defaults = CountingShortcutDefaults()
-        let store = ApplicationSettingsStore(userDefaults: defaults)
-        let viewModel = ApplicationSettingsViewModel(
-            store: store,
-            launchAtLoginService: FakeLaunchAtLoginService()
-        )
-        let enabled = viewModel.replacesCommandTab
-        let initialWriteCount = defaults.writeCount
-        let settingsRecorder = NotificationRecorder()
-        let commandTabRecorder = NotificationRecorder()
-        let settingsObserver = NotificationCenter.default.addObserver(
-            forName: .applicationSettingsDidChange,
-            object: nil,
-            queue: nil
-        ) { _ in
-            settingsRecorder.record()
-        }
-        let commandTabObserver = NotificationCenter.default.addObserver(
-            forName: .commandTabReplacementDidChange,
-            object: nil,
-            queue: nil
-        ) { _ in
-            commandTabRecorder.record()
-        }
-        var publishCount = 0
-        let cancellable = viewModel.objectWillChange.sink {
-            publishCount += 1
-        }
-        defer {
-            cancellable.cancel()
-            NotificationCenter.default.removeObserver(settingsObserver)
-            NotificationCenter.default.removeObserver(commandTabObserver)
-        }
-
-        let didStoreSave = store.saveReplacesCommandTab(enabled)
-        let didViewModelSave = viewModel.setReplacesCommandTab(enabled)
-
-        try expectTrue(didStoreSave)
-        try expectTrue(didViewModelSave)
-        try expectEqual(defaults.writeCount, initialWriteCount)
-        try expectEqual(settingsRecorder.postCount, 0)
-        try expectEqual(commandTabRecorder.postCount, 0)
-        try expectEqual(publishCount, 0)
-    }
-
-    @MainActor
-    static func testReplacesCommandTabBridgeRejectsFuturePayload() throws {
-        let defaults = makeDefaults()
-        defaults.set(false, forKey: ApplicationSettingsStore.replacesCommandTabKey)
-        let futurePayload = try JSONEncoder().encode(
-            ApplicationSettingsBridgePayload(
-                version: 2,
-                configurations: [
-                    .defaultCurrentAppWindows,
-                    .defaultApplicationSwitching
-                ]
-            )
-        )
-        defaults.set(futurePayload, forKey: "SwitchTab.shortcut.configurations")
-        let store = ApplicationSettingsStore(userDefaults: defaults)
-        let settingsRecorder = NotificationRecorder()
-        let commandTabRecorder = NotificationRecorder()
-        let settingsObserver = NotificationCenter.default.addObserver(
-            forName: .applicationSettingsDidChange,
-            object: nil,
-            queue: nil
-        ) { _ in
-            settingsRecorder.record()
-        }
-        let commandTabObserver = NotificationCenter.default.addObserver(
-            forName: .commandTabReplacementDidChange,
-            object: nil,
-            queue: nil
-        ) { _ in
-            commandTabRecorder.record()
-        }
-        defer {
-            NotificationCenter.default.removeObserver(settingsObserver)
-            NotificationCenter.default.removeObserver(commandTabObserver)
-        }
-
-        try expectFalse(store.saveReplacesCommandTab(true))
-        try expectEqual(defaults.data(forKey: "SwitchTab.shortcut.configurations"), futurePayload)
-        try expectEqual(settingsRecorder.postCount, 0)
-        try expectEqual(commandTabRecorder.postCount, 0)
-
-        let viewModel = ApplicationSettingsViewModel(
-            store: store,
-            launchAtLoginService: FakeLaunchAtLoginService()
-        )
-        try expectFalse(viewModel.replacesCommandTab)
-
-        let didSave = viewModel.setReplacesCommandTab(true)
-
-        try expectFalse(didSave)
-        try expectFalse(viewModel.replacesCommandTab)
-        try expectEqual(
-            viewModel.errorMessage,
-            "Application switching could not be updated."
-        )
-        try expectEqual(defaults.data(forKey: "SwitchTab.shortcut.configurations"), futurePayload)
-        try expectEqual(settingsRecorder.postCount, 0)
-        try expectEqual(commandTabRecorder.postCount, 0)
     }
 
     static func testOverlaySizeScaleDefaultsToOne() throws {
@@ -465,11 +269,6 @@ enum ApplicationSettingsStoreTests {
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
     }
-}
-
-private struct ApplicationSettingsBridgePayload: Codable {
-    let version: Int
-    let configurations: [SwitcherShortcutConfiguration]
 }
 
 private final class NotificationRecorder: @unchecked Sendable {

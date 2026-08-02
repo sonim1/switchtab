@@ -3,10 +3,6 @@ import ServiceManagement
 
 public extension Notification.Name {
     static let applicationSettingsDidChange = Notification.Name("SwitchTab.applicationSettingsDidChange")
-    // TODO(Task 4): Remove this deprecated compatibility notification with AppDelegate's legacy observer.
-    static let commandTabReplacementDidChange = Notification.Name(
-        "SwitchTab.commandTabReplacementDidChange"
-    )
 }
 
 public struct ApplicationSettingsStore {
@@ -34,38 +30,6 @@ public struct ApplicationSettingsStore {
 
         userDefaults.set(visible, forKey: Self.menuBarIconVisibleKey)
         NotificationCenter.default.post(name: .applicationSettingsDidChange, object: nil)
-    }
-
-    // TODO(Task 4): Remove this deprecated forwarding shim after AppDelegate reads unified configurations.
-    public var replacesCommandTab: Bool {
-        ShortcutSettingsStore(userDefaults: userDefaults)
-            .loadConfigurations()
-            .first { $0.mode == .applicationSwitching }?
-            .isEnabled ?? SwitcherShortcutConfiguration.defaultApplicationSwitching.isEnabled
-    }
-
-    // TODO(Task 5): Remove this deprecated forwarding shim after the settings UI uses ShortcutSettingsViewModel.
-    @discardableResult
-    public func saveReplacesCommandTab(_ enabled: Bool) -> Bool {
-        let shortcutStore = ShortcutSettingsStore(userDefaults: userDefaults)
-        var configurations = shortcutStore.loadConfigurations()
-        guard let index = configurations.firstIndex(where: { $0.mode == .applicationSwitching }) else {
-            return false
-        }
-        guard configurations[index].isEnabled != enabled else {
-            return true
-        }
-
-        configurations[index].isEnabled = enabled
-        do {
-            try shortcutStore.saveConfigurations(configurations)
-        } catch {
-            return false
-        }
-
-        NotificationCenter.default.post(name: .applicationSettingsDidChange, object: nil)
-        NotificationCenter.default.post(name: .commandTabReplacementDidChange, object: nil)
-        return true
     }
 
     public var overlaySizeScale: OverlaySizeScale {

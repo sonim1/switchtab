@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import SwiftUI
 import XCTest
 @testable import SwitchTab
 
@@ -9,10 +11,13 @@ final class AppSettingsCommandRoutingTests: XCTestCase {
 }
 
 enum AppStoreDistributionSettingsTests {
+    @MainActor
     static func run() throws {
         try testInfoPlistUsesAppStoreBundleIdentifier()
         try testInfoPlistDeclaresAppBundleMetadata()
         try testBuildAndDistributionPathsUseSwitchTab()
+        try testShortcutRowPresentationUsesModeSpecificLabelsAndStatus()
+        try testShortcutRowLayoutSupportsLongestShortcut()
         try testXcodeProjectUsesAppStoreBundleIdentifier()
         try testAppSandboxIsDisabledForGlobalWindowSwitching()
         try testSparkleAdapterIsDirectDistributionGuarded()
@@ -69,6 +74,104 @@ enum AppStoreDistributionSettingsTests {
         try expectTrue(scriptContents.contains("SwitchTab.xcodeproj/project.pbxproj"))
         try expectFalse(scriptContents.contains("WindowSwitcher.xcodeproj/project.pbxproj"))
         try expectFalse(packageContents.contains("WindowSwitcher"))
+    }
+
+    static func testShortcutRowPresentationUsesModeSpecificLabelsAndStatus() throws {
+        let expectedTitles: [SwitcherMode: String] = [
+            .currentAppWindowSwitching: "Current App Windows",
+            .applicationSwitching: "Application Switching"
+        ]
+
+        for mode in SwitcherMode.allCases {
+            guard let expectedTitle = expectedTitles[mode] else {
+                throw TestFailure.failed("Missing expected title for \(mode.rawValue)")
+            }
+
+            let enabledPresentation = ShortcutSettingsRowPresentation(mode: mode, isEnabled: true)
+            try expectEqual(enabledPresentation.title, expectedTitle)
+            try expectEqual(enabledPresentation.statusText, "Enabled")
+            try expectEqual(enabledPresentation.toggleAccessibilityLabel, "Enable \(expectedTitle)")
+            try expectEqual(
+                enabledPresentation.resetAccessibilityLabel,
+                "Restore \(expectedTitle) default shortcut"
+            )
+            try expectEqual(
+                enabledPresentation.resetAccessibilityHint,
+                "Restore \(expectedTitle) default shortcut."
+            )
+            try expectEqual(
+                enabledPresentation.shortcutAccessibilityLabel,
+                "\(expectedTitle) shortcut"
+            )
+
+            let disabledPresentation = ShortcutSettingsRowPresentation(mode: mode, isEnabled: false)
+            try expectEqual(disabledPresentation.title, expectedTitle)
+            try expectEqual(disabledPresentation.statusText, "Disabled")
+            try expectEqual(disabledPresentation.toggleAccessibilityLabel, "Enable \(expectedTitle)")
+            try expectEqual(
+                disabledPresentation.resetAccessibilityLabel,
+                "Restore \(expectedTitle) default shortcut"
+            )
+            try expectEqual(
+                disabledPresentation.resetAccessibilityHint,
+                "Restore \(expectedTitle) default shortcut."
+            )
+        }
+    }
+
+    @MainActor
+    static func testShortcutRowLayoutSupportsLongestShortcut() throws {
+        let setting = ShortcutSetting(
+            id: "long-shortcut",
+            mode: .currentAppWindowSwitching,
+            keyEquivalent: "Return",
+            modifiers: ["command", "option", "control", "shift"],
+            isUsable: true
+        )
+        let presentation = ShortcutSettingsRowPresentation(
+            mode: setting.mode,
+            isEnabled: true
+        )
+        let layout = presentation.layout
+
+        try expectEqual(setting.displayText, "Cmd + Option + Ctrl + Shift + Return")
+        try expectTrue(layout.keycapWidth >= 170)
+        try expectTrue(layout.titleMinWidth >= 120)
+        try expectEqual(layout.statusWidth, 54)
+        try expectEqual(layout.keycapLineLimit, 1)
+        try expectEqual(layout.titleLineLimit, 1)
+        let renderedKeycap = NSHostingController(
+            rootView: Text(setting.displayText)
+                .font(.system(.body, design: .monospaced).weight(.semibold))
+                .lineLimit(layout.keycapLineLimit)
+                .minimumScaleFactor(layout.minimumScaleFactor)
+                .padding(.horizontal, layout.keycapHorizontalPadding)
+                .padding(.vertical, 7)
+        )
+        let frame = NSRect(x: 0, y: 0, width: 320, height: 40)
+        let window = NSWindow(
+            contentRect: frame,
+            styleMask: .borderless,
+            backing: .buffered,
+            defer: false
+        )
+        window.contentViewController = renderedKeycap
+        window.orderFront(nil)
+        defer {
+            window.orderOut(nil)
+            window.contentViewController = nil
+        }
+        renderedKeycap.view.layoutSubtreeIfNeeded()
+        renderedKeycap.view.displayIfNeeded()
+        let intrinsicTextWidth = renderedKeycap.view.fittingSize.width
+            - (2 * layout.keycapHorizontalPadding)
+        let availableKeycapTextWidth = layout.keycapWidth - (2 * layout.keycapHorizontalPadding)
+
+        XCTAssertTrue(
+            ceil(intrinsicTextWidth * layout.minimumScaleFactor) < availableKeycapTextWidth,
+            "Longest shortcut does not fit the keycap at the configured minimum scale."
+        )
+        try expectTrue(layout.rightControlClusterIsFixed)
     }
 
     static func testAppSettingsCommandRoutesToCustomSettingsWindow() throws {

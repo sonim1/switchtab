@@ -3,6 +3,7 @@ import Foundation
 import SwitchTab
 
 enum ShortcutSettingsStoreTests {
+    @MainActor
     static func run() throws {
         try testStoreLoadsDefaultsWhenEmpty()
         try testFreshInstallLoadsBothModesEnabled()
@@ -49,6 +50,8 @@ enum ShortcutSettingsStoreTests {
         try testSavingUnchangedRegistrationMessagesDoesNotRewrite()
         try testSavingEmptyRegistrationMessagesClearsPersistedMessages()
         try testViewModelResetsShortcutToDefault()
+        try testRecordingCoordinatorStopsPreviousModeBeforeStartingNext()
+        try testRecordingCoordinatorIgnoresStaleModeEnd()
     }
 
     static func testStoreLoadsDefaultsWhenEmpty() throws {
@@ -741,15 +744,13 @@ enum ShortcutSettingsStoreTests {
         let store = ShortcutSettingsStore(userDefaults: defaults)
         let viewModel = ShortcutSettingsViewModel(store: store)
 
-        let saved = viewModel.save(
-            keyEquivalent: "K",
-            modifiers: ["command"],
-            isUsable: true
+        let saved = viewModel.record(
+            capture: ShortcutCapture(keyEquivalent: "K", modifiers: ["command"]),
+            for: .currentAppWindowSwitching
         )
-        let rejected = viewModel.save(
-            keyEquivalent: "J",
-            modifiers: [],
-            isUsable: true
+        let rejected = viewModel.record(
+            capture: ShortcutCapture(keyEquivalent: "J", modifiers: []),
+            for: .currentAppWindowSwitching
         )
 
         try expectTrue(saved)
@@ -777,17 +778,19 @@ enum ShortcutSettingsStoreTests {
         ])
         let viewModel = ShortcutSettingsViewModel(
             store: store,
-            onValidSettingsChanged: { _, _ in .rejectedPreviousRestored }
+            onShortcutChanged: { _, _ in .rejectedPreviousRestored }
         )
 
-        let didSave = viewModel.save(
-            keyEquivalent: "J",
-            modifiers: ["command"],
-            isUsable: true
+        let didSave = viewModel.record(
+            capture: ShortcutCapture(keyEquivalent: "J", modifiers: ["command"]),
+            for: .currentAppWindowSwitching
         )
 
         try expectFalse(didSave)
-        try expectEqual(viewModel.currentAppWindowShortcut, previous)
+        try expectEqual(
+            viewModel.configuration(for: .currentAppWindowSwitching).shortcut,
+            previous
+        )
         try expectEqual(currentAppWindowShortcut(in: store), previous)
     }
 
@@ -864,16 +867,18 @@ enum ShortcutSettingsStoreTests {
         var notificationCount = 0
         let viewModel = ShortcutSettingsViewModel(
             store: ShortcutSettingsStore(userDefaults: defaults),
-            onValidSettingsChanged: { _, _ in
+            onShortcutChanged: { _, _ in
                 notificationCount += 1
                 return .applied
             }
         )
 
-        let didSave = viewModel.save(
-            keyEquivalent: ShortcutSetting.defaultCurrentAppWindowSwitching.keyEquivalent,
-            modifiers: ShortcutSetting.defaultCurrentAppWindowSwitching.modifiers,
-            isUsable: true
+        let didSave = viewModel.record(
+            capture: ShortcutCapture(
+                keyEquivalent: ShortcutSetting.defaultCurrentAppWindowSwitching.keyEquivalent,
+                modifiers: ShortcutSetting.defaultCurrentAppWindowSwitching.modifiers
+            ),
+            for: .currentAppWindowSwitching
         )
 
         try expectTrue(didSave)
@@ -886,13 +891,15 @@ enum ShortcutSettingsStoreTests {
             store: ShortcutSettingsStore(userDefaults: makeDefaults())
         )
 
-        let firstSave = viewModel.save(
-            keyEquivalent: "K",
-            modifiers: [],
-            isUsable: true
+        let firstSave = viewModel.record(
+            capture: ShortcutCapture(keyEquivalent: "K", modifiers: []),
+            for: .currentAppWindowSwitching
         )
         try expectFalse(firstSave)
-        try expectEqual(viewModel.errorMessage, "Shortcut must include at least one modifier.")
+        try expectEqual(
+            viewModel.errorMessage(for: .currentAppWindowSwitching),
+            "Shortcut must include at least one modifier."
+        )
 
         var publishCount = 0
         let cancellable = viewModel.objectWillChange.sink {
@@ -902,14 +909,16 @@ enum ShortcutSettingsStoreTests {
             cancellable.cancel()
         }
 
-        let secondSave = viewModel.save(
-            keyEquivalent: "K",
-            modifiers: [],
-            isUsable: true
+        let secondSave = viewModel.record(
+            capture: ShortcutCapture(keyEquivalent: "K", modifiers: []),
+            for: .currentAppWindowSwitching
         )
 
         try expectFalse(secondSave)
-        try expectEqual(viewModel.errorMessage, "Shortcut must include at least one modifier.")
+        try expectEqual(
+            viewModel.errorMessage(for: .currentAppWindowSwitching),
+            "Shortcut must include at least one modifier."
+        )
         try expectEqual(publishCount, 0)
     }
 
@@ -917,18 +926,19 @@ enum ShortcutSettingsStoreTests {
         let store = ShortcutSettingsStore(userDefaults: makeDefaults())
         let viewModel = ShortcutSettingsViewModel(store: store)
 
-        let didSave = viewModel.save(
-            keyEquivalent: "Tab",
-            keyCode: 48,
-            modifiers: ["command"],
-            isUsable: true
+        let didSave = viewModel.record(
+            capture: ShortcutCapture(keyEquivalent: "Tab", modifiers: ["command"], keyCode: 48),
+            for: .currentAppWindowSwitching
         )
 
         try expectFalse(didSave)
-        try expectEqual(viewModel.currentAppWindowShortcut, .defaultCurrentAppWindowSwitching)
+        try expectEqual(
+            viewModel.configuration(for: .currentAppWindowSwitching).shortcut,
+            .defaultCurrentAppWindowSwitching
+        )
         try expectEqual(currentAppWindowShortcut(in: store), .defaultCurrentAppWindowSwitching)
         try expectEqual(
-            viewModel.errorMessage,
+            viewModel.errorMessage(for: .currentAppWindowSwitching),
             "Shortcut is already used by another switcher mode."
         )
     }
@@ -942,7 +952,10 @@ enum ShortcutSettingsStoreTests {
 
         let viewModel = ShortcutSettingsViewModel(store: store)
 
-        try expectEqual(viewModel.registrationMessage(), "Shortcut unavailable")
+        try expectEqual(
+            viewModel.registrationMessage(for: .currentAppWindowSwitching),
+            "Shortcut unavailable"
+        )
     }
 
     static func testViewModelCombinesRegistrationMessages() throws {
@@ -957,7 +970,7 @@ enum ShortcutSettingsStoreTests {
         let viewModel = ShortcutSettingsViewModel(store: store)
 
         try expectEqual(
-            viewModel.registrationMessage(),
+            viewModel.registrationMessage(for: .currentAppWindowSwitching),
             "Cmd + ` unavailable Option + ` unavailable Fallback failed"
         )
     }
@@ -974,9 +987,12 @@ enum ShortcutSettingsStoreTests {
 
         let viewModel = ShortcutSettingsViewModel(store: store)
 
-        try expectEqual(viewModel.registrationMessage(), "Window first Window second")
         try expectEqual(
-            viewModel.applicationSwitchingRegistrationMessage(),
+            viewModel.registrationMessage(for: .currentAppWindowSwitching),
+            "Window first Window second"
+        )
+        try expectEqual(
+            viewModel.registrationMessage(for: .applicationSwitching),
             "Applications first Applications second"
         )
     }
@@ -1001,9 +1017,12 @@ enum ShortcutSettingsStoreTests {
 
         let viewModel = ShortcutSettingsViewModel(store: store)
 
-        try expectEqual(viewModel.registrationMessage(), nil)
         try expectEqual(
-            viewModel.applicationSwitchingRegistrationMessage(),
+            viewModel.registrationMessage(for: .currentAppWindowSwitching),
+            nil
+        )
+        try expectEqual(
+            viewModel.registrationMessage(for: .applicationSwitching),
             ApplicationSwitchingHotkeyController.registrationFailureMessage
         )
     }
@@ -1018,7 +1037,10 @@ enum ShortcutSettingsStoreTests {
         ])
         NotificationCenter.default.post(name: .shortcutRegistrationDidChange, object: nil)
 
-        try expectEqual(viewModel.registrationMessage(), "Window fallback failed")
+        try expectEqual(
+            viewModel.registrationMessage(for: .currentAppWindowSwitching),
+            "Window fallback failed"
+        )
     }
 
     static func testViewModelDoesNotPublishUnchangedRegistrationMessages() throws {
@@ -1039,7 +1061,10 @@ enum ShortcutSettingsStoreTests {
 
         NotificationCenter.default.post(name: .shortcutRegistrationDidChange, object: nil)
 
-        try expectEqual(viewModel.registrationMessage(), "Shortcut unavailable")
+        try expectEqual(
+            viewModel.registrationMessage(for: .currentAppWindowSwitching),
+            "Shortcut unavailable"
+        )
         try expectEqual(publishCount, 0)
     }
 
@@ -1087,17 +1112,58 @@ enum ShortcutSettingsStoreTests {
         let store = ShortcutSettingsStore(userDefaults: defaults)
         let viewModel = ShortcutSettingsViewModel(store: store)
 
-        _ = viewModel.save(
-            keyEquivalent: "K",
-            modifiers: ["option", "control"],
-            isUsable: true
+        _ = viewModel.record(
+            capture: ShortcutCapture(keyEquivalent: "K", modifiers: ["option", "control"]),
+            for: .currentAppWindowSwitching
         )
 
-        let reset = viewModel.resetToDefault()
+        let reset = viewModel.resetToDefault(for: .currentAppWindowSwitching)
 
         try expectTrue(reset)
-        try expectEqual(viewModel.currentAppWindowShortcut, .defaultCurrentAppWindowSwitching)
+        try expectEqual(
+            viewModel.configuration(for: .currentAppWindowSwitching).shortcut,
+            .defaultCurrentAppWindowSwitching
+        )
         try expectEqual(currentAppWindowShortcut(in: store), .defaultCurrentAppWindowSwitching)
+    }
+
+    @MainActor
+    static func testRecordingCoordinatorStopsPreviousModeBeforeStartingNext() throws {
+        let coordinator = ShortcutRecordingCoordinator()
+        var events: [String] = []
+
+        coordinator.begin(mode: .currentAppWindowSwitching) {
+            events.append("window-end")
+        }
+        coordinator.begin(mode: .applicationSwitching) {
+            events.append("application-end")
+        }
+
+        try expectEqual(events, ["window-end"])
+        try expectEqual(coordinator.activeMode, .applicationSwitching)
+
+        coordinator.end(mode: .applicationSwitching)
+
+        try expectEqual(events, ["window-end"])
+        try expectEqual(coordinator.activeMode, nil)
+    }
+
+    @MainActor
+    static func testRecordingCoordinatorIgnoresStaleModeEnd() throws {
+        let coordinator = ShortcutRecordingCoordinator()
+        var stopCount = 0
+
+        coordinator.begin(mode: .currentAppWindowSwitching) {
+            stopCount += 1
+        }
+        coordinator.begin(mode: .applicationSwitching) {
+            stopCount += 1
+        }
+
+        coordinator.end(mode: .currentAppWindowSwitching)
+
+        try expectEqual(stopCount, 1)
+        try expectEqual(coordinator.activeMode, .applicationSwitching)
     }
 
     private static func currentAppWindowShortcut(

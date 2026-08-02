@@ -198,7 +198,7 @@ enum ShortcutCaptureTests {
 
         let saved = viewModel.record(
             capture: ShortcutCapture(keyEquivalent: "j", modifiers: ["option", "control"]),
-            isUsable: true
+            for: .currentAppWindowSwitching
         )
 
         try expectTrue(saved)
@@ -218,7 +218,7 @@ enum ShortcutCaptureTests {
 
         let saved = viewModel.record(
             capture: ShortcutCapture(keyEquivalent: "λ", modifiers: ["command"], keyCode: 40),
-            isUsable: true
+            for: .currentAppWindowSwitching
         )
 
         try expectTrue(saved)

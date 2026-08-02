@@ -104,37 +104,6 @@ public final class ShortcutSettingsViewModel: ObservableObject {
             }
     }
 
-    // TODO(Task 5): Remove this deprecated compatibility shim when the settings UI uses configuration(for:).
-    public var currentAppWindowShortcut: ShortcutSetting {
-        configuration(for: .currentAppWindowSwitching).shortcut
-    }
-
-    // TODO(Task 5): Remove this deprecated compatibility shim when errors render per mode.
-    public var errorMessage: String? {
-        errorMessage(for: .currentAppWindowSwitching)
-            ?? errorMessage(for: .applicationSwitching)
-    }
-
-    // TODO(Task 4): Remove this deprecated initializer after callback wiring accepts configurations.
-    public convenience init(
-        store: ShortcutSettingsStore = ShortcutSettingsStore(),
-        validator: ShortcutValidationService = ShortcutValidationService(),
-        permissionStateProvider: @escaping () -> PermissionState = { PermissionService().currentState() },
-        onValidSettingsChanged: @escaping (
-            ShortcutSetting,
-            ShortcutSetting
-        ) -> ShortcutChangeResult
-    ) {
-        self.init(
-            store: store,
-            validator: validator,
-            permissionStateProvider: permissionStateProvider,
-            onShortcutChanged: { candidate, previous in
-                onValidSettingsChanged(candidate.shortcut, previous.shortcut)
-            }
-        )
-    }
-
     public func configuration(for mode: SwitcherMode) -> SwitcherShortcutConfiguration {
         shortcutState.configurations.first { $0.mode == mode }
             ?? .defaultValue(for: mode)
@@ -146,14 +115,6 @@ public final class ShortcutSettingsViewModel: ObservableObject {
 
     public func registrationMessage(for mode: SwitcherMode) -> String? {
         registrationMessageText.message(for: mode)
-    }
-
-    public func registrationMessage() -> String? {
-        registrationMessage(for: .currentAppWindowSwitching)
-    }
-
-    public func applicationSwitchingRegistrationMessage() -> String? {
-        registrationMessage(for: .applicationSwitching)
     }
 
     public func refreshPermissionState() {
@@ -213,43 +174,6 @@ public final class ShortcutSettingsViewModel: ObservableObject {
             isUsable: defaultShortcut.isUsable,
             for: mode
         )
-    }
-
-    // TODO(Task 5): Remove this deprecated window-only compatibility API with the old settings row.
-    @discardableResult
-    public func save(
-        keyEquivalent: String,
-        keyCode: UInt16? = nil,
-        modifiers: [String],
-        isUsable: Bool
-    ) -> Bool {
-        updateShortcut(
-            keyEquivalent: keyEquivalent,
-            keyCode: keyCode,
-            modifiers: modifiers,
-            isUsable: isUsable,
-            for: .currentAppWindowSwitching
-        )
-    }
-
-    // TODO(Task 5): Remove this deprecated window-only compatibility API with the old settings row.
-    @discardableResult
-    public func record(
-        capture: ShortcutCapture,
-        isUsable: Bool
-    ) -> Bool {
-        save(
-            keyEquivalent: capture.keyEquivalent,
-            keyCode: capture.keyCode,
-            modifiers: capture.modifiers,
-            isUsable: isUsable
-        )
-    }
-
-    // TODO(Task 5): Remove this deprecated window-only compatibility API with the old settings row.
-    @discardableResult
-    public func resetToDefault() -> Bool {
-        resetToDefault(for: .currentAppWindowSwitching)
     }
 
     private func updateShortcut(
