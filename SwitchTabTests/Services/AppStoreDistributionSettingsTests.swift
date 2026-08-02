@@ -17,7 +17,10 @@ enum AppStoreDistributionSettingsTests {
         try testAppSandboxIsDisabledForGlobalWindowSwitching()
         try testSparkleAdapterIsDirectDistributionGuarded()
         try testSparkleErrorUIIsDirectDistributionGuarded()
-        try testAppDelegateTreatsEnabledApplicationShortcutsAsWindowConflicts()
+        try testEnabledApplicationConflictUsesConfiguredForwardAndShiftReverse()
+        try testDisabledApplicationContributesNoWindowConflicts()
+        try testWindowRegistrationConflictListsComeFromPolicyBoundary()
+        try testAppDelegateReferencesShortcutConflictPolicy()
         try testDirectDistributionScriptGeneratesIsolatedProjectVariant()
         try testDirectDistributionScriptPinsSparkleToExactRevision()
         try testDirectDistributionScriptRequiresSparklePublicKey()
@@ -149,33 +152,54 @@ enum AppStoreDistributionSettingsTests {
         }
     }
 
-    static func testAppDelegateTreatsEnabledApplicationShortcutsAsWindowConflicts() throws {
-        let conflictingWindowShortcut = ShortcutSetting(
-            id: "current-app-window-switching",
-            mode: .currentAppWindowSwitching,
-            keyEquivalent: "Tab",
-            keyCode: 48,
-            modifiers: ["command"],
-            isUsable: true
-        )
-        let configurations = [
-            SwitcherShortcutConfiguration(
-                mode: .currentAppWindowSwitching,
-                isEnabled: true,
-                shortcut: conflictingWindowShortcut
-            ),
-            SwitcherShortcutConfiguration.defaultApplicationSwitching
-        ]
+    static func testEnabledApplicationConflictUsesConfiguredForwardAndShiftReverse() throws {
         let applicationShortcutConflicts = AppDelegateShortcutConflictPolicy
-            .enabledApplicationShortcuts(in: configurations)
-        let expectedApplicationForward = ShortcutSetting.defaultApplicationSwitching
-        let expectedApplicationReverse = expectedApplicationForward.reverseVariant(
-            id: "\(expectedApplicationForward.id)-reverse"
+            .enabledApplicationShortcuts(in: conflictConfigurations(applicationEnabled: true))
+
+        try expectEqual(applicationShortcutConflicts.count, 2)
+        try expectEqual(applicationShortcutConflicts[0], customApplicationShortcut)
+        try expectEqual(applicationShortcutConflicts[1].id, "application-switching-reverse")
+        try expectEqual(applicationShortcutConflicts[1].mode, .applicationSwitching)
+        try expectEqual(applicationShortcutConflicts[1].keyEquivalent, "Space")
+        try expectEqual(applicationShortcutConflicts[1].keyCode, 49)
+        try expectEqual(
+            applicationShortcutConflicts[1].modifiers,
+            ["option", "control", "shift"]
         )
+        try expectTrue(applicationShortcutConflicts[1].isUsable)
+    }
+
+    static func testDisabledApplicationContributesNoWindowConflicts() throws {
+        let configurations = conflictConfigurations(applicationEnabled: false)
 
         try expectEqual(
-            applicationShortcutConflicts,
-            [expectedApplicationForward, expectedApplicationReverse]
+            AppDelegateShortcutConflictPolicy.enabledApplicationShortcuts(in: configurations),
+            []
+        )
+
+        let existingShortcuts = AppDelegateShortcutConflictPolicy
+            .windowRegistrationExistingShortcuts(
+                windowSetting: conflictingWindowShortcut,
+                configurations: configurations
+            )
+        try expectEqual(existingShortcuts.forward, [])
+        try expectEqual(existingShortcuts.reverse, [conflictingWindowShortcut])
+    }
+
+    static func testWindowRegistrationConflictListsComeFromPolicyBoundary() throws {
+        let configurations = conflictConfigurations(applicationEnabled: true)
+        let applicationShortcutConflicts = AppDelegateShortcutConflictPolicy
+            .enabledApplicationShortcuts(in: configurations)
+
+        let registrationExistingShortcuts = AppDelegateShortcutConflictPolicy
+            .windowRegistrationExistingShortcuts(
+                windowSetting: conflictingWindowShortcut,
+                configurations: configurations
+            )
+        try expectEqual(registrationExistingShortcuts.forward, applicationShortcutConflicts)
+        try expectEqual(
+            registrationExistingShortcuts.reverse,
+            [conflictingWindowShortcut] + applicationShortcutConflicts
         )
 
         let registrar = AppDelegateConflictRecordingRegistrar()
@@ -183,7 +207,7 @@ enum AppStoreDistributionSettingsTests {
         let result = service.registerFirstUsable(
             primaryCandidate: conflictingWindowShortcut,
             fallbackCandidate: .fallbackCurrentAppWindowSwitching,
-            existing: applicationShortcutConflicts,
+            existing: registrationExistingShortcuts.forward,
             mode: .currentAppWindowSwitching
         ) {}
 
@@ -193,26 +217,22 @@ enum AppStoreDistributionSettingsTests {
             .fallbackCurrentAppWindowSwitching
         )
         try expectEqual(registrar.registeredKeyCodes, [50])
+    }
 
-        var disabledConfigurations = configurations
-        disabledConfigurations[1].isEnabled = false
-        try expectEqual(
-            AppDelegateShortcutConflictPolicy.enabledApplicationShortcuts(
-                in: disabledConfigurations
-            ),
-            []
-        )
-
+    static func testAppDelegateReferencesShortcutConflictPolicy() throws {
         let appDelegateSource = try String(
             contentsOf: projectRoot.appendingPathComponent("SwitchTab/AppDelegate.swift"),
             encoding: .utf8
         )
-        try expectTrue(appDelegateSource.contains("AppDelegateShortcutConflictPolicy"))
-        try expectTrue(appDelegateSource.contains("enabledApplicationShortcuts"))
-        try expectTrue(appDelegateSource.contains("existing: applicationShortcutConflicts"))
-        try expectTrue(appDelegateSource.contains(
-            "existing: [windowSetting] + applicationShortcutConflicts"
-        ))
+        guard let appDelegateDeclaration = appDelegateSource.range(
+            of: "public final class AppDelegate"
+        ) else {
+            throw TestFailure.failed("Expected AppDelegate declaration")
+        }
+        let appDelegateImplementation = appDelegateSource[appDelegateDeclaration.lowerBound...]
+
+        try expectTrue(appDelegateImplementation.contains("AppDelegateShortcutConflictPolicy"))
+        try expectTrue(appDelegateImplementation.contains("windowRegistrationExistingShortcuts"))
     }
 
     static func testDirectDistributionScriptGeneratesIsolatedProjectVariant() throws {
@@ -290,6 +310,43 @@ enum AppStoreDistributionSettingsTests {
         try expectTrue(guideContents.contains("SPARKLE_PUBLIC_ED_KEY"))
         try expectTrue(guideContents.contains("SWITCHTAB_UPDATE_FEED_URL"))
         try expectTrue(guideContents.contains("DEVELOPER_ID_APPLICATION"))
+    }
+
+    private static var customApplicationShortcut: ShortcutSetting {
+        ShortcutSetting.defaultApplicationSwitching.replacingWithValidation(
+            keyEquivalent: "Space",
+            keyCode: 49,
+            modifiers: ["option", "control"],
+            isUsable: true
+        )
+    }
+
+    private static var conflictingWindowShortcut: ShortcutSetting {
+        ShortcutSetting(
+            id: "current-app-window-switching",
+            mode: .currentAppWindowSwitching,
+            keyEquivalent: "Space",
+            keyCode: 49,
+            modifiers: ["option", "control"],
+            isUsable: true
+        )
+    }
+
+    private static func conflictConfigurations(
+        applicationEnabled: Bool
+    ) -> [SwitcherShortcutConfiguration] {
+        [
+            SwitcherShortcutConfiguration(
+                mode: .currentAppWindowSwitching,
+                isEnabled: true,
+                shortcut: conflictingWindowShortcut
+            ),
+            SwitcherShortcutConfiguration(
+                mode: .applicationSwitching,
+                isEnabled: applicationEnabled,
+                shortcut: customApplicationShortcut
+            )
+        ]
     }
 
     private static var projectRoot: URL {
