@@ -1,6 +1,6 @@
 public final class ApplicationSwitchingHotkeyController {
     public static let registrationFailureMessage =
-        "Cmd-Tab replacement needs Accessibility permission. Grant access in Permissions, then return to SwitchTab."
+        "Application switching needs Accessibility permission. Grant access in Permissions, then return to SwitchTab."
 
     private let hotkeyService: HotkeyService
     private var registrationMessages: [ShortcutRegistrationMessage] = []
@@ -17,6 +17,7 @@ public final class ApplicationSwitchingHotkeyController {
 
     @discardableResult
     public func updateRegistration(
+        setting: ShortcutSetting,
         enabled: Bool,
         forwardHandler: @escaping () -> Void,
         reverseHandler: @escaping () -> Void
@@ -29,7 +30,7 @@ public final class ApplicationSwitchingHotkeyController {
         }
 
         let forwardResult = hotkeyService.register(
-            setting: .defaultApplicationSwitching,
+            setting: setting,
             existing: [] as [ShortcutSetting],
             mode: .applicationSwitching,
             handler: forwardHandler
@@ -38,9 +39,10 @@ public final class ApplicationSwitchingHotkeyController {
             return handleRegistrationFailure()
         }
 
+        let reverseSetting = setting.reverseVariant(id: "application-switching-reverse")
         let reverseResult = hotkeyService.register(
-            setting: .defaultApplicationSwitchingReverse,
-            existing: [.defaultApplicationSwitching],
+            setting: reverseSetting,
+            existing: [setting],
             mode: .applicationSwitching,
             handler: reverseHandler
         )
@@ -49,6 +51,21 @@ public final class ApplicationSwitchingHotkeyController {
         }
 
         return true
+    }
+
+    // TODO(Task 4): Remove this compatibility overload once AppDelegate passes its stored setting.
+    @discardableResult
+    public func updateRegistration(
+        enabled: Bool,
+        forwardHandler: @escaping () -> Void,
+        reverseHandler: @escaping () -> Void
+    ) -> Bool {
+        updateRegistration(
+            setting: .defaultApplicationSwitching,
+            enabled: enabled,
+            forwardHandler: forwardHandler,
+            reverseHandler: reverseHandler
+        )
     }
 
     public func unregisterAll() {

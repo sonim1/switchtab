@@ -5,6 +5,7 @@ import Foundation
 enum ApplicationSwitchingTests {
     static func run() throws {
         try testDefaultApplicationSwitchingShortcutsAreFixed()
+        try testControllerRegistersCustomApplicationShortcutAndReverseHandlers()
         try testControllerEnablesForwardAndReverseHandlersInOrder()
         try testControllerReenableUnregistersBeforeRegisteringAgain()
         try testControllerDisableDoesNotRegisterAndUnregistersEnabledRegistrations()
@@ -60,6 +61,43 @@ enum ApplicationSwitchingTests {
         try expectTrue(forward.id != reverse.id)
     }
 
+    static func testControllerRegistersCustomApplicationShortcutAndReverseHandlers() throws {
+        let registrar = ApplicationSwitchingRecordingRegistrar()
+        let controller = ApplicationSwitchingHotkeyController(
+            hotkeyService: HotkeyService(registrar: registrar)
+        )
+        let setting = ShortcutSetting(
+            id: "custom-application-switching",
+            mode: .applicationSwitching,
+            keyEquivalent: "Space",
+            keyCode: 49,
+            modifiers: ["option"],
+            isUsable: true
+        )
+        let reverse = setting.reverseVariant(id: "application-switching-reverse")
+        var forwardCount = 0
+        var reverseCount = 0
+
+        let didRegister = controller.updateRegistration(
+            setting: setting,
+            enabled: true,
+            forwardHandler: { forwardCount += 1 },
+            reverseHandler: { reverseCount += 1 }
+        )
+
+        try expectTrue(didRegister)
+        try expectEqual(registrar.events, ["register-forward", "register-reverse"])
+        try expectEqual(registrar.attemptedSettings, [setting, reverse])
+
+        registrar.invoke(settingID: setting.id)
+        try expectEqual(forwardCount, 1)
+        try expectEqual(reverseCount, 0)
+
+        registrar.invoke(settingID: reverse.id)
+        try expectEqual(forwardCount, 1)
+        try expectEqual(reverseCount, 1)
+    }
+
     static func testControllerEnablesForwardAndReverseHandlersInOrder() throws {
         let registrar = ApplicationSwitchingRecordingRegistrar()
         let controller = ApplicationSwitchingHotkeyController(
@@ -69,6 +107,7 @@ enum ApplicationSwitchingTests {
         var reverseCount = 0
 
         let didRegister = controller.updateRegistration(
+            setting: .defaultApplicationSwitching,
             enabled: true,
             forwardHandler: { forwardCount += 1 },
             reverseHandler: { reverseCount += 1 }
@@ -96,10 +135,20 @@ enum ApplicationSwitchingTests {
             hotkeyService: HotkeyService(registrar: registrar)
         )
 
-        try expectTrue(controller.updateRegistration(enabled: true, forwardHandler: {}, reverseHandler: {}))
+        try expectTrue(controller.updateRegistration(
+            setting: .defaultApplicationSwitching,
+            enabled: true,
+            forwardHandler: {},
+            reverseHandler: {}
+        ))
         registrar.events.removeAll()
 
-        try expectTrue(controller.updateRegistration(enabled: true, forwardHandler: {}, reverseHandler: {}))
+        try expectTrue(controller.updateRegistration(
+            setting: .defaultApplicationSwitching,
+            enabled: true,
+            forwardHandler: {},
+            reverseHandler: {}
+        ))
 
         try expectEqual(registrar.events, ["unregister", "register-forward", "register-reverse"])
     }
@@ -110,13 +159,28 @@ enum ApplicationSwitchingTests {
             hotkeyService: HotkeyService(registrar: registrar)
         )
 
-        try expectTrue(controller.updateRegistration(enabled: false, forwardHandler: {}, reverseHandler: {}))
+        try expectTrue(controller.updateRegistration(
+            setting: .defaultApplicationSwitching,
+            enabled: false,
+            forwardHandler: {},
+            reverseHandler: {}
+        ))
         try expectEqual(registrar.events, [])
 
-        try expectTrue(controller.updateRegistration(enabled: true, forwardHandler: {}, reverseHandler: {}))
+        try expectTrue(controller.updateRegistration(
+            setting: .defaultApplicationSwitching,
+            enabled: true,
+            forwardHandler: {},
+            reverseHandler: {}
+        ))
         registrar.events.removeAll()
 
-        try expectTrue(controller.updateRegistration(enabled: false, forwardHandler: {}, reverseHandler: {}))
+        try expectTrue(controller.updateRegistration(
+            setting: .defaultApplicationSwitching,
+            enabled: false,
+            forwardHandler: {},
+            reverseHandler: {}
+        ))
 
         try expectEqual(registrar.events, ["unregister"])
         try expectEqual(controller.registrationMessageSnapshot(), [])
@@ -132,6 +196,7 @@ enum ApplicationSwitchingTests {
         var forwardCount = 0
 
         let didRegister = controller.updateRegistration(
+            setting: .defaultApplicationSwitching,
             enabled: true,
             forwardHandler: { forwardCount += 1 },
             reverseHandler: {}
@@ -168,7 +233,12 @@ enum ApplicationSwitchingTests {
         var controller: ApplicationSwitchingHotkeyController? = ApplicationSwitchingHotkeyController(
             hotkeyService: HotkeyService(registrar: applicationRegistrar)
         )
-        _ = controller?.updateRegistration(enabled: true, forwardHandler: {}, reverseHandler: {})
+        _ = controller?.updateRegistration(
+            setting: .defaultApplicationSwitching,
+            enabled: true,
+            forwardHandler: {},
+            reverseHandler: {}
+        )
         controller?.unregisterAll()
         controller = nil
 
@@ -1002,9 +1072,9 @@ private final class ApplicationSwitchingRecordingRegistrar: HotkeyRegistering {
     func register(setting: ShortcutSetting, handler: @escaping () -> Void) -> Bool {
         attemptedSettings.append(setting)
         events.append(
-            setting.id == ShortcutSetting.defaultApplicationSwitching.id
-                ? "register-forward"
-                : "register-reverse"
+            setting.id.hasSuffix("-reverse")
+                ? "register-reverse"
+                : "register-forward"
         )
         guard shouldRegister(setting) else {
             return false
