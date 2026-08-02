@@ -8,6 +8,12 @@ public extension Notification.Name {
     static let shortcutRecordingDidEnd = Notification.Name("SwitchTab.shortcutRecordingDidEnd")
 }
 
+public enum ShortcutChangeResult: Equatable, Sendable {
+    case applied
+    case rejectedPreviousRestored
+    case rollbackFailed
+}
+
 public final class ShortcutSettingsViewModel: ObservableObject {
     private struct ModeMessageText: Equatable {
         var currentAppWindowSwitching: String?
@@ -52,7 +58,7 @@ public final class ShortcutSettingsViewModel: ObservableObject {
     private let onShortcutChanged: (
         SwitcherShortcutConfiguration,
         SwitcherShortcutConfiguration
-    ) -> Bool
+    ) -> ShortcutChangeResult
     private let onEnabledChanged: (SwitcherShortcutConfiguration) -> Void
     private var registrationMessageCancellable: AnyCancellable?
 
@@ -64,7 +70,7 @@ public final class ShortcutSettingsViewModel: ObservableObject {
         onShortcutChanged: @escaping (
             SwitcherShortcutConfiguration,
             SwitcherShortcutConfiguration
-        ) -> Bool = { _, _ in true },
+        ) -> ShortcutChangeResult = { _, _ in .applied },
         onEnabledChanged: @escaping (SwitcherShortcutConfiguration) -> Void = { _ in }
     ) {
         let configurations = store.loadConfigurations()
@@ -114,7 +120,10 @@ public final class ShortcutSettingsViewModel: ObservableObject {
         store: ShortcutSettingsStore = ShortcutSettingsStore(),
         validator: ShortcutValidationService = ShortcutValidationService(),
         permissionStateProvider: @escaping () -> PermissionState = { PermissionService().currentState() },
-        onValidSettingsChanged: @escaping (ShortcutSetting, ShortcutSetting) -> Bool
+        onValidSettingsChanged: @escaping (
+            ShortcutSetting,
+            ShortcutSetting
+        ) -> ShortcutChangeResult
     ) {
         self.init(
             store: store,
@@ -280,9 +289,18 @@ public final class ShortcutSettingsViewModel: ObservableObject {
             return false
         }
 
-        guard onShortcutChanged(candidate, previous) else {
+        switch onShortcutChanged(candidate, previous) {
+        case .applied:
+            break
+        case .rejectedPreviousRestored:
             setErrorMessage(
                 "Shortcut could not be registered. The previous shortcut is still active.",
+                for: mode
+            )
+            return false
+        case .rollbackFailed:
+            setErrorMessage(
+                "Shortcut could not be registered, and the previous shortcut could not be restored.",
                 for: mode
             )
             return false
@@ -293,7 +311,7 @@ public final class ShortcutSettingsViewModel: ObservableObject {
         do {
             try saveConfigurations(configurations)
         } catch {
-            let didRestorePreviousShortcut = onShortcutChanged(previous, candidate)
+            let didRestorePreviousShortcut = onShortcutChanged(previous, candidate) == .applied
             setErrorMessage(
                 didRestorePreviousShortcut
                     ? "Shortcut could not be saved."

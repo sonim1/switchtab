@@ -26,6 +26,7 @@ enum ShortcutSettingsStoreTests {
         try testUnchangedShortcutClearsOnlyItsModeError()
         try testEnabledPersistenceFailureKeepsConfigurationAndSetsModeError()
         try testRegistrationFailureKeepsConfigurationsAndSetsModeError()
+        try testRegistrationRollbackFailureKeepsConfigurationsAndSetsDistinctError()
         try testPersistenceFailureRollsBackLiveRegistration()
         try testPersistenceFailureReportsFailedLiveRegistrationRollback()
         try testForwardConflictAcrossModesIsRejected()
@@ -400,7 +401,7 @@ enum ShortcutSettingsStoreTests {
             store: ShortcutSettingsStore(userDefaults: defaults),
             onShortcutChanged: { _, _ in
                 callbackCount += 1
-                return true
+                return .applied
             }
         )
         let initialWriteCount = defaults.writeCount
@@ -432,7 +433,7 @@ enum ShortcutSettingsStoreTests {
             store: ShortcutSettingsStore(userDefaults: defaults),
             onShortcutChanged: { _, _ in
                 callbackCount += 1
-                return true
+                return .applied
             }
         )
         let initialWriteCount = defaults.writeCount
@@ -508,7 +509,7 @@ enum ShortcutSettingsStoreTests {
             store: store,
             onShortcutChanged: { _, _ in
                 callbackCount += 1
-                return false
+                return .rejectedPreviousRestored
             }
         )
         let previous = store.loadConfigurations()
@@ -530,6 +531,34 @@ enum ShortcutSettingsStoreTests {
         try expectEqual(
             viewModel.errorMessage(for: .applicationSwitching),
             "Shortcut could not be registered. The previous shortcut is still active."
+        )
+        try expectEqual(viewModel.errorMessage(for: .currentAppWindowSwitching), nil)
+    }
+
+    static func testRegistrationRollbackFailureKeepsConfigurationsAndSetsDistinctError() throws {
+        let store = ShortcutSettingsStore(userDefaults: makeDefaults())
+        let previous = store.loadConfigurations()
+        let viewModel = ShortcutSettingsViewModel(
+            store: store,
+            onShortcutChanged: { _, _ in .rollbackFailed }
+        )
+
+        let didRecord = viewModel.record(
+            capture: ShortcutCapture(
+                keyEquivalent: "Space",
+                modifiers: ["option"],
+                keyCode: 49
+            ),
+            for: .applicationSwitching
+        )
+
+        try expectFalse(didRecord)
+        try expectEqual(viewModel.configuration(for: .currentAppWindowSwitching), previous[0])
+        try expectEqual(viewModel.configuration(for: .applicationSwitching), previous[1])
+        try expectEqual(store.loadConfigurations(), previous)
+        try expectEqual(
+            viewModel.errorMessage(for: .applicationSwitching),
+            "Shortcut could not be registered, and the previous shortcut could not be restored."
         )
         try expectEqual(viewModel.errorMessage(for: .currentAppWindowSwitching), nil)
     }
@@ -560,7 +589,7 @@ enum ShortcutSettingsStoreTests {
             onShortcutChanged: { candidate, previous in
                 callbackCandidates.append(candidate)
                 callbackPreviousValues.append(previous)
-                return true
+                return .applied
             }
         )
 
@@ -604,7 +633,7 @@ enum ShortcutSettingsStoreTests {
         )
         var callbackCandidates: [SwitcherShortcutConfiguration] = []
         var callbackPreviousValues: [SwitcherShortcutConfiguration] = []
-        var callbackResults = [true, false]
+        var callbackResults: [ShortcutChangeResult] = [.applied, .rollbackFailed]
         var saveAttemptCount = 0
         let viewModel = ShortcutSettingsViewModel(
             store: store,
@@ -651,7 +680,7 @@ enum ShortcutSettingsStoreTests {
             store: store,
             onShortcutChanged: { _, _ in
                 callbackCount += 1
-                return true
+                return .applied
             }
         )
         let previous = store.loadConfigurations()
@@ -748,7 +777,7 @@ enum ShortcutSettingsStoreTests {
         ])
         let viewModel = ShortcutSettingsViewModel(
             store: store,
-            onValidSettingsChanged: { _, _ in false }
+            onValidSettingsChanged: { _, _ in .rejectedPreviousRestored }
         )
 
         let didSave = viewModel.save(
@@ -837,7 +866,7 @@ enum ShortcutSettingsStoreTests {
             store: ShortcutSettingsStore(userDefaults: defaults),
             onValidSettingsChanged: { _, _ in
                 notificationCount += 1
-                return true
+                return .applied
             }
         )
 

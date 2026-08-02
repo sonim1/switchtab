@@ -16,7 +16,7 @@ public protocol HotkeyRegistering {
 public final class HotkeyService {
     private let registrar: any HotkeyRegistering
     private let validator: ShortcutValidationService
-    private var registeredSettingsByMode: [SwitcherMode: ShortcutSetting] = [:]
+    private var registeredSettingsByMode: [SwitcherMode: [ShortcutSetting]] = [:]
     private var registrationMessages: [ShortcutRegistrationMessage] = []
 
     public init(
@@ -93,7 +93,11 @@ public final class HotkeyService {
     }
 
     public func registeredSetting(for mode: SwitcherMode) -> ShortcutSetting? {
-        registeredSettingsByMode[mode]
+        registeredSettingsByMode[mode]?.first
+    }
+
+    public func registeredSettings(for mode: SwitcherMode) -> [ShortcutSetting] {
+        registeredSettingsByMode[mode] ?? []
     }
 
     public func registrationMessageSnapshot() -> [ShortcutRegistrationMessage] {
@@ -117,9 +121,7 @@ public final class HotkeyService {
             return false
         }
 
-        if registeredSettingsByMode[mode] == nil {
-            registeredSettingsByMode[mode] = setting
-        }
+        registeredSettingsByMode[mode, default: []].append(setting)
 
         if let requestedDisplayText {
             registrationMessages.append(

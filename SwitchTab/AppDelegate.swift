@@ -24,26 +24,31 @@ enum AppDelegateShortcutConflictPolicy {
 }
 
 struct ApplicationShortcutLifecycleTransaction {
+    let previousWindowSettings: [ShortcutSetting]
     let suspendWindow: () -> Void
     let registerApplicationCandidate: () -> Bool
     let registerWindowWithCandidateConflicts: () -> Bool
-    let restorePreviousApplication: () -> Void
-    let restorePreviousWindow: () -> Void
+    let restorePreviousApplication: () -> Bool
+    let restorePreviousWindow: ([ShortcutSetting]) -> Bool
 
-    func apply() -> Bool {
+    func apply() -> ShortcutChangeResult {
         suspendWindow()
         guard registerApplicationCandidate() else {
-            restorePreviousApplication()
-            restorePreviousWindow()
-            return false
+            return restorePreviousRegistrations()
         }
         guard registerWindowWithCandidateConflicts() else {
-            restorePreviousApplication()
-            restorePreviousWindow()
-            return false
+            return restorePreviousRegistrations()
         }
 
-        return true
+        return .applied
+    }
+
+    private func restorePreviousRegistrations() -> ShortcutChangeResult {
+        let didRestoreApplication = restorePreviousApplication()
+        let didRestoreWindow = restorePreviousWindow(previousWindowSettings)
+        return didRestoreApplication && didRestoreWindow
+            ? .rejectedPreviousRestored
+            : .rollbackFailed
     }
 }
 
@@ -535,7 +540,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.applyShortcutChange(
                         candidateConfiguration: candidate,
                         previousConfiguration: previous
-                    ) ?? false
+                    ) ?? .rollbackFailed
                 },
                 onEnabledChanged: { [weak self] configuration in
                     self?.applyEnabledChange(configuration: configuration)
@@ -700,18 +705,18 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private func applyShortcutChange(
         candidateConfiguration: SwitcherShortcutConfiguration,
         previousConfiguration: SwitcherShortcutConfiguration
-    ) -> Bool {
+    ) -> ShortcutChangeResult {
         let configurations = shortcutStore.loadConfigurations()
 
         switch candidateConfiguration.mode {
         case .currentAppWindowSwitching:
-            let previousLiveSetting = hotkeyService.registeredSetting(
+            let previousLiveSettings = hotkeyService.registeredSettings(
                 for: .currentAppWindowSwitching
             )
             guard candidateConfiguration.isEnabled else {
                 hotkeyService.unregisterAll()
                 persistRegistrationMessages()
-                return true
+                return .applied
             }
 
             guard registerExactWindowHotkeys(
@@ -721,23 +726,22 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     in: configurations
                 )
             ) else {
-                if let previousLiveSetting {
-                    _ = registerExactWindowHotkeys(
-                        setting: previousLiveSetting,
-                        configurations: replacing(
-                            previousConfiguration,
-                            in: configurations
-                        )
+                let didRestorePreviousWindow = restoreExactWindowHotkeys(
+                    settings: previousLiveSettings,
+                    configuredSetting: previousConfiguration.shortcut,
+                    configurations: replacing(
+                        previousConfiguration,
+                        in: configurations
                     )
-                } else {
-                    hotkeyService.unregisterAll()
-                }
+                )
                 persistRegistrationMessages()
-                return false
+                return didRestorePreviousWindow
+                    ? .rejectedPreviousRestored
+                    : .rollbackFailed
             }
 
         case .applicationSwitching:
-            let previousWindowLiveSetting = hotkeyService.registeredSetting(
+            let previousWindowLiveSettings = hotkeyService.registeredSettings(
                 for: .currentAppWindowSwitching
             )
             let candidateConfigurations = replacing(
@@ -752,7 +756,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 previousConfiguration,
                 in: configurations
             )
+            let previousWindowConfiguration = configuration(
+                for: .currentAppWindowSwitching,
+                in: previousConfigurations
+            )
             let transaction = ApplicationShortcutLifecycleTransaction(
+                previousWindowSettings: previousWindowLiveSettings,
                 suspendWindow: {
                     self.hotkeyService.unregisterAll()
                 },
@@ -773,29 +782,27 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 },
                 restorePreviousApplication: {
                     self.hotkeyService.unregisterAll()
-                    _ = self.updateApplicationHotkeyRegistration(
+                    return self.updateApplicationHotkeyRegistration(
                         configuration: previousConfiguration
                     )
                 },
-                restorePreviousWindow: {
-                    if let previousWindowLiveSetting {
-                        _ = self.registerExactWindowHotkeys(
-                            setting: previousWindowLiveSetting,
-                            configurations: previousConfigurations
-                        )
-                    } else {
-                        self.hotkeyService.unregisterAll()
-                    }
+                restorePreviousWindow: { settings in
+                    self.restoreExactWindowHotkeys(
+                        settings: settings,
+                        configuredSetting: previousWindowConfiguration.shortcut,
+                        configurations: previousConfigurations
+                    )
                 }
             )
-            guard transaction.apply() else {
+            let result = transaction.apply()
+            guard result == .applied else {
                 persistRegistrationMessages()
-                return false
+                return result
             }
         }
 
         persistRegistrationMessages()
-        return true
+        return .applied
     }
 
     private func applyEnabledChange(configuration _: SwitcherShortcutConfiguration) {
@@ -806,34 +813,85 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         setting windowSetting: ShortcutSetting,
         configurations: [SwitcherShortcutConfiguration]
     ) -> Bool {
+        restoreExactWindowHotkeys(
+            settings: [
+                windowSetting,
+                windowSetting.reverseVariant(id: "\(windowSetting.id)-reverse")
+            ],
+            configuredSetting: windowSetting,
+            configurations: configurations
+        )
+    }
+
+    private func restoreExactWindowHotkeys(
+        settings: [ShortcutSetting],
+        configuredSetting: ShortcutSetting,
+        configurations: [SwitcherShortcutConfiguration]
+    ) -> Bool {
         hotkeyService.unregisterAll()
-        let existingShortcuts = AppDelegateShortcutConflictPolicy
-            .windowRegistrationExistingShortcuts(
-                windowSetting: windowSetting,
-                configurations: configurations
-            )
+        let applicationShortcuts = AppDelegateShortcutConflictPolicy
+            .enabledApplicationShortcuts(in: configurations)
+        var restoredSettings: [ShortcutSetting] = []
 
-        let forwardResult = hotkeyService.register(
-            setting: windowSetting,
-            existing: existingShortcuts.forward,
-            mode: .currentAppWindowSwitching
-        ) { [weak self] in
-            self?.showCurrentAppSwitcher()
-        }
-        guard forwardResult == .registered else {
-            return false
+        for setting in settings {
+            let existingSettings = applicationShortcuts + restoredSettings
+            let result: HotkeyRegistrationResult
+            switch windowHotkeyDirection(
+                for: setting,
+                configuredSetting: configuredSetting
+            ) {
+            case .forward:
+                result = hotkeyService.register(
+                    setting: setting,
+                    existing: existingSettings,
+                    mode: .currentAppWindowSwitching
+                ) { [weak self] in
+                    self?.showCurrentAppSwitcher()
+                }
+            case .reverse:
+                result = hotkeyService.register(
+                    setting: setting,
+                    existing: existingSettings,
+                    mode: .currentAppWindowSwitching
+                ) { [weak self] in
+                    self?.showCurrentAppSwitcher(reverse: true)
+                }
+            case nil:
+                return false
+            }
+
+            guard result == .registered else {
+                return false
+            }
+            restoredSettings.append(setting)
         }
 
-        let reverseSetting = windowSetting.reverseVariant(id: "\(windowSetting.id)-reverse")
-        let reverseResult = hotkeyService.register(
-            setting: reverseSetting,
-            existing: existingShortcuts.reverse,
-            mode: .currentAppWindowSwitching
-        ) { [weak self] in
-            self?.showCurrentAppSwitcher(reverse: true)
+        return true
+    }
+
+    private enum WindowHotkeyDirection {
+        case forward
+        case reverse
+    }
+
+    private func windowHotkeyDirection(
+        for setting: ShortcutSetting,
+        configuredSetting: ShortcutSetting
+    ) -> WindowHotkeyDirection? {
+        if setting == configuredSetting
+            || setting == .fallbackCurrentAppWindowSwitching {
+            return .forward
         }
 
-        return reverseResult == .registered
+        let configuredReverse = configuredSetting.reverseVariant(
+            id: "\(configuredSetting.id)-reverse"
+        )
+        if setting == configuredReverse
+            || setting == .fallbackCurrentAppWindowSwitchingReverse {
+            return .reverse
+        }
+
+        return nil
     }
 
     private func configuration(

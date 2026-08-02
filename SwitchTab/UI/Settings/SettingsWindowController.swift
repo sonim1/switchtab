@@ -97,7 +97,7 @@ public final class SettingsWindowController {
         onShortcutChanged: @escaping (
             SwitcherShortcutConfiguration,
             SwitcherShortcutConfiguration
-        ) -> Bool = { _, _ in true },
+        ) -> ShortcutChangeResult = { _, _ in .applied },
         onEnabledChanged: @escaping (SwitcherShortcutConfiguration) -> Void = { _ in }
     ) {
         let hostingController = FloatingPanelFactory.hostingController(

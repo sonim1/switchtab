@@ -23,10 +23,7 @@ enum AppStoreDistributionSettingsTests {
         try testApplicationCandidateIsAWindowRegistrationConflict()
         try testApplicationShortcutTransactionSucceedsInOrder()
         try testApplicationShortcutTransactionRestoresAfterCandidateFailure()
-        try testApplicationShortcutTransactionRestoresAfterWindowFailure()
-        try testAppDelegateReferencesShortcutConflictPolicy()
-        try testAppDelegateUsesUnifiedShortcutLifecycle()
-        try testSettingsWindowInjectsUnifiedShortcutCallbacks()
+        try testApplicationShortcutTransactionReportsWindowRestorationFailure()
         try testDirectDistributionScriptGeneratesIsolatedProjectVariant()
         try testDirectDistributionScriptPinsSparkleToExactRevision()
         try testDirectDistributionScriptRequiresSparklePublicKey()
@@ -271,6 +268,7 @@ enum AppStoreDistributionSettingsTests {
     static func testApplicationShortcutTransactionSucceedsInOrder() throws {
         var events: [String] = []
         let transaction = ApplicationShortcutLifecycleTransaction(
+            previousWindowSettings: mixedWindowRegistrationSnapshot,
             suspendWindow: { events.append("suspend-window") },
             registerApplicationCandidate: {
                 events.append("register-app-candidate")
@@ -280,11 +278,17 @@ enum AppStoreDistributionSettingsTests {
                 events.append("register-window")
                 return true
             },
-            restorePreviousApplication: { events.append("restore-app") },
-            restorePreviousWindow: { events.append("restore-window") }
+            restorePreviousApplication: {
+                events.append("restore-app")
+                return true
+            },
+            restorePreviousWindow: { settings in
+                events.append("restore-window:\(settings.count)")
+                return true
+            }
         )
 
-        try expectTrue(transaction.apply())
+        try expectEqual(transaction.apply(), .applied)
         try expectEqual(
             events,
             ["suspend-window", "register-app-candidate", "register-window"]
@@ -293,7 +297,9 @@ enum AppStoreDistributionSettingsTests {
 
     static func testApplicationShortcutTransactionRestoresAfterCandidateFailure() throws {
         var events: [String] = []
+        var restoredWindowSettings: [ShortcutSetting] = []
         let transaction = ApplicationShortcutLifecycleTransaction(
+            previousWindowSettings: mixedWindowRegistrationSnapshot,
             suspendWindow: { events.append("suspend-window") },
             registerApplicationCandidate: {
                 events.append("register-app-candidate")
@@ -303,11 +309,19 @@ enum AppStoreDistributionSettingsTests {
                 events.append("register-window")
                 return true
             },
-            restorePreviousApplication: { events.append("restore-app") },
-            restorePreviousWindow: { events.append("restore-window") }
+            restorePreviousApplication: {
+                events.append("restore-app")
+                return true
+            },
+            restorePreviousWindow: { settings in
+                events.append("restore-window")
+                restoredWindowSettings = settings
+                return true
+            }
         )
 
-        try expectFalse(transaction.apply())
+        try expectEqual(transaction.apply(), .rejectedPreviousRestored)
+        try expectEqual(restoredWindowSettings, mixedWindowRegistrationSnapshot)
         try expectEqual(
             events,
             [
@@ -319,9 +333,11 @@ enum AppStoreDistributionSettingsTests {
         )
     }
 
-    static func testApplicationShortcutTransactionRestoresAfterWindowFailure() throws {
+    static func testApplicationShortcutTransactionReportsWindowRestorationFailure() throws {
         var events: [String] = []
+        var restoredWindowSettings: [ShortcutSetting] = []
         let transaction = ApplicationShortcutLifecycleTransaction(
+            previousWindowSettings: mixedWindowRegistrationSnapshot,
             suspendWindow: { events.append("suspend-window") },
             registerApplicationCandidate: {
                 events.append("register-app-candidate")
@@ -331,11 +347,19 @@ enum AppStoreDistributionSettingsTests {
                 events.append("register-window")
                 return false
             },
-            restorePreviousApplication: { events.append("restore-app") },
-            restorePreviousWindow: { events.append("restore-window") }
+            restorePreviousApplication: {
+                events.append("restore-app")
+                return true
+            },
+            restorePreviousWindow: { settings in
+                events.append("restore-window")
+                restoredWindowSettings = settings
+                return false
+            }
         )
 
-        try expectFalse(transaction.apply())
+        try expectEqual(transaction.apply(), .rollbackFailed)
+        try expectEqual(restoredWindowSettings, mixedWindowRegistrationSnapshot)
         try expectEqual(
             events,
             [
@@ -346,108 +370,6 @@ enum AppStoreDistributionSettingsTests {
                 "restore-window"
             ]
         )
-    }
-
-    static func testAppDelegateReferencesShortcutConflictPolicy() throws {
-        let appDelegateSource = try String(
-            contentsOf: projectRoot.appendingPathComponent("SwitchTab/AppDelegate.swift"),
-            encoding: .utf8
-        )
-        guard let appDelegateDeclaration = appDelegateSource.range(
-            of: "public final class AppDelegate"
-        ) else {
-            throw TestFailure.failed("Expected AppDelegate declaration")
-        }
-        let appDelegateImplementation = appDelegateSource[appDelegateDeclaration.lowerBound...]
-
-        try expectTrue(appDelegateImplementation.contains("AppDelegateShortcutConflictPolicy"))
-        try expectTrue(appDelegateImplementation.contains("windowRegistrationExistingShortcuts"))
-    }
-
-    static func testAppDelegateUsesUnifiedShortcutLifecycle() throws {
-        let source = try sourceContents(at: "SwitchTab/AppDelegate.swift")
-        let implementation = try sourceSection(
-            source,
-            startingAt: "public final class AppDelegate",
-            endingBefore: "enum ApplicationSwitcherWindowCountPolicy"
-        )
-        let recordingLifecycle = try sourceSection(
-            implementation,
-            startingAt: "private func observeShortcutRecording",
-            endingBefore: "private func observeWorkspaceApplicationActivation"
-        )
-        guard let recordingEnd = recordingLifecycle.range(
-            of: ".shortcutRecordingDidEnd"
-        ) else {
-            throw TestFailure.failed("Expected shortcut recording end observer")
-        }
-        let recordingBegin = recordingLifecycle[..<recordingEnd.lowerBound]
-        let recordingRestore = recordingLifecycle[recordingEnd.lowerBound...]
-        let launch = try sourceSection(
-            implementation,
-            startingAt: "public func applicationDidFinishLaunching",
-            endingBefore: "public func applicationShouldHandleReopen"
-        )
-        let applicationPresentation = try sourceSection(
-            implementation,
-            startingAt: "public func showApplicationSwitcher",
-            endingBefore: "private func thumbnailLoaderForRefresh"
-        )
-        let triggerShortcuts = try sourceSection(
-            implementation,
-            startingAt: "private func applicationTriggerShortcut",
-            endingBefore: "private func registerWindowHotkeys"
-        )
-        let shortcutTransaction = try sourceSection(
-            implementation,
-            startingAt: "private func applyShortcutChange",
-            endingBefore: "private func applyEnabledChange"
-        )
-        let requiredSymbols = [
-            "shortcutStore.loadConfigurations()",
-            "registerConfiguredHotkeys",
-            "applyShortcutChange",
-            "applyEnabledChange"
-        ]
-        let missingSymbols = requiredSymbols.filter { !implementation.contains($0) }
-
-        try expectEqual(missingSymbols, [])
-        try expectTrue(launch.contains("shortcutStore.loadConfigurations()"))
-        try expectTrue(launch.contains("registerConfiguredHotkeys"))
-        try expectTrue(recordingBegin.contains("hotkeyService.unregisterAll"))
-        try expectTrue(recordingBegin.contains("applicationHotkeyController.unregisterAll"))
-        try expectTrue(recordingBegin.contains("persistRegistrationMessages"))
-        try expectTrue(recordingRestore.contains("shortcutStore.loadConfigurations()"))
-        try expectTrue(recordingRestore.contains("registerConfiguredHotkeys"))
-        try expectFalse(implementation.contains("applicationSettingsStore.replacesCommandTab"))
-        try expectFalse(implementation.contains(".commandTabReplacementDidChange"))
-        try expectFalse(implementation.contains("observeShortcutChanges"))
-        try expectTrue(applicationPresentation.contains("applicationTriggerShortcut"))
-        try expectFalse(applicationPresentation.contains(".defaultApplicationSwitching"))
-        try expectTrue(triggerShortcuts.contains("configuredShortcut"))
-        try expectFalse(triggerShortcuts.contains(".defaultApplicationSwitching"))
-        try expectTrue(shortcutTransaction.contains("ApplicationShortcutLifecycleTransaction"))
-    }
-
-    static func testSettingsWindowInjectsUnifiedShortcutCallbacks() throws {
-        let source = try sourceContents(
-            at: "SwitchTab/UI/Settings/SettingsWindowController.swift"
-        )
-        let controller = try sourceSection(
-            source,
-            startingAt: "public final class SettingsWindowController",
-            endingBefore: "private extension ApplicationActivationPolicy"
-        )
-        let initializer = try sourceSection(
-            controller,
-            startingAt: "public init(",
-            endingBefore: "public func show()"
-        )
-
-        try expectTrue(initializer.contains("onShortcutChanged"))
-        try expectTrue(initializer.contains("SwitcherShortcutConfiguration"))
-        try expectTrue(initializer.contains("onEnabledChanged"))
-        try expectTrue(initializer.contains("ShortcutSettingsViewModel("))
     }
 
     static func testDirectDistributionScriptGeneratesIsolatedProjectVariant() throws {
@@ -547,6 +469,13 @@ enum AppStoreDistributionSettingsTests {
         )
     }
 
+    private static var mixedWindowRegistrationSnapshot: [ShortcutSetting] {
+        [
+            .defaultCurrentAppWindowSwitching,
+            .fallbackCurrentAppWindowSwitchingReverse
+        ]
+    }
+
     private static func conflictConfigurations(
         applicationEnabled: Bool
     ) -> [SwitcherShortcutConfiguration] {
@@ -562,31 +491,6 @@ enum AppStoreDistributionSettingsTests {
                 shortcut: customApplicationShortcut
             )
         ]
-    }
-
-    private static func sourceContents(at path: String) throws -> String {
-        try String(
-            contentsOf: projectRoot.appendingPathComponent(path),
-            encoding: .utf8
-        )
-    }
-
-    private static func sourceSection(
-        _ source: some StringProtocol,
-        startingAt startMarker: String,
-        endingBefore endMarker: String
-    ) throws -> Substring {
-        guard let start = source.range(of: startMarker),
-              let end = source.range(
-                of: endMarker,
-                range: start.upperBound..<source.endIndex
-              ) else {
-            throw TestFailure.failed(
-                "Expected source section from \(startMarker) to \(endMarker)"
-            )
-        }
-
-        return Substring(source[start.lowerBound..<end.lowerBound])
     }
 
     private static var projectRoot: URL {

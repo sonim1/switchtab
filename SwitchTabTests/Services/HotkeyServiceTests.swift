@@ -8,6 +8,7 @@ enum HotkeyServiceTests {
         try testDynamicWindowCmdTabCandidateIsForwardedToRegistrar()
         try testExactRegistrationDoesNotUseFallbackWhenRequestedShortcutIsUnavailable()
         try testSameModeForwardAndReverseHotkeysCanHaveSeparateHandlers()
+        try testRegisteredSettingsPreserveMixedPrimaryFallbackPairInRegistrationOrder()
         try testEventTapDispatcherInvokesApplicationAutorepeats()
         try testEventTapDispatcherConsumesIgnoredWindowAutorepeats()
         try testModeInvocationKeepsFirstRegisteredSettingWhenHandlerIsUpdated()
@@ -109,6 +110,39 @@ enum HotkeyServiceTests {
         try expectEqual(forwardCount, 1)
         try expectEqual(reverseCount, 1)
         try expectEqual(service.registeredSetting(for: .currentAppWindowSwitching), .defaultCurrentAppWindowSwitching)
+    }
+
+    static func testRegisteredSettingsPreserveMixedPrimaryFallbackPairInRegistrationOrder() throws {
+        let primaryReverse = ShortcutSetting.defaultCurrentAppWindowSwitching.reverseVariant(
+            id: "current-app-window-switching-reverse"
+        )
+        let registrar = SelectivelyFailingHotkeyRegistrar(
+            blockedDisplayText: primaryReverse.displayText
+        )
+        let service = HotkeyService(registrar: registrar)
+
+        let forwardResult = service.registerFirstUsable(
+            primaryCandidate: .defaultCurrentAppWindowSwitching,
+            fallbackCandidate: .fallbackCurrentAppWindowSwitching,
+            existing: [] as [ShortcutSetting],
+            mode: .currentAppWindowSwitching
+        ) {}
+        let reverseResult = service.registerFirstUsable(
+            primaryCandidate: primaryReverse,
+            fallbackCandidate: .fallbackCurrentAppWindowSwitchingReverse,
+            existing: [.defaultCurrentAppWindowSwitching],
+            mode: .currentAppWindowSwitching
+        ) {}
+
+        try expectEqual(forwardResult, .registered)
+        try expectEqual(reverseResult, .registered)
+        try expectEqual(
+            service.registeredSettings(for: .currentAppWindowSwitching),
+            [
+                .defaultCurrentAppWindowSwitching,
+                .fallbackCurrentAppWindowSwitchingReverse
+            ]
+        )
     }
 
     static func testEventTapDispatcherInvokesApplicationAutorepeats() throws {
