@@ -541,7 +541,7 @@ public final class ShortcutRecordingCoordinator: ObservableObject {
     }
 }
 
-struct ShortcutRecorderRow: View {
+private struct ShortcutRecorderRow: View {
     let configuration: SwitcherShortcutConfiguration
     let errorMessage: String?
     let registrationMessage: String?
@@ -582,11 +582,11 @@ struct ShortcutRecorderRow: View {
         let isDefault = setting == SwitcherShortcutConfiguration.defaultValue(for: configuration.mode).shortcut
 
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
+            HStack(spacing: layout.rowHorizontalSpacing) {
                 Image(systemName: "keyboard")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
+                    .frame(width: layout.rowIconWidth, height: layout.rowIconWidth)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(presentation.title)
@@ -622,6 +622,7 @@ struct ShortcutRecorderRow: View {
                     )
                     .labelsHidden()
                     .toggleStyle(.switch)
+                    .frame(width: layout.toggleWidth)
 
                     Button {
                         beginRecording()
@@ -651,7 +652,7 @@ struct ShortcutRecorderRow: View {
                     } label: {
                         Image(systemName: "arrow.counterclockwise")
                     }
-                    .frame(width: 20)
+                    .frame(width: layout.resetWidth)
                     .disabled(isRecording || isDefault)
                     .buttonStyle(.borderless)
                     .help("Restore the default shortcut")
@@ -661,6 +662,7 @@ struct ShortcutRecorderRow: View {
                 .fixedSize(horizontal: layout.rightControlClusterIsFixed, vertical: false)
             }
             .frame(minHeight: 44)
+            .frame(maxWidth: layout.rowContentWidth, alignment: .leading)
 
             if let message = errorMessage ?? registrationMessage {
                 Label(message, systemImage: "exclamationmark.triangle.fill")
