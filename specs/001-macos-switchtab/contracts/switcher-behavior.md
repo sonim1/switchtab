@@ -43,14 +43,14 @@ Completion:
 ## Application Switching
 
 Trigger:
-- User enables `Application Switching` in Settings > Shortcuts and presses its
-  configured shortcut (forward) or adds Shift to it (reverse) while SwitchTab
-  is running.
+- User enables `Application Switching` in Settings > Shortcut and presses its
+  configured shortcut (forward) or its Shift-toggled variant (reverse) while
+  SwitchTab is running.
 
 Preconditions:
 - The application-switching toggle is on.
 - Accessibility permission is granted so the dedicated suppressing EventTap can
-  intercept the configured forward and Shift-added reverse shortcuts.
+  intercept the configured forward and Shift-toggled reverse shortcuts.
 - Finder, Safari, Notes, or other regular running applications are available;
   SwitchTab itself, terminated processes, and non-regular activation-policy
   processes are excluded.
@@ -79,7 +79,7 @@ Visible result:
 
 Keyboard behavior:
 - Repeating the configured application shortcut advances application selection.
-- Repeating it with Shift added reverses application selection.
+- Repeating its Shift-toggled variant reverses application selection.
 - Tab/Shift-Tab and arrow-key movement follow the same selection navigation as
   the current-app window switcher.
 - Releasing Command confirms the highlighted application.

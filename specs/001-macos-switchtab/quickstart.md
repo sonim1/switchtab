@@ -31,7 +31,7 @@ Expected:
 2. Invoke the current-app window switcher.
 3. Confirm the app explains the missing permission and gives recovery steps for
    current-app window switching.
-4. Open Settings > Shortcuts, confirm `Application Switching` is enabled, and
+4. Open Settings > Shortcut, confirm `Application Switching` is enabled, and
    confirm the application-specific warning explains that Accessibility is
    required for EventTap interception.
 5. Press Cmd+Tab and confirm native macOS behavior remains available while the

@@ -172,7 +172,7 @@ eight scenarios in the [quickstart acceptance contract](quickstart.md#applicatio
   prior state and otherwise keep it disabled.
 - **FR-017**: When application switching is enabled and Accessibility is
   granted, the system MUST register a dedicated suppressing EventTap for its
-  configured forward shortcut and Shift-added reverse shortcut, while leaving
+  configured forward shortcut and Shift-toggled reverse shortcut, while leaving
   current-app window shortcut registration independent.
 - **FR-018**: When application switching is disabled, EventTap registration
   fails, or SwitchTab exits, the system MUST leave or restore native behavior
@@ -232,7 +232,7 @@ eight scenarios in the [quickstart acceptance contract](quickstart.md#applicatio
   a Cmd+Tab press reaches the native macOS switcher without a SwitchTab
   application overlay.
 - **SC-007**: With application switching enabled and Accessibility granted, its
-  configured forward or Shift-added reverse shortcut presents the SwitchTab
+  configured forward or Shift-toggled reverse shortcut presents the SwitchTab
   application overlay and activates the highlighted application on trigger-
   modifier release within 2 seconds.
 - **SC-008**: Application icons and names remain available without Screen
