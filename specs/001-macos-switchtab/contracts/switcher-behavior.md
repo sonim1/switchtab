@@ -82,12 +82,12 @@ Keyboard behavior:
 - Repeating its Shift-toggled variant reverses application selection.
 - Tab/Shift-Tab and arrow-key movement follow the same selection navigation as
   the current-app window switcher.
-- Releasing Command confirms the highlighted application.
+- Releasing the trigger modifier confirms the highlighted application.
 - Cmd+Q requests normal application termination. It is not a force-quit path.
 - Escape cancels without changing the frontmost application or writing MRU.
 
 Completion:
-- Command release and direct mouse selection use the same confirmation path.
+- Trigger-modifier release and direct mouse selection use the same confirmation path.
 - The selected process requests coordinated activation from the actual
   frontmost application and brings all of its windows forward.
 - Successful activation records the stable application identifier in application

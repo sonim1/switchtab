@@ -83,8 +83,8 @@ while its setting is off.
 
 **Independent Test**: With Finder, Safari, and Notes open, verify native Cmd+Tab
 while application switching is disabled, enable it with Accessibility granted,
-cycle forward and reverse through application icons, release Command to
-activate the highlighted app, then disable or quit SwitchTab and verify native
+cycle forward and reverse through application icons, release the trigger
+modifier to activate the highlighted app, then disable or quit SwitchTab and verify native
 Cmd+Tab is restored.
 
 **Acceptance Scenarios**:
@@ -97,9 +97,9 @@ Cmd+Tab is restored.
    **When** the user presses its configured shortcut, **Then** a SwitchTab
    application overlay appears, that shortcut's native effect is suppressed,
    and the forward/reverse shortcuts cycle application icons and names.
-3. **Given** an application is highlighted, **When** the user releases Command,
-   **Then** that application becomes frontmost and its stable identifier is
-   recorded in application MRU history.
+3. **Given** an application is highlighted, **When** the user releases the
+   trigger modifier, **Then** that application becomes frontmost and its stable
+   identifier is recorded in application MRU history.
 4. **Given** application switching is disabled or SwitchTab exits, **When** the
    user presses Cmd+Tab, **Then** macOS's native application switcher is
    available and the current-app window shortcut remains registered.
