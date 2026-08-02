@@ -28,6 +28,7 @@ enum ShortcutSettingsStoreTests {
         try testEnabledPersistenceFailureKeepsConfigurationAndSetsModeError()
         try testRegistrationFailureKeepsConfigurationsAndSetsModeError()
         try testRegistrationRollbackFailureKeepsConfigurationsAndSetsDistinctError()
+        try testRecordingRegistrationFailureReportsDeferredRestoration()
         try testPersistenceFailureRollsBackLiveRegistration()
         try testPersistenceFailureReportsFailedLiveRegistrationRollback()
         try testForwardConflictAcrossModesIsRejected()
@@ -564,6 +565,32 @@ enum ShortcutSettingsStoreTests {
             "Shortcut could not be registered, and the previous shortcut could not be restored."
         )
         try expectEqual(viewModel.errorMessage(for: .currentAppWindowSwitching), nil)
+    }
+
+    static func testRecordingRegistrationFailureReportsDeferredRestoration() throws {
+        let store = ShortcutSettingsStore(userDefaults: makeDefaults())
+        let previous = store.loadConfigurations()
+        let viewModel = ShortcutSettingsViewModel(
+            store: store,
+            onShortcutChanged: { _, _ in .rejectedRestorationDeferred }
+        )
+
+        let didRecord = viewModel.record(
+            capture: ShortcutCapture(
+                keyEquivalent: "Space",
+                modifiers: ["option"],
+                keyCode: 49
+            ),
+            for: .applicationSwitching
+        )
+
+        try expectFalse(didRecord)
+        try expectEqual(viewModel.configuration(for: .applicationSwitching), previous[1])
+        try expectEqual(store.loadConfigurations(), previous)
+        try expectEqual(
+            viewModel.errorMessage(for: .applicationSwitching),
+            "Shortcut could not be registered. SwitchTab will retry the previous shortcut after recording. If that fails, check Permissions or choose another shortcut."
+        )
     }
 
     static func testPersistenceFailureRollsBackLiveRegistration() throws {

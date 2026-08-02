@@ -15,6 +15,8 @@ enum ApplicationSwitchingTests {
         try testWindowEnabledChangesLeaveApplicationRegistrationsLive()
         try testApplicationEnabledFailurePersistsWithoutWindowMutation()
         try testApplicationEnableRejectsLiveWindowFallbackConflict()
+        try testApplicationShortcutTransactionDefersRestoreWhileRecording()
+        try testRecordingLifecycleSuspendsBothAndRestoresOnlyEnabledModes()
         try testApplicationPresentationAppliesMRUThenPinsActiveApplication()
         try testSelectionPolicyUsesMRUFirstWhenNoApplicationIsActive()
         try testSelectionPolicySkipsPinnedActiveApplicationForward()
@@ -599,6 +601,149 @@ enum ApplicationSwitchingTests {
                 message: ApplicationSwitchingHotkeyController.registrationFailureMessage
             )
         )
+    }
+
+    static func testApplicationShortcutTransactionDefersRestoreWhileRecording() throws {
+        var events: [String] = []
+        let transaction = ApplicationShortcutLifecycleTransaction(
+            previousWindowSnapshot: HotkeyRegistrationSnapshot(
+                mode: .currentAppWindowSwitching,
+                expectedEnabled: true,
+                settings: [],
+                registrationMessages: []
+            ),
+            suspendWindow: { events.append("suspend-window") },
+            registerApplicationCandidate: {
+                events.append("register-application")
+                return false
+            },
+            registerWindowWithCandidateConflicts: {
+                events.append("register-window")
+                return true
+            },
+            restorePreviousApplication: {
+                events.append("restore-application")
+                return true
+            },
+            restorePreviousWindow: { _ in
+                events.append("restore-window")
+                return true
+            },
+            deferredRestoration: {
+                events.append("defer-restoration")
+            }
+        )
+
+        try expectEqual(transaction.apply(), .rejectedRestorationDeferred)
+        try expectEqual(
+            events,
+            [
+                "suspend-window",
+                "register-application",
+                "defer-restoration"
+            ]
+        )
+    }
+
+    static func testRecordingLifecycleSuspendsBothAndRestoresOnlyEnabledModes() throws {
+        let windowRegistrar = ApplicationSwitchingRecordingRegistrar()
+        let windowHotkeyService = HotkeyService(registrar: windowRegistrar)
+        let applicationRegistrar = ApplicationSwitchingRecordingRegistrar()
+        let applicationController = ApplicationSwitchingHotkeyController(
+            hotkeyService: HotkeyService(registrar: applicationRegistrar)
+        )
+        var windowInvocationCount = 0
+        var applicationInvocationCount = 0
+        var persistCount = 0
+        let lifecycle = ShortcutRecordingHotkeyLifecycle(
+            windowHotkeyService: windowHotkeyService,
+            applicationHotkeyController: applicationController,
+            registerWindowHotkeys: { setting, _ in
+                let reverse = setting.reverseVariant(
+                    id: "current-app-window-switching-reverse"
+                )
+                let forwardResult = windowHotkeyService.register(
+                    setting: setting,
+                    existing: [] as [ShortcutSetting],
+                    mode: .currentAppWindowSwitching
+                ) {
+                    windowInvocationCount += 1
+                }
+                let reverseResult = windowHotkeyService.register(
+                    setting: reverse,
+                    existing: [setting],
+                    mode: .currentAppWindowSwitching
+                ) {
+                    windowInvocationCount += 1
+                }
+                return forwardResult == .registered && reverseResult == .registered
+            },
+            updateApplicationHotkeyRegistration: { configuration in
+                applicationController.updateRegistration(
+                    setting: configuration.shortcut,
+                    enabled: configuration.isEnabled,
+                    forwardHandler: { applicationInvocationCount += 1 },
+                    reverseHandler: { applicationInvocationCount += 1 }
+                )
+            },
+            dismissWindowOverlayIfActive: {},
+            persistRegistrationMessages: { persistCount += 1 }
+        )
+        let windowEnabledOnly = [
+            SwitcherShortcutConfiguration.defaultCurrentAppWindows,
+            SwitcherShortcutConfiguration(
+                mode: .applicationSwitching,
+                isEnabled: false,
+                shortcut: .defaultApplicationSwitching
+            )
+        ]
+        let applicationEnabledOnly = [
+            SwitcherShortcutConfiguration(
+                mode: .currentAppWindowSwitching,
+                isEnabled: false,
+                shortcut: .defaultCurrentAppWindowSwitching
+            ),
+            SwitcherShortcutConfiguration.defaultApplicationSwitching
+        ]
+        let bothEnabled = [
+            SwitcherShortcutConfiguration.defaultCurrentAppWindows,
+            SwitcherShortcutConfiguration.defaultApplicationSwitching
+        ]
+
+        lifecycle.end(configurations: bothEnabled)
+        windowRegistrar.events.removeAll()
+        applicationRegistrar.events.removeAll()
+
+        lifecycle.begin()
+        lifecycle.applicationDidBecomeActive(configurations: bothEnabled)
+        windowRegistrar.invoke(settingID: ShortcutSetting.defaultCurrentAppWindowSwitching.id)
+        applicationRegistrar.invoke(settingID: ShortcutSetting.defaultApplicationSwitching.id)
+        try expectEqual(windowInvocationCount, 0)
+        try expectEqual(applicationInvocationCount, 0)
+        try expectEqual(windowRegistrar.events, ["unregister"])
+        try expectEqual(applicationRegistrar.events, ["unregister"])
+
+        windowRegistrar.events.removeAll()
+        applicationRegistrar.events.removeAll()
+        lifecycle.end(configurations: windowEnabledOnly)
+        windowRegistrar.invoke(settingID: ShortcutSetting.defaultCurrentAppWindowSwitching.id)
+        applicationRegistrar.invoke(settingID: ShortcutSetting.defaultApplicationSwitching.id)
+        try expectEqual(windowInvocationCount, 1)
+        try expectEqual(applicationInvocationCount, 0)
+        try expectEqual(windowRegistrar.events, ["register-forward", "register-reverse"])
+        try expectEqual(applicationRegistrar.events, [])
+
+        lifecycle.begin()
+        windowRegistrar.events.removeAll()
+        applicationRegistrar.events.removeAll()
+        lifecycle.end(configurations: applicationEnabledOnly)
+        windowRegistrar.invoke(settingID: ShortcutSetting.defaultCurrentAppWindowSwitching.id)
+        applicationRegistrar.invoke(settingID: ShortcutSetting.defaultApplicationSwitching.id)
+        try expectEqual(windowInvocationCount, 1)
+        try expectEqual(applicationInvocationCount, 1)
+        try expectEqual(windowRegistrar.events, [])
+        try expectEqual(applicationRegistrar.events, ["register-forward", "register-reverse"])
+        try expectEqual(persistCount, 5)
     }
 
     static func testApplicationPresentationAppliesMRUThenPinsActiveApplication() throws {

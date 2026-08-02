@@ -30,6 +30,25 @@ struct ApplicationShortcutLifecycleTransaction {
     let registerWindowWithCandidateConflicts: () -> Bool
     let restorePreviousApplication: () -> Bool
     let restorePreviousWindow: (HotkeyRegistrationSnapshot) -> Bool
+    let deferredRestoration: (() -> Void)?
+
+    init(
+        previousWindowSnapshot: HotkeyRegistrationSnapshot,
+        suspendWindow: @escaping () -> Void,
+        registerApplicationCandidate: @escaping () -> Bool,
+        registerWindowWithCandidateConflicts: @escaping () -> Bool,
+        restorePreviousApplication: @escaping () -> Bool,
+        restorePreviousWindow: @escaping (HotkeyRegistrationSnapshot) -> Bool,
+        deferredRestoration: (() -> Void)? = nil
+    ) {
+        self.previousWindowSnapshot = previousWindowSnapshot
+        self.suspendWindow = suspendWindow
+        self.registerApplicationCandidate = registerApplicationCandidate
+        self.registerWindowWithCandidateConflicts = registerWindowWithCandidateConflicts
+        self.restorePreviousApplication = restorePreviousApplication
+        self.restorePreviousWindow = restorePreviousWindow
+        self.deferredRestoration = deferredRestoration
+    }
 
     func apply() -> ShortcutChangeResult {
         suspendWindow()
@@ -44,6 +63,11 @@ struct ApplicationShortcutLifecycleTransaction {
     }
 
     private func restorePreviousRegistrations() -> ShortcutChangeResult {
+        if let deferredRestoration {
+            deferredRestoration()
+            return .rejectedRestorationDeferred
+        }
+
         let didRestoreApplication = restorePreviousApplication()
         let didRestoreWindow = restorePreviousWindow(previousWindowSnapshot)
         return didRestoreApplication && didRestoreWindow
@@ -80,6 +104,94 @@ struct ShortcutEnabledLifecycle {
 }
 
 @MainActor
+final class ShortcutRecordingHotkeyLifecycle {
+    let windowHotkeyService: HotkeyService
+    let applicationHotkeyController: ApplicationSwitchingHotkeyController
+    let registerWindowHotkeys: @MainActor (
+        ShortcutSetting,
+        [SwitcherShortcutConfiguration]
+    ) -> Bool
+    let updateApplicationHotkeyRegistration: @MainActor (
+        SwitcherShortcutConfiguration
+    ) -> Bool
+    let dismissWindowOverlayIfActive: @MainActor () -> Void
+    let persistRegistrationMessages: @MainActor () -> Void
+    private(set) var isRecording = false
+
+    init(
+        windowHotkeyService: HotkeyService,
+        applicationHotkeyController: ApplicationSwitchingHotkeyController,
+        registerWindowHotkeys: @escaping @MainActor (
+            ShortcutSetting,
+            [SwitcherShortcutConfiguration]
+        ) -> Bool,
+        updateApplicationHotkeyRegistration: @escaping @MainActor (
+            SwitcherShortcutConfiguration
+        ) -> Bool,
+        dismissWindowOverlayIfActive: @escaping @MainActor () -> Void,
+        persistRegistrationMessages: @escaping @MainActor () -> Void
+    ) {
+        self.windowHotkeyService = windowHotkeyService
+        self.applicationHotkeyController = applicationHotkeyController
+        self.registerWindowHotkeys = registerWindowHotkeys
+        self.updateApplicationHotkeyRegistration = updateApplicationHotkeyRegistration
+        self.dismissWindowOverlayIfActive = dismissWindowOverlayIfActive
+        self.persistRegistrationMessages = persistRegistrationMessages
+    }
+
+    func begin() {
+        isRecording = true
+        windowHotkeyService.unregisterAll()
+        applicationHotkeyController.unregisterAll()
+        persistRegistrationMessages()
+    }
+
+    func end(configurations: [SwitcherShortcutConfiguration]) {
+        isRecording = false
+        restore(configurations: configurations)
+    }
+
+    func applicationDidBecomeActive(configurations: [SwitcherShortcutConfiguration]) {
+        guard !isRecording else {
+            return
+        }
+
+        restore(configurations: configurations)
+    }
+
+    func restore(configurations: [SwitcherShortcutConfiguration]) {
+        let windowConfiguration = configuration(
+            for: .currentAppWindowSwitching,
+            in: configurations
+        )
+        let applicationConfiguration = configuration(
+            for: .applicationSwitching,
+            in: configurations
+        )
+
+        windowHotkeyService.unregisterAll()
+        if !windowConfiguration.isEnabled {
+            dismissWindowOverlayIfActive()
+        }
+
+        _ = updateApplicationHotkeyRegistration(applicationConfiguration)
+        if windowConfiguration.isEnabled {
+            _ = registerWindowHotkeys(windowConfiguration.shortcut, configurations)
+        }
+
+        persistRegistrationMessages()
+    }
+
+    private func configuration(
+        for mode: SwitcherMode,
+        in configurations: [SwitcherShortcutConfiguration]
+    ) -> SwitcherShortcutConfiguration {
+        configurations.first { $0.mode == mode }
+            ?? .defaultValue(for: mode)
+    }
+}
+
+@MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayController: SwitcherOverlayController?
     private let windowProvider = AccessibilityWindowProvider()
@@ -98,6 +210,28 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private let usageMetricsStore = UsageMetricsStore()
     private let hotkeyService = HotkeyService()
     private let applicationHotkeyController = ApplicationSwitchingHotkeyController()
+    private lazy var shortcutRecordingHotkeyLifecycle = ShortcutRecordingHotkeyLifecycle(
+        windowHotkeyService: hotkeyService,
+        applicationHotkeyController: applicationHotkeyController,
+        registerWindowHotkeys: { [weak self] setting, configurations in
+            self?.registerWindowHotkeys(
+                setting: setting,
+                configurations: configurations
+            ) ?? false
+        },
+        updateApplicationHotkeyRegistration: { [weak self] configuration in
+            self?.updateApplicationHotkeyRegistration(configuration: configuration) ?? false
+        },
+        dismissWindowOverlayIfActive: { [weak self] in
+            guard self?.overlayController?.activeMode == .currentAppWindowSwitching else {
+                return
+            }
+            self?.overlayController?.dismiss()
+        },
+        persistRegistrationMessages: { [weak self] in
+            self?.persistRegistrationMessages()
+        }
+    )
     private lazy var workspaceActivationRecencyObserver = WorkspaceActivationRecencyObserver(
         recencyStore: applicationRecencyStore
     )
@@ -372,9 +506,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func observeShortcutRecording() {
         observe(.shortcutRecordingDidBegin, storing: &shortcutRecordingDidBeginObserver) { [weak self] in
-            self?.hotkeyService.unregisterAll()
-            self?.applicationHotkeyController.unregisterAll()
-            self?.persistRegistrationMessages()
+            guard let self else {
+                return
+            }
+
+            self.shortcutRecordingHotkeyLifecycle.begin()
         }
 
         observe(.shortcutRecordingDidEnd, storing: &shortcutRecordingDidEndObserver) { [weak self] in
@@ -382,7 +518,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
-            self.registerConfiguredHotkeys(self.shortcutStore.loadConfigurations())
+            self.shortcutRecordingHotkeyLifecycle.end(
+                configurations: self.shortcutStore.loadConfigurations()
+            )
         }
     }
 
@@ -461,7 +599,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
-            self.registerConfiguredHotkeys(self.shortcutStore.loadConfigurations())
+            self.shortcutRecordingHotkeyLifecycle.applicationDidBecomeActive(
+                configurations: self.shortcutStore.loadConfigurations()
+            )
         }
     }
 
@@ -670,31 +810,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private func registerConfiguredHotkeys(
         _ configurations: [SwitcherShortcutConfiguration]
     ) {
-        let windowConfiguration = configuration(
-            for: .currentAppWindowSwitching,
-            in: configurations
-        )
-        let applicationConfiguration = configuration(
-            for: .applicationSwitching,
-            in: configurations
-        )
-
-        hotkeyService.unregisterAll()
-        if !windowConfiguration.isEnabled,
-           overlayController?.activeMode == .currentAppWindowSwitching {
-            overlayController?.dismiss()
-        }
-
-        _ = updateApplicationHotkeyRegistration(configuration: applicationConfiguration)
-
-        if windowConfiguration.isEnabled {
-            registerWindowHotkeys(
-                setting: windowConfiguration.shortcut,
-                configurations: configurations
-            )
-        }
-
-        persistRegistrationMessages()
+        shortcutRecordingHotkeyLifecycle.restore(configurations: configurations)
     }
 
     @discardableResult
@@ -756,6 +872,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     in: configurations
                 )
             ) else {
+                guard !shortcutRecordingHotkeyLifecycle.isRecording else {
+                    shortcutRecordingHotkeyLifecycle.begin()
+                    return .rejectedRestorationDeferred
+                }
+
                 let didRestorePreviousWindow = restoreExactWindowHotkeys(
                     snapshot: previousWindowSnapshot,
                     configuredSetting: previousConfiguration.shortcut,
@@ -791,6 +912,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 for: .currentAppWindowSwitching,
                 expectedEnabled: previousWindowConfiguration.isEnabled
             )
+            let deferredRestoration: (() -> Void)? = shortcutRecordingHotkeyLifecycle.isRecording
+                ? { self.shortcutRecordingHotkeyLifecycle.begin() }
+                : nil
             let transaction = ApplicationShortcutLifecycleTransaction(
                 previousWindowSnapshot: previousWindowSnapshot,
                 suspendWindow: {
@@ -823,7 +947,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                         configuredSetting: previousWindowConfiguration.shortcut,
                         configurations: previousConfigurations
                     )
-                }
+                },
+                deferredRestoration: deferredRestoration
             )
             let result = transaction.apply()
             guard result == .applied else {

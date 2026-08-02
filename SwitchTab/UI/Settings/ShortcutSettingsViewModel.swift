@@ -11,6 +11,7 @@ public extension Notification.Name {
 public enum ShortcutChangeResult: Equatable, Sendable {
     case applied
     case rejectedPreviousRestored
+    case rejectedRestorationDeferred
     case rollbackFailed
 }
 
@@ -219,6 +220,12 @@ public final class ShortcutSettingsViewModel: ObservableObject {
         case .rejectedPreviousRestored:
             setErrorMessage(
                 "Shortcut could not be registered. The previous shortcut is still active.",
+                for: mode
+            )
+            return false
+        case .rejectedRestorationDeferred:
+            setErrorMessage(
+                "Shortcut could not be registered. SwitchTab will retry the previous shortcut after recording. If that fails, check Permissions or choose another shortcut.",
                 for: mode
             )
             return false
