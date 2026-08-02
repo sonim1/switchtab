@@ -10,14 +10,12 @@ enum ShortcutSettingsStoreTests {
         try testLegacyFootprintWithoutExplicitAppStateKeepsAppSwitchingDisabled()
         try testUnifiedPayloadWinsOverLegacyValues()
         try testSavingUnchangedConfigurationsDoesNotRewrite()
-        try testCompatibilityWrappersMigrateIntoUnifiedPayload()
         try testSavingIncompleteConfigurationsThrows()
         try testSavingDuplicateConfigurationsThrows()
         try testFuturePayloadIsNotOverwrittenDuringLoad()
         try testFuturePayloadRejectsSaveWithoutChangingBytes()
         try testSavingModeMismatchThrows()
         try testLoadingModeMismatchMigratesInsteadOfAccepting()
-        try testCompatibilitySaveRejectsApplicationShortcutInWindowSlot()
         try testUsageOnlyLegacyFootprintDisablesApplicationSwitching()
         try testViewModelLoadsBothConfigurations()
         try testViewModelTogglesOneModeWithoutChangingTheOther()
@@ -56,8 +54,14 @@ enum ShortcutSettingsStoreTests {
         let defaults = makeDefaults()
         let store = ShortcutSettingsStore(userDefaults: defaults)
 
-        try expectEqual(store.load(), .defaultCurrentAppWindowSwitching)
-        try expectEqual(store.load(), .defaultCurrentAppWindowSwitching)
+        try expectEqual(
+            store.loadConfigurations(),
+            [.defaultCurrentAppWindows, .defaultApplicationSwitching]
+        )
+        try expectEqual(
+            store.loadConfigurations(),
+            [.defaultCurrentAppWindows, .defaultApplicationSwitching]
+        )
     }
 
     static func testFreshInstallLoadsBothModesEnabled() throws {
@@ -148,29 +152,6 @@ enum ShortcutSettingsStoreTests {
         try expectEqual(defaults.writeCount, 1)
     }
 
-    static func testCompatibilityWrappersMigrateIntoUnifiedPayload() throws {
-        let defaults = makeDefaults()
-        let store = ShortcutSettingsStore(userDefaults: defaults)
-        let customSetting = ShortcutSetting(
-            id: "current-app-window-switching",
-            mode: .currentAppWindowSwitching,
-            keyEquivalent: "K",
-            modifiers: ["command"],
-            isUsable: true
-        )
-
-        try expectEqual(store.load(), .defaultCurrentAppWindowSwitching)
-        try expectTrue(defaults.data(forKey: "SwitchTab.shortcut.configurations") != nil)
-
-        try store.save(customSetting)
-
-        try expectEqual(store.load(), customSetting)
-        try expectEqual(
-            store.loadConfigurations().first { $0.mode == .currentAppWindowSwitching }?.shortcut,
-            customSetting
-        )
-    }
-
     static func testSavingIncompleteConfigurationsThrows() throws {
         let store = ShortcutSettingsStore(userDefaults: makeDefaults())
 
@@ -237,13 +218,6 @@ enum ShortcutSettingsStoreTests {
             try expectEqual(error, .unsupportedVersion(2))
         }
 
-        do {
-            try store.save(.defaultCurrentAppWindowSwitching)
-            throw TestFailure.failed("Expected compatibility save to reject a future payload")
-        } catch let error as ShortcutSettingsStoreError {
-            try expectEqual(error, .unsupportedVersion(2))
-        }
-
         try expectEqual(defaults.data(forKey: "SwitchTab.shortcut.configurations"), futureData)
     }
 
@@ -283,20 +257,6 @@ enum ShortcutSettingsStoreTests {
 
         try expectEqual(configurations, [.defaultCurrentAppWindows, .defaultApplicationSwitching])
         try expectFalse(configurations.contains { $0.shortcut.mode != $0.mode })
-    }
-
-    static func testCompatibilitySaveRejectsApplicationShortcutInWindowSlot() throws {
-        let store = ShortcutSettingsStore(userDefaults: makeDefaults())
-
-        do {
-            try store.save(.defaultApplicationSwitching)
-            throw TestFailure.failed("Expected compatibility save to reject application shortcut")
-        } catch let error as ShortcutSettingsStoreError {
-            try expectEqual(
-                error,
-                .modeMismatch(expected: .currentAppWindowSwitching, actual: .applicationSwitching)
-            )
-        }
     }
 
     static func testUsageOnlyLegacyFootprintDisablesApplicationSwitching() throws {
@@ -765,7 +725,7 @@ enum ShortcutSettingsStoreTests {
 
         try expectTrue(saved)
         try expectFalse(rejected)
-        try expectEqual(store.load().keyEquivalent, "K")
+        try expectEqual(currentAppWindowShortcut(in: store).keyEquivalent, "K")
     }
 
     static func testRegistrationFailureKeepsLastPersistedShortcut() throws {
@@ -778,7 +738,14 @@ enum ShortcutSettingsStoreTests {
             modifiers: ["command"],
             isUsable: true
         )
-        try store.save(previous)
+        try store.saveConfigurations([
+            SwitcherShortcutConfiguration(
+                mode: .currentAppWindowSwitching,
+                isEnabled: true,
+                shortcut: previous
+            ),
+            .defaultApplicationSwitching
+        ])
         let viewModel = ShortcutSettingsViewModel(
             store: store,
             onValidSettingsChanged: { _, _ in false }
@@ -792,7 +759,7 @@ enum ShortcutSettingsStoreTests {
 
         try expectFalse(didSave)
         try expectEqual(viewModel.currentAppWindowShortcut, previous)
-        try expectEqual(store.load(), previous)
+        try expectEqual(currentAppWindowShortcut(in: store), previous)
     }
 
     static func testSavingUnchangedShortcutDoesNotRewrite() throws {
@@ -806,21 +773,32 @@ enum ShortcutSettingsStoreTests {
             isUsable: true
         )
 
-        try store.save(setting)
-        try store.save(setting)
+        let configurations = [
+            SwitcherShortcutConfiguration(
+                mode: .currentAppWindowSwitching,
+                isEnabled: true,
+                shortcut: setting
+            ),
+            SwitcherShortcutConfiguration.defaultApplicationSwitching
+        ]
+        try store.saveConfigurations(configurations)
+        try store.saveConfigurations(configurations)
 
-        try expectEqual(defaults.writeCount, 2)
+        try expectEqual(defaults.writeCount, 1)
     }
 
     static func testSavingDefaultShortcutDoesNotPersistWhenAlreadyImplicit() throws {
         let defaults = CountingShortcutDefaults()
         let store = ShortcutSettingsStore(userDefaults: defaults)
 
-        try store.save(.defaultCurrentAppWindowSwitching)
+        try store.saveConfigurations([
+            .defaultCurrentAppWindows,
+            .defaultApplicationSwitching
+        ])
 
         try expectEqual(defaults.writeCount, 1)
         try expectEqual(defaults.removeCount, 0)
-        try expectEqual(store.load(), .defaultCurrentAppWindowSwitching)
+        try expectEqual(currentAppWindowShortcut(in: store), .defaultCurrentAppWindowSwitching)
     }
 
     static func testSavingDefaultShortcutClearsPersistedCustomShortcut() throws {
@@ -834,12 +812,22 @@ enum ShortcutSettingsStoreTests {
             isUsable: true
         )
 
-        try store.save(customSetting)
-        try store.save(.defaultCurrentAppWindowSwitching)
+        try store.saveConfigurations([
+            SwitcherShortcutConfiguration(
+                mode: .currentAppWindowSwitching,
+                isEnabled: true,
+                shortcut: customSetting
+            ),
+            .defaultApplicationSwitching
+        ])
+        try store.saveConfigurations([
+            .defaultCurrentAppWindows,
+            .defaultApplicationSwitching
+        ])
 
-        try expectEqual(defaults.writeCount, 3)
+        try expectEqual(defaults.writeCount, 2)
         try expectEqual(defaults.removeCount, 0)
-        try expectEqual(store.load(), .defaultCurrentAppWindowSwitching)
+        try expectEqual(currentAppWindowShortcut(in: store), .defaultCurrentAppWindowSwitching)
     }
 
     static func testViewModelDoesNotNotifyWhenShortcutIsUnchanged() throws {
@@ -909,7 +897,7 @@ enum ShortcutSettingsStoreTests {
 
         try expectFalse(didSave)
         try expectEqual(viewModel.currentAppWindowShortcut, .defaultCurrentAppWindowSwitching)
-        try expectEqual(store.load(), .defaultCurrentAppWindowSwitching)
+        try expectEqual(currentAppWindowShortcut(in: store), .defaultCurrentAppWindowSwitching)
         try expectEqual(
             viewModel.errorMessage,
             "Shortcut is already used by another switcher mode."
@@ -973,7 +961,12 @@ enum ShortcutSettingsStoreTests {
         )
 
         try expectFalse(
-            controller.updateRegistration(enabled: true, forwardHandler: {}, reverseHandler: {})
+            controller.updateRegistration(
+                setting: .defaultApplicationSwitching,
+                enabled: true,
+                forwardHandler: {},
+                reverseHandler: {}
+            )
         )
         try expectTrue(store.saveRegistrationMessages(controller.registrationMessageSnapshot()))
 
@@ -1075,7 +1068,15 @@ enum ShortcutSettingsStoreTests {
 
         try expectTrue(reset)
         try expectEqual(viewModel.currentAppWindowShortcut, .defaultCurrentAppWindowSwitching)
-        try expectEqual(store.load(), .defaultCurrentAppWindowSwitching)
+        try expectEqual(currentAppWindowShortcut(in: store), .defaultCurrentAppWindowSwitching)
+    }
+
+    private static func currentAppWindowShortcut(
+        in store: ShortcutSettingsStore
+    ) -> ShortcutSetting {
+        store.loadConfigurations().first {
+            $0.mode == .currentAppWindowSwitching
+        }?.shortcut ?? .defaultCurrentAppWindowSwitching
     }
 
     private static func makeStoredConfigurationsData(

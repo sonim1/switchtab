@@ -41,12 +41,6 @@ public struct ShortcutSettingsStore {
         self.userDefaults = userDefaults
     }
 
-    public func load() -> ShortcutSetting {
-        loadConfigurations().first {
-            $0.mode == .currentAppWindowSwitching
-        }?.shortcut ?? .defaultCurrentAppWindowSwitching
-    }
-
     private func load(key: String, defaultSetting: ShortcutSetting) -> ShortcutSetting {
         guard let data = userDefaults.data(forKey: key),
               let setting = try? decoder.decode(ShortcutSetting.self, from: data) else {
@@ -54,18 +48,6 @@ public struct ShortcutSettingsStore {
         }
 
         return setting
-    }
-
-    public func save(_ setting: ShortcutSetting) throws {
-        var configurations = loadConfigurations()
-        guard let index = configurations.firstIndex(where: {
-            $0.mode == .currentAppWindowSwitching
-        }) else {
-            return
-        }
-
-        configurations[index].shortcut = setting
-        try saveConfigurations(configurations)
     }
 
     public func loadConfigurations() -> [SwitcherShortcutConfiguration] {

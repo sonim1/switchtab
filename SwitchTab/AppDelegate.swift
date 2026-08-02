@@ -50,11 +50,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarStatusItemController: MenuBarStatusItemController?
     private var settingsWindowController: SettingsWindowController?
     private var aboutWindowController: AboutWindowController?
-    private var shortcutSettingsObserver: NSObjectProtocol?
     private var shortcutRecordingDidBeginObserver: NSObjectProtocol?
     private var shortcutRecordingDidEndObserver: NSObjectProtocol?
     private var applicationDidBecomeActiveObserver: NSObjectProtocol?
-    private var applicationSettingsObserver: NSObjectProtocol?
     private var workspaceApplicationActivationObserver: NSObjectProtocol?
     private var workspaceApplicationTerminationObserver: NSObjectProtocol?
     private var settingsRequestObserver: NSObjectProtocol?
@@ -74,16 +72,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             store: applicationSettingsStore,
             updateChecker: updateChecker
         )
-        observeShortcutChanges()
         observeShortcutRecording()
         observeApplicationActivation()
-        observeApplicationSettingsChanges()
         observeWorkspaceApplicationActivation()
         observeWorkspaceApplicationTermination()
         observeSettingsRequests()
         observeAboutRequests()
         observeUpdateCheckRequests()
-        refreshHotkeyRegistrations()
+        registerConfiguredHotkeys(shortcutStore.loadConfigurations())
         showSettingsWindowIfNeededOnLaunch()
     }
 
@@ -252,7 +248,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 applications: applications,
                 reverse: reverse
             ),
-            triggerShortcut: .defaultApplicationSwitching,
+            triggerShortcut: applicationTriggerShortcut(),
             onQuit: { [weak self] item, _ in
                 guard let self,
                       let selectedApplication = snapshot.element(withID: item.id) else {
@@ -318,19 +314,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    private func observeShortcutChanges() {
-        observe(
-            .shortcutSettingsDidChange,
-            storing: &shortcutSettingsObserver,
-            extracting: { $0.userInfo?["settings"] as? [ShortcutSetting] }
-        ) { [weak self] settings in
-            self?.registerWindowHotkeys(settings: settings)
-        }
-    }
-
     private func observeShortcutRecording() {
         observe(.shortcutRecordingDidBegin, storing: &shortcutRecordingDidBeginObserver) { [weak self] in
             self?.hotkeyService.unregisterAll()
+            self?.applicationHotkeyController.unregisterAll()
             self?.persistRegistrationMessages()
         }
 
@@ -339,13 +326,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
-            self.registerWindowHotkeys(setting: self.shortcutStore.load())
-        }
-    }
-
-    private func observeApplicationSettingsChanges() {
-        observe(.commandTabReplacementDidChange, storing: &applicationSettingsObserver) { [weak self] in
-            self?.refreshHotkeyRegistrations()
+            self.registerConfiguredHotkeys(self.shortcutStore.loadConfigurations())
         }
     }
 
@@ -424,7 +405,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
-            self.refreshHotkeyRegistrations()
+            self.registerConfiguredHotkeys(self.shortcutStore.loadConfigurations())
         }
     }
 
@@ -482,11 +463,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func removeNotificationObservers() {
-        removeObserver(&shortcutSettingsObserver)
         removeObserver(&shortcutRecordingDidBeginObserver)
         removeObserver(&shortcutRecordingDidEndObserver)
         removeObserver(&applicationDidBecomeActiveObserver)
-        removeObserver(&applicationSettingsObserver)
         removeWorkspaceApplicationActivationObserver()
         removeWorkspaceApplicationTerminationObserver()
         removeObserver(&settingsRequestObserver)
@@ -528,8 +507,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     policyApplier: NSApplicationActivationPolicyApplier()
                 ),
                 updateChecker: updateChecker,
-                onShortcutChange: { [weak self] candidate, previous in
-                    self?.replaceWindowHotkeys(candidate: candidate, previous: previous) ?? false
+                onShortcutChanged: { [weak self] candidate, previous in
+                    self?.applyShortcutChange(
+                        candidateConfiguration: candidate,
+                        previousConfiguration: previous
+                    ) ?? false
+                },
+                onEnabledChanged: { [weak self] configuration in
+                    self?.applyEnabledChange(configuration: configuration)
                 }
             )
         }
@@ -570,29 +555,36 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func displayedWindowShortcutLabel() -> String {
         let registeredWindowShortcut = hotkeyService.registeredSetting(for: .currentAppWindowSwitching)
-        let windowShortcut = registeredWindowShortcut ?? shortcutStore.load()
+        let windowShortcut = registeredWindowShortcut
+            ?? configuredShortcut(for: .currentAppWindowSwitching)
         return windowShortcut.displayText
     }
 
     private func windowTriggerShortcut() -> ShortcutSetting {
         hotkeyService.registeredSetting(for: .currentAppWindowSwitching)
-            ?? shortcutStore.load()
+            ?? configuredShortcut(for: .currentAppWindowSwitching)
     }
 
-    private func registerWindowHotkeys(settings: [ShortcutSetting]) {
-        let windowSetting = settings.first { $0.mode == .currentAppWindowSwitching }
-            ?? ShortcutSetting.defaultCurrentAppWindowSwitching
-        registerWindowHotkeys(setting: windowSetting)
+    private func applicationTriggerShortcut() -> ShortcutSetting {
+        configuredShortcut(for: .applicationSwitching)
     }
 
-    private func registerWindowHotkeys(setting windowSetting: ShortcutSetting) {
+    private func configuredShortcut(for mode: SwitcherMode) -> ShortcutSetting {
+        shortcutStore.loadConfigurations().first { $0.mode == mode }?.shortcut
+            ?? SwitcherShortcutConfiguration.defaultValue(for: mode).shortcut
+    }
+
+    private func registerWindowHotkeys(
+        setting windowSetting: ShortcutSetting,
+        configurations: [SwitcherShortcutConfiguration]
+    ) {
         hotkeyService.unregisterAll()
 
         let windowReverseSetting = windowSetting.reverseVariant(id: "\(windowSetting.id)-reverse")
         let existingShortcuts = AppDelegateShortcutConflictPolicy
             .windowRegistrationExistingShortcuts(
                 windowSetting: windowSetting,
-                configurations: shortcutStore.loadConfigurations()
+                configurations: configurations
             )
 
         let forwardResult = hotkeyService.registerFirstUsable(
@@ -615,24 +607,53 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         debugLog("registered reverse shortcut=\(windowReverseSetting.displayText) keyCode=\(String(describing: windowReverseSetting.keyCode)) result=\(reverseResult)")
 
+    }
+
+    private func registerConfiguredHotkeys(
+        _ configurations: [SwitcherShortcutConfiguration]
+    ) {
+        let windowConfiguration = configuration(
+            for: .currentAppWindowSwitching,
+            in: configurations
+        )
+        let applicationConfiguration = configuration(
+            for: .applicationSwitching,
+            in: configurations
+        )
+
+        hotkeyService.unregisterAll()
+        if !windowConfiguration.isEnabled,
+           overlayController?.activeMode == .currentAppWindowSwitching {
+            overlayController?.dismiss()
+        }
+
+        _ = updateApplicationHotkeyRegistration(configuration: applicationConfiguration)
+
+        if windowConfiguration.isEnabled {
+            registerWindowHotkeys(
+                setting: windowConfiguration.shortcut,
+                configurations: configurations
+            )
+        }
+
         persistRegistrationMessages()
     }
 
-    private func refreshHotkeyRegistrations() {
-        let applicationSwitchingEnabled = applicationSettingsStore.replacesCommandTab
-        if !applicationSwitchingEnabled {
-            updateApplicationHotkeyRegistration()
+    @discardableResult
+    private func updateApplicationHotkeyRegistration(
+        configuration: SwitcherShortcutConfiguration
+    ) -> Bool {
+        guard configuration.isEnabled else {
+            applicationHotkeyController.unregisterAll()
+            if overlayController?.activeMode == .applicationSwitching {
+                overlayController?.dismiss()
+            }
+            return true
         }
-        registerWindowHotkeys(setting: shortcutStore.load())
-        if applicationSwitchingEnabled {
-            updateApplicationHotkeyRegistration()
-        }
-    }
 
-    private func updateApplicationHotkeyRegistration() {
-        let isEnabled = applicationSettingsStore.replacesCommandTab
-        _ = applicationHotkeyController.updateRegistration(
-            enabled: isEnabled,
+        return applicationHotkeyController.updateRegistration(
+            setting: configuration.shortcut,
+            enabled: true,
             forwardHandler: { [weak self] in
                 self?.showApplicationSwitcher()
             },
@@ -640,12 +661,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.showApplicationSwitcher(reverse: true)
             }
         )
-
-        if !isEnabled,
-           overlayController?.activeMode == .applicationSwitching {
-            overlayController?.dismiss()
-        }
-        persistRegistrationMessages()
     }
 
     private func persistRegistrationMessages() {
@@ -656,25 +671,105 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func replaceWindowHotkeys(
-        candidate: ShortcutSetting,
-        previous: ShortcutSetting
+    private func applyShortcutChange(
+        candidateConfiguration: SwitcherShortcutConfiguration,
+        previousConfiguration: SwitcherShortcutConfiguration
     ) -> Bool {
-        guard registerExactWindowHotkeys(setting: candidate) else {
-            registerWindowHotkeys(setting: previous)
-            return false
+        let configurations = shortcutStore.loadConfigurations()
+
+        switch candidateConfiguration.mode {
+        case .currentAppWindowSwitching:
+            let previousLiveSetting = hotkeyService.registeredSetting(
+                for: .currentAppWindowSwitching
+            )
+            guard candidateConfiguration.isEnabled else {
+                hotkeyService.unregisterAll()
+                persistRegistrationMessages()
+                return true
+            }
+
+            guard registerExactWindowHotkeys(
+                setting: candidateConfiguration.shortcut,
+                configurations: replacing(
+                    candidateConfiguration,
+                    in: configurations
+                )
+            ) else {
+                if let previousLiveSetting {
+                    _ = registerExactWindowHotkeys(
+                        setting: previousLiveSetting,
+                        configurations: replacing(
+                            previousConfiguration,
+                            in: configurations
+                        )
+                    )
+                } else {
+                    hotkeyService.unregisterAll()
+                }
+                persistRegistrationMessages()
+                return false
+            }
+
+        case .applicationSwitching:
+            let previousWindowLiveSetting = hotkeyService.registeredSetting(
+                for: .currentAppWindowSwitching
+            )
+            let candidateConfigurations = replacing(
+                candidateConfiguration,
+                in: configurations
+            )
+            hotkeyService.unregisterAll()
+
+            guard updateApplicationHotkeyRegistration(
+                configuration: candidateConfiguration
+            ) else {
+                _ = updateApplicationHotkeyRegistration(
+                    configuration: previousConfiguration
+                )
+                if let previousWindowLiveSetting {
+                    _ = registerExactWindowHotkeys(
+                        setting: previousWindowLiveSetting,
+                        configurations: replacing(
+                            previousConfiguration,
+                            in: configurations
+                        )
+                    )
+                } else {
+                    hotkeyService.unregisterAll()
+                }
+                persistRegistrationMessages()
+                return false
+            }
+
+            let windowConfiguration = configuration(
+                for: .currentAppWindowSwitching,
+                in: candidateConfigurations
+            )
+            if windowConfiguration.isEnabled {
+                registerWindowHotkeys(
+                    setting: windowConfiguration.shortcut,
+                    configurations: candidateConfigurations
+                )
+            }
         }
 
         persistRegistrationMessages()
         return true
     }
 
-    private func registerExactWindowHotkeys(setting windowSetting: ShortcutSetting) -> Bool {
+    private func applyEnabledChange(configuration _: SwitcherShortcutConfiguration) {
+        registerConfiguredHotkeys(shortcutStore.loadConfigurations())
+    }
+
+    private func registerExactWindowHotkeys(
+        setting windowSetting: ShortcutSetting,
+        configurations: [SwitcherShortcutConfiguration]
+    ) -> Bool {
         hotkeyService.unregisterAll()
         let existingShortcuts = AppDelegateShortcutConflictPolicy
             .windowRegistrationExistingShortcuts(
                 windowSetting: windowSetting,
-                configurations: shortcutStore.loadConfigurations()
+                configurations: configurations
             )
 
         let forwardResult = hotkeyService.register(
@@ -698,6 +793,23 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         return reverseResult == .registered
+    }
+
+    private func configuration(
+        for mode: SwitcherMode,
+        in configurations: [SwitcherShortcutConfiguration]
+    ) -> SwitcherShortcutConfiguration {
+        configurations.first { $0.mode == mode }
+            ?? .defaultValue(for: mode)
+    }
+
+    private func replacing(
+        _ configuration: SwitcherShortcutConfiguration,
+        in configurations: [SwitcherShortcutConfiguration]
+    ) -> [SwitcherShortcutConfiguration] {
+        configurations.map { existing in
+            existing.mode == configuration.mode ? configuration : existing
+        }
     }
 
     private func debugLog(_ message: String) {

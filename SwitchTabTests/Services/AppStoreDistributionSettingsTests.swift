@@ -20,7 +20,10 @@ enum AppStoreDistributionSettingsTests {
         try testEnabledApplicationConflictUsesConfiguredForwardAndShiftReverse()
         try testDisabledApplicationContributesNoWindowConflicts()
         try testWindowRegistrationConflictListsComeFromPolicyBoundary()
+        try testApplicationCandidateIsAWindowRegistrationConflict()
         try testAppDelegateReferencesShortcutConflictPolicy()
+        try testAppDelegateUsesUnifiedShortcutLifecycle()
+        try testSettingsWindowInjectsUnifiedShortcutCallbacks()
         try testDirectDistributionScriptGeneratesIsolatedProjectVariant()
         try testDirectDistributionScriptPinsSparkleToExactRevision()
         try testDirectDistributionScriptRequiresSparklePublicKey()
@@ -219,6 +222,49 @@ enum AppStoreDistributionSettingsTests {
         try expectEqual(registrar.registeredKeyCodes, [50])
     }
 
+    static func testApplicationCandidateIsAWindowRegistrationConflict() throws {
+        let windowShortcut = ShortcutSetting(
+            id: "current-app-window-switching",
+            mode: .currentAppWindowSwitching,
+            keyEquivalent: "K",
+            keyCode: 40,
+            modifiers: ["command"],
+            isUsable: true
+        )
+        let applicationCandidate = ShortcutSetting(
+            id: "application-switching",
+            mode: .applicationSwitching,
+            keyEquivalent: "`",
+            keyCode: 50,
+            modifiers: ["option", "control"],
+            isUsable: true
+        )
+        let configurations = [
+            SwitcherShortcutConfiguration(
+                mode: .currentAppWindowSwitching,
+                isEnabled: true,
+                shortcut: windowShortcut
+            ),
+            SwitcherShortcutConfiguration(
+                mode: .applicationSwitching,
+                isEnabled: true,
+                shortcut: applicationCandidate
+            )
+        ]
+
+        let conflicts = AppDelegateShortcutConflictPolicy
+            .windowRegistrationExistingShortcuts(
+                windowSetting: windowShortcut,
+                configurations: configurations
+            )
+
+        try expectEqual(conflicts.forward.first, applicationCandidate)
+        try expectEqual(
+            conflicts.forward.last,
+            applicationCandidate.reverseVariant(id: "application-switching-reverse")
+        )
+    }
+
     static func testAppDelegateReferencesShortcutConflictPolicy() throws {
         let appDelegateSource = try String(
             contentsOf: projectRoot.appendingPathComponent("SwitchTab/AppDelegate.swift"),
@@ -233,6 +279,110 @@ enum AppStoreDistributionSettingsTests {
 
         try expectTrue(appDelegateImplementation.contains("AppDelegateShortcutConflictPolicy"))
         try expectTrue(appDelegateImplementation.contains("windowRegistrationExistingShortcuts"))
+    }
+
+    static func testAppDelegateUsesUnifiedShortcutLifecycle() throws {
+        let source = try sourceContents(at: "SwitchTab/AppDelegate.swift")
+        let implementation = try sourceSection(
+            source,
+            startingAt: "public final class AppDelegate",
+            endingBefore: "enum ApplicationSwitcherWindowCountPolicy"
+        )
+        let recordingLifecycle = try sourceSection(
+            implementation,
+            startingAt: "private func observeShortcutRecording",
+            endingBefore: "private func observeWorkspaceApplicationActivation"
+        )
+        guard let recordingEnd = recordingLifecycle.range(
+            of: ".shortcutRecordingDidEnd"
+        ) else {
+            throw TestFailure.failed("Expected shortcut recording end observer")
+        }
+        let recordingBegin = recordingLifecycle[..<recordingEnd.lowerBound]
+        let recordingRestore = recordingLifecycle[recordingEnd.lowerBound...]
+        let launch = try sourceSection(
+            implementation,
+            startingAt: "public func applicationDidFinishLaunching",
+            endingBefore: "public func applicationShouldHandleReopen"
+        )
+        let applicationPresentation = try sourceSection(
+            implementation,
+            startingAt: "public func showApplicationSwitcher",
+            endingBefore: "private func thumbnailLoaderForRefresh"
+        )
+        let triggerShortcuts = try sourceSection(
+            implementation,
+            startingAt: "private func applicationTriggerShortcut",
+            endingBefore: "private func registerWindowHotkeys"
+        )
+        let shortcutTransaction = try sourceSection(
+            implementation,
+            startingAt: "private func applyShortcutChange",
+            endingBefore: "private func applyEnabledChange"
+        )
+        guard let applicationCase = shortcutTransaction.range(
+            of: "case .applicationSwitching:"
+        ) else {
+            throw TestFailure.failed("Expected application shortcut transaction")
+        }
+        let applicationTransaction = shortcutTransaction[applicationCase.lowerBound...]
+        guard let windowUnregister = applicationTransaction.range(
+            of: "hotkeyService.unregisterAll"
+        ), let candidateRegistration = applicationTransaction.range(
+            of: "updateApplicationHotkeyRegistration"
+        ), let windowReregistration = applicationTransaction.range(
+            of: "registerWindowHotkeys"
+        ) else {
+            throw TestFailure.failed(
+                "Expected window suspend, application registration, and window restore"
+            )
+        }
+        let requiredSymbols = [
+            "shortcutStore.loadConfigurations()",
+            "registerConfiguredHotkeys",
+            "applyShortcutChange",
+            "applyEnabledChange"
+        ]
+        let missingSymbols = requiredSymbols.filter { !implementation.contains($0) }
+
+        try expectEqual(missingSymbols, [])
+        try expectTrue(launch.contains("shortcutStore.loadConfigurations()"))
+        try expectTrue(launch.contains("registerConfiguredHotkeys"))
+        try expectTrue(recordingBegin.contains("hotkeyService.unregisterAll"))
+        try expectTrue(recordingBegin.contains("applicationHotkeyController.unregisterAll"))
+        try expectTrue(recordingBegin.contains("persistRegistrationMessages"))
+        try expectTrue(recordingRestore.contains("shortcutStore.loadConfigurations()"))
+        try expectTrue(recordingRestore.contains("registerConfiguredHotkeys"))
+        try expectFalse(implementation.contains("applicationSettingsStore.replacesCommandTab"))
+        try expectFalse(implementation.contains(".commandTabReplacementDidChange"))
+        try expectFalse(implementation.contains("observeShortcutChanges"))
+        try expectTrue(applicationPresentation.contains("applicationTriggerShortcut"))
+        try expectFalse(applicationPresentation.contains(".defaultApplicationSwitching"))
+        try expectTrue(triggerShortcuts.contains("configuredShortcut"))
+        try expectFalse(triggerShortcuts.contains(".defaultApplicationSwitching"))
+        try expectTrue(windowUnregister.lowerBound < candidateRegistration.lowerBound)
+        try expectTrue(candidateRegistration.lowerBound < windowReregistration.lowerBound)
+    }
+
+    static func testSettingsWindowInjectsUnifiedShortcutCallbacks() throws {
+        let source = try sourceContents(
+            at: "SwitchTab/UI/Settings/SettingsWindowController.swift"
+        )
+        let controller = try sourceSection(
+            source,
+            startingAt: "public final class SettingsWindowController",
+            endingBefore: "private extension ApplicationActivationPolicy"
+        )
+        let initializer = try sourceSection(
+            controller,
+            startingAt: "public init(",
+            endingBefore: "public func show()"
+        )
+
+        try expectTrue(initializer.contains("onShortcutChanged"))
+        try expectTrue(initializer.contains("SwitcherShortcutConfiguration"))
+        try expectTrue(initializer.contains("onEnabledChanged"))
+        try expectTrue(initializer.contains("ShortcutSettingsViewModel("))
     }
 
     static func testDirectDistributionScriptGeneratesIsolatedProjectVariant() throws {
@@ -347,6 +497,31 @@ enum AppStoreDistributionSettingsTests {
                 shortcut: customApplicationShortcut
             )
         ]
+    }
+
+    private static func sourceContents(at path: String) throws -> String {
+        try String(
+            contentsOf: projectRoot.appendingPathComponent(path),
+            encoding: .utf8
+        )
+    }
+
+    private static func sourceSection(
+        _ source: some StringProtocol,
+        startingAt startMarker: String,
+        endingBefore endMarker: String
+    ) throws -> Substring {
+        guard let start = source.range(of: startMarker),
+              let end = source.range(
+                of: endMarker,
+                range: start.upperBound..<source.endIndex
+              ) else {
+            throw TestFailure.failed(
+                "Expected source section from \(startMarker) to \(endMarker)"
+            )
+        }
+
+        return Substring(source[start.lowerBound..<end.lowerBound])
     }
 
     private static var projectRoot: URL {

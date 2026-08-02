@@ -53,21 +53,6 @@ public final class ApplicationSwitchingHotkeyController {
         return true
     }
 
-    // TODO(Task 4): Remove this compatibility overload once AppDelegate passes its stored setting.
-    @discardableResult
-    public func updateRegistration(
-        enabled: Bool,
-        forwardHandler: @escaping () -> Void,
-        reverseHandler: @escaping () -> Void
-    ) -> Bool {
-        updateRegistration(
-            setting: .defaultApplicationSwitching,
-            enabled: enabled,
-            forwardHandler: forwardHandler,
-            reverseHandler: reverseHandler
-        )
-    }
-
     public func unregisterAll() {
         hotkeyService.unregisterAll()
         registrationMessages.removeAll(keepingCapacity: true)
