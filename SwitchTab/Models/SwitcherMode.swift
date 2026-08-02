@@ -1,4 +1,4 @@
-public enum SwitcherMode: String, Codable, Equatable, Sendable {
+public enum SwitcherMode: String, CaseIterable, Codable, Equatable, Sendable {
     case currentAppWindowSwitching
     case applicationSwitching
 

@@ -5,6 +5,11 @@ import SwitchTab
 enum ShortcutSettingsStoreTests {
     static func run() throws {
         try testStoreLoadsDefaultsWhenEmpty()
+        try testFreshInstallLoadsBothModesEnabled()
+        try testLegacyInstallPreservesWindowShortcutAndExplicitAppState()
+        try testLegacyFootprintWithoutExplicitAppStateKeepsAppSwitchingDisabled()
+        try testUnifiedPayloadWinsOverLegacyValues()
+        try testSavingUnchangedConfigurationsDoesNotRewrite()
         try testInvalidSaveKeepsLastPersistedShortcut()
         try testRegistrationFailureKeepsLastPersistedShortcut()
         try testSavingDefaultShortcutDoesNotPersistWhenAlreadyImplicit()
@@ -31,6 +36,94 @@ enum ShortcutSettingsStoreTests {
 
         try expectEqual(store.load(), .defaultCurrentAppWindowSwitching)
         try expectEqual(store.load(), .defaultCurrentAppWindowSwitching)
+    }
+
+    static func testFreshInstallLoadsBothModesEnabled() throws {
+        let store = ShortcutSettingsStore(userDefaults: makeDefaults())
+
+        let configurations = store.loadConfigurations()
+
+        try expectEqual(
+            configurations,
+            [.defaultCurrentAppWindows, .defaultApplicationSwitching]
+        )
+        try expectTrue(configurations.allSatisfy(\.isEnabled))
+    }
+
+    static func testLegacyInstallPreservesWindowShortcutAndExplicitAppState() throws {
+        let defaults = makeDefaults()
+        let legacyWindow = ShortcutSetting.defaultCurrentAppWindowSwitching.replacingWithValidation(
+            keyEquivalent: "K",
+            modifiers: ["command"],
+            isUsable: true
+        )
+        defaults.set(
+            try JSONEncoder().encode(legacyWindow),
+            forKey: ShortcutSettingsStore.legacyWindowShortcutStorageKey
+        )
+        defaults.set(false, forKey: ApplicationSettingsStore.replacesCommandTabKey)
+
+        let configurations = ShortcutSettingsStore(userDefaults: defaults).loadConfigurations()
+
+        try expectEqual(
+            configurations[0],
+            SwitcherShortcutConfiguration(
+                mode: .currentAppWindowSwitching,
+                isEnabled: true,
+                shortcut: legacyWindow
+            )
+        )
+        try expectEqual(
+            configurations[1],
+            SwitcherShortcutConfiguration(
+                mode: .applicationSwitching,
+                isEnabled: false,
+                shortcut: .defaultApplicationSwitching
+            )
+        )
+    }
+
+    static func testLegacyFootprintWithoutExplicitAppStateKeepsAppSwitchingDisabled() throws {
+        let defaults = makeDefaults()
+        defaults.set(["finder"], forKey: "SwitchTab.recency.currentAppWindowSwitching")
+
+        let configurations = ShortcutSettingsStore(userDefaults: defaults).loadConfigurations()
+
+        try expectFalse(configurations[1].isEnabled)
+    }
+
+    static func testUnifiedPayloadWinsOverLegacyValues() throws {
+        let defaults = makeDefaults()
+        let store = ShortcutSettingsStore(userDefaults: defaults)
+        let saved = [
+            SwitcherShortcutConfiguration(
+                mode: .currentAppWindowSwitching,
+                isEnabled: false,
+                shortcut: .defaultCurrentAppWindowSwitching
+            ),
+            SwitcherShortcutConfiguration(
+                mode: .applicationSwitching,
+                isEnabled: true,
+                shortcut: .defaultApplicationSwitching
+            )
+        ]
+        try store.saveConfigurations(saved)
+        defaults.set(true, forKey: ApplicationSettingsStore.replacesCommandTabKey)
+
+        try expectEqual(store.loadConfigurations(), saved)
+    }
+
+    static func testSavingUnchangedConfigurationsDoesNotRewrite() throws {
+        let defaults = CountingShortcutDefaults()
+        let store = ShortcutSettingsStore(userDefaults: defaults)
+        let configurations = [
+            SwitcherShortcutConfiguration.defaultCurrentAppWindows,
+            SwitcherShortcutConfiguration.defaultApplicationSwitching
+        ]
+
+        try store.saveConfigurations(configurations)
+        try store.saveConfigurations(configurations)
+        try expectEqual(defaults.writeCount, 1)
     }
 
     static func testInvalidSaveKeepsLastPersistedShortcut() throws {
