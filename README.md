@@ -16,16 +16,18 @@ SwitchTab provides two focused switching modes:
 
 - Press <kbd>Command</kbd>+<kbd>`</kbd> to move between windows in the current
   application, with live previews when Screen Recording permission is available.
-- Optionally enable `Replace macOS Cmd-Tab` in Settings > Shortcut to move
-  between applications with compact icons and a caption for the selected app.
+- Press <kbd>Command</kbd>+<kbd>Tab</kbd> to move between applications with
+  compact icons and a caption for the selected app.
 
-The current-app window shortcut is configurable. If macOS refuses the reserved
-default shortcut, SwitchTab falls back to
+Both shortcuts can be enabled, disabled, and changed independently in
+Settings > Shortcut. If macOS refuses the reserved current-window default,
+SwitchTab falls back to
 <kbd>Option</kbd>+<kbd>Control</kbd>+<kbd>`</kbd>.
 
-Application replacement is off by default, so native macOS
-<kbd>Command</kbd>+<kbd>Tab</kbd> remains unchanged until you opt in. When
-enabled, <kbd>Command</kbd>+<kbd>Tab</kbd> moves forward,
+Fresh installations enable both switching modes by default. Existing
+installations preserve an explicit previous application-switcher choice; when
+no previous choice can be detected, application switching remains disabled.
+When enabled, <kbd>Command</kbd>+<kbd>Tab</kbd> moves forward,
 <kbd>Command</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> moves backward, and releasing
 Command activates the selected app. Turning the setting off or quitting
 SwitchTab restores the native switcher.
@@ -36,8 +38,8 @@ Arrow keys move through the same selection grid, and
 <kbd>Command</kbd>+<kbd>Q</kbd> asks the selected app to quit normally while the
 switcher stays open; the tile disappears only after that app exits.
 
-Accessibility permission is required for window focus and the optional Cmd-Tab
-replacement. Screen Recording is required only for window previews, not for
+Accessibility permission is required for window focus and application
+switching. Screen Recording is required only for window previews, not for
 application icons or names. If Cmd-Tab interception is unavailable, SwitchTab
 keeps the setting saved, shows recovery guidance, and leaves native Cmd-Tab
 working.

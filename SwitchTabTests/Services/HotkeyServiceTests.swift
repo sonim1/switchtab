@@ -5,9 +5,14 @@ import CoreGraphics
 enum HotkeyServiceTests {
     static func run() throws {
         try testFallbackRegistrationRecordsWarningWhenRequestedShortcutUnavailable()
-        try testPersistedWindowCmdTabFallsBackWithoutRegisteringReservedKey()
+        try testDynamicWindowCmdTabCandidateIsForwardedToRegistrar()
         try testExactRegistrationDoesNotUseFallbackWhenRequestedShortcutIsUnavailable()
         try testSameModeForwardAndReverseHotkeysCanHaveSeparateHandlers()
+        try testRegisteredSettingsPreserveMixedPrimaryFallbackPairInRegistrationOrder()
+        try testRegistrationSnapshotRestoresMixedPairAndFallbackGuidance()
+        try testEnabledRegistrationSnapshotRejectsEmptyLiveState()
+        try testEnabledRegistrationSnapshotRejectsIncompleteLiveState()
+        try testDisabledRegistrationSnapshotAcceptsEmptyLiveState()
         try testEventTapDispatcherInvokesApplicationAutorepeats()
         try testEventTapDispatcherConsumesIgnoredWindowAutorepeats()
         try testModeInvocationKeepsFirstRegisteredSettingWhenHandlerIsUpdated()
@@ -37,7 +42,7 @@ enum HotkeyServiceTests {
         try expectTrue(registrationMessages.first?.message.contains("Option + Ctrl + `") == true)
     }
 
-    static func testPersistedWindowCmdTabFallsBackWithoutRegisteringReservedKey() throws {
+    static func testDynamicWindowCmdTabCandidateIsForwardedToRegistrar() throws {
         let registrar = CountingHotkeyRegistrar(shouldRegister: true)
         let service = HotkeyService(registrar: registrar)
         let persistedWindowShortcut = ShortcutSetting(
@@ -59,10 +64,9 @@ enum HotkeyServiceTests {
         try expectEqual(result, .registered)
         try expectEqual(
             service.registeredSetting(for: .currentAppWindowSwitching),
-            .fallbackCurrentAppWindowSwitching
+            persistedWindowShortcut
         )
-        try expectEqual(registrar.registeredKeyCodes, [50])
-        try expectFalse(registrar.registeredKeyCodes.contains(48))
+        try expectEqual(registrar.registeredKeyCodes, [48])
     }
 
     static func testExactRegistrationDoesNotUseFallbackWhenRequestedShortcutIsUnavailable() throws {
@@ -110,6 +114,147 @@ enum HotkeyServiceTests {
         try expectEqual(forwardCount, 1)
         try expectEqual(reverseCount, 1)
         try expectEqual(service.registeredSetting(for: .currentAppWindowSwitching), .defaultCurrentAppWindowSwitching)
+    }
+
+    static func testRegisteredSettingsPreserveMixedPrimaryFallbackPairInRegistrationOrder() throws {
+        let primaryReverse = ShortcutSetting.defaultCurrentAppWindowSwitching.reverseVariant(
+            id: "current-app-window-switching-reverse"
+        )
+        let registrar = SelectivelyFailingHotkeyRegistrar(
+            blockedDisplayText: primaryReverse.displayText
+        )
+        let service = HotkeyService(registrar: registrar)
+
+        let forwardResult = service.registerFirstUsable(
+            primaryCandidate: .defaultCurrentAppWindowSwitching,
+            fallbackCandidate: .fallbackCurrentAppWindowSwitching,
+            existing: [] as [ShortcutSetting],
+            mode: .currentAppWindowSwitching
+        ) {}
+        let reverseResult = service.registerFirstUsable(
+            primaryCandidate: primaryReverse,
+            fallbackCandidate: .fallbackCurrentAppWindowSwitchingReverse,
+            existing: [.defaultCurrentAppWindowSwitching],
+            mode: .currentAppWindowSwitching
+        ) {}
+
+        try expectEqual(forwardResult, .registered)
+        try expectEqual(reverseResult, .registered)
+        try expectEqual(
+            service.registeredSettings(for: .currentAppWindowSwitching),
+            [
+                .defaultCurrentAppWindowSwitching,
+                .fallbackCurrentAppWindowSwitchingReverse
+            ]
+        )
+    }
+
+    static func testRegistrationSnapshotRestoresMixedPairAndFallbackGuidance() throws {
+        let primaryReverse = ShortcutSetting.defaultCurrentAppWindowSwitching.reverseVariant(
+            id: "current-app-window-switching-reverse"
+        )
+        let service = HotkeyService(
+            registrar: SelectivelyFailingHotkeyRegistrar(
+                blockedDisplayText: primaryReverse.displayText
+            )
+        )
+
+        _ = service.registerFirstUsable(
+            primaryCandidate: .defaultCurrentAppWindowSwitching,
+            fallbackCandidate: .fallbackCurrentAppWindowSwitching,
+            existing: [] as [ShortcutSetting],
+            mode: .currentAppWindowSwitching
+        ) {}
+        _ = service.registerFirstUsable(
+            primaryCandidate: primaryReverse,
+            fallbackCandidate: .fallbackCurrentAppWindowSwitchingReverse,
+            existing: [.defaultCurrentAppWindowSwitching],
+            mode: .currentAppWindowSwitching
+        ) {}
+        let expectedSettings: [ShortcutSetting] = [
+            .defaultCurrentAppWindowSwitching,
+            .fallbackCurrentAppWindowSwitchingReverse
+        ]
+        let expectedMessages = service.registrationMessageSnapshot()
+        let snapshot = service.registrationSnapshot(
+            for: .currentAppWindowSwitching,
+            expectedEnabled: true
+        )
+
+        try expectEqual(expectedMessages.count, 1)
+        try expectEqual(snapshot.settings, expectedSettings)
+        try expectEqual(snapshot.registrationMessages, expectedMessages)
+
+        service.unregisterAll()
+        var restoredSettings: [ShortcutSetting] = []
+        for setting in snapshot.settings {
+            let result = service.register(
+                setting: setting,
+                existing: restoredSettings,
+                mode: .currentAppWindowSwitching
+            ) {}
+            try expectEqual(result, .registered)
+            restoredSettings.append(setting)
+        }
+
+        try expectTrue(service.restoreRegistrationMetadata(from: snapshot))
+        try expectEqual(
+            service.registrationSnapshot(
+                for: .currentAppWindowSwitching,
+                expectedEnabled: true
+            ),
+            snapshot
+        )
+        try expectEqual(service.registrationMessageSnapshot(), expectedMessages)
+    }
+
+    static func testEnabledRegistrationSnapshotRejectsEmptyLiveState() throws {
+        let service = HotkeyService(registrar: InMemoryHotkeyRegistrar())
+        let snapshot = service.registrationSnapshot(
+            for: .currentAppWindowSwitching,
+            expectedEnabled: true
+        )
+
+        try expectFalse(service.restoreRegistrationMetadata(from: snapshot))
+    }
+
+    static func testEnabledRegistrationSnapshotRejectsIncompleteLiveState() throws {
+        let service = HotkeyService(registrar: InMemoryHotkeyRegistrar())
+        _ = service.register(
+            setting: .defaultCurrentAppWindowSwitching,
+            existing: [] as [ShortcutSetting],
+            mode: .currentAppWindowSwitching
+        ) {}
+        let snapshot = service.registrationSnapshot(
+            for: .currentAppWindowSwitching,
+            expectedEnabled: true
+        )
+
+        service.unregisterAll()
+        _ = service.register(
+            setting: .defaultCurrentAppWindowSwitching,
+            existing: [] as [ShortcutSetting],
+            mode: .currentAppWindowSwitching
+        ) {}
+
+        try expectFalse(service.restoreRegistrationMetadata(from: snapshot))
+    }
+
+    static func testDisabledRegistrationSnapshotAcceptsEmptyLiveState() throws {
+        let service = HotkeyService(registrar: InMemoryHotkeyRegistrar())
+        let snapshot = service.registrationSnapshot(
+            for: .currentAppWindowSwitching,
+            expectedEnabled: false
+        )
+
+        try expectTrue(service.restoreRegistrationMetadata(from: snapshot))
+        try expectEqual(
+            service.registrationSnapshot(
+                for: .currentAppWindowSwitching,
+                expectedEnabled: false
+            ),
+            snapshot
+        )
     }
 
     static func testEventTapDispatcherInvokesApplicationAutorepeats() throws {

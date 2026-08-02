@@ -1,10 +1,11 @@
 # Contract: Switcher Behavior
 
-Current repository scope (2026-07-29): this contract covers the checked-in
-current-app window switcher and the opt-in application switcher. The
-`Replace macOS Cmd-Tab` setting defaults off; native Cmd+Tab remains available
-while it is disabled, when Accessibility prevents EventTap registration, and
-after SwitchTab exits.
+Current repository scope (2026-08-02): this contract covers independently
+configurable current-app window and application switchers. Fresh installs
+enable both with Cmd+` and Cmd+Tab respectively; legacy migration preserves an
+explicit application-switching state and otherwise keeps it disabled. Native
+Cmd+Tab remains available while application switching is disabled, when
+Accessibility prevents EventTap registration, and after SwitchTab exits.
 
 ## Current-App Window Switching
 
@@ -39,16 +40,17 @@ Completion:
 - If the target becomes unavailable, the overlay keeps the user in a safe state
   and does not crash.
 
-## Opt-In Application Switching
+## Application Switching
 
 Trigger:
-- User enables `Replace macOS Cmd-Tab` in Settings > Shortcut and presses
-  Cmd+Tab (forward) or Cmd+Shift+Tab (reverse) while SwitchTab is running.
+- User enables `Application Switching` in Settings > Shortcut and presses its
+  configured shortcut (forward) or its Shift-toggled variant (reverse) while
+  SwitchTab is running.
 
 Preconditions:
-- The replacement toggle is on.
+- The application-switching toggle is on.
 - Accessibility permission is granted so the dedicated suppressing EventTap can
-  intercept the fixed Cmd+Tab shortcuts.
+  intercept the configured forward and Shift-toggled reverse shortcuts.
 - Finder, Safari, Notes, or other regular running applications are available;
   SwitchTab itself, terminated processes, and non-regular activation-policy
   processes are excluded.
@@ -76,16 +78,16 @@ Visible result:
 - Screen Recording permission is not required for application icons or names.
 
 Keyboard behavior:
-- Repeated Cmd+Tab advances application selection.
-- Repeated Cmd+Shift+Tab reverses application selection.
+- Repeating the configured application shortcut advances application selection.
+- Repeating its Shift-toggled variant reverses application selection.
 - Tab/Shift-Tab and arrow-key movement follow the same selection navigation as
   the current-app window switcher.
-- Releasing Command confirms the highlighted application.
+- Releasing the trigger modifier confirms the highlighted application.
 - Cmd+Q requests normal application termination. It is not a force-quit path.
 - Escape cancels without changing the frontmost application or writing MRU.
 
 Completion:
-- Command release and direct mouse selection use the same confirmation path.
+- Trigger-modifier release and direct mouse selection use the same confirmation path.
 - The selected process requests coordinated activation from the actual
   frontmost application and brings all of its windows forward.
 - Successful activation records the stable application identifier in application
@@ -106,7 +108,8 @@ Lifecycle and fallback:
   an active application overlay; the configurable current-app window shortcut
   remains registered.
 - A failed or partial EventTap registration is rolled back without consuming
-  Cmd+Tab and exposes application-specific Accessibility recovery copy.
+  the configured shortcut and exposes application-specific Accessibility
+  recovery copy.
 - Quitting or crashing removes the process-owned EventTap, restoring native
   macOS Cmd+Tab behavior.
 
@@ -117,27 +120,29 @@ Trigger:
 
 Behavior:
 - User can edit the current-app window shortcut.
-- Settings show shortcut controls, the `Replace macOS Cmd-Tab` opt-in toggle,
-  and permission status.
-- The application replacement toggle defaults off and persists separately from
-  the current-app window shortcut.
+- Settings show independent `Current App Windows` and `Application Switching`
+  status, toggle, shortcut, and reset controls, plus permission status.
+- Fresh installs enable both modes with Cmd+` and Cmd+Tab respectively. Each
+  enabled state and shortcut persists independently; legacy migration preserves
+  explicit prior application-switching state and otherwise keeps it disabled.
 - General app preferences such as overlay size may be present.
 - Saving validates usability.
 - Invalid or unusable shortcuts display a specific error.
 - A rejected shortcut never replaces the last valid shortcut.
-- Disabling application replacement leaves the current-app window shortcut
+- Disabling application switching leaves the current-app window shortcut
+  registered, and disabling current-app windows leaves application switching
   registered.
 
 ## Permission Guidance
 
 Accessibility missing:
 - App explains that window observation and window focus require Accessibility access.
-- App explains that application Cmd-Tab replacement also requires Accessibility
-  for its EventTap.
+- App explains that application switching also requires Accessibility for its
+  EventTap.
 - App shows recovery steps for macOS Settings.
 - Current-app window switching actions remain blocked until access is granted.
-- If replacement is enabled, the setting remains saved but native Cmd+Tab is not
-  consumed until EventTap registration succeeds.
+- If application switching is enabled, the setting remains saved but its
+  configured shortcut is not consumed until EventTap registration succeeds.
 
 Screen Recording missing:
 - App explains that window previews require Screen Recording access.
@@ -191,13 +196,13 @@ claim these live scenarios have passed.
 
 | Scenario | Required action/result | Evidence path |
 | --- | --- | --- |
-| 01 | Accessibility granted, replacement off; hold Command and press Tab once; native switcher only | `01-native-off.png` |
-| 02 | Enable replacement; repeat Command-Tab; SwitchTab application overlay only | `02-switchtab-on.png` |
+| 01 | Accessibility granted, application switching disabled; hold Command and press Tab once; native switcher only | `01-native-off.png` |
+| 02 | Enable application switching; repeat Command-Tab; SwitchTab application overlay only | `02-switchtab-on.png` |
 | 03 | Finder active; cycle forward with Tab and reverse with Shift-Tab; match distinct highlights to names | `03-forward.png`, `03-reverse.png` |
 | 04 | Release Command with a non-Finder app highlighted; verify Computer Use frontmost state | `04-activation-state.txt` |
-| 05 | Disable replacement, press Command-Tab for native behavior, then invoke the configured current-app window shortcut and verify its SwitchTab window overlay still appears | `05-disabled-native.png`, `05-window-shortcut-still-active.png` |
-| 06 | Revoke Accessibility, enable replacement, verify native fallback/recovery copy, restore access, retry, verify working overlay/cleared warning | `06-permission-fallback.png`, `06-permission-recovered.png` |
-| 07 | Leave replacement enabled; quit/relaunch QA build; toggle persists and Cmd+Tab opens SwitchTab | `07-relaunch-persistence.png` |
+| 05 | Disable application switching, press Command-Tab for native behavior, then invoke the configured current-app window shortcut and verify its SwitchTab window overlay still appears | `05-disabled-native.png`, `05-window-shortcut-still-active.png` |
+| 06 | Revoke Accessibility, enable application switching, verify native fallback/recovery copy, restore access, retry, verify working overlay/cleared warning | `06-permission-fallback.png`, `06-permission-recovered.png` |
+| 07 | Leave application switching enabled; quit/relaunch QA build; toggle persists and Cmd+Tab opens SwitchTab | `07-relaunch-persistence.png` |
 | 08 | Quit SwitchTab through its menu; press Command-Tab; native behavior restored | `08-quit-native.png` |
 
 For Scenario 05, the `actual` and `selected/frontmost app identity` fields must

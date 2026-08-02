@@ -532,3 +532,36 @@ public struct ShortcutSetting: Identifiable, Codable, Equatable, Sendable {
         return true
     }
 }
+
+public struct SwitcherShortcutConfiguration: Codable, Equatable, Sendable {
+    public let mode: SwitcherMode
+    public var isEnabled: Bool
+    public var shortcut: ShortcutSetting
+
+    public init(mode: SwitcherMode, isEnabled: Bool, shortcut: ShortcutSetting) {
+        self.mode = mode
+        self.isEnabled = isEnabled
+        self.shortcut = shortcut
+    }
+
+    public static let defaultCurrentAppWindows = SwitcherShortcutConfiguration(
+        mode: .currentAppWindowSwitching,
+        isEnabled: true,
+        shortcut: .defaultCurrentAppWindowSwitching
+    )
+
+    public static let defaultApplicationSwitching = SwitcherShortcutConfiguration(
+        mode: .applicationSwitching,
+        isEnabled: true,
+        shortcut: .defaultApplicationSwitching
+    )
+
+    public static func defaultValue(for mode: SwitcherMode) -> SwitcherShortcutConfiguration {
+        switch mode {
+        case .currentAppWindowSwitching:
+            .defaultCurrentAppWindows
+        case .applicationSwitching:
+            .defaultApplicationSwitching
+        }
+    }
+}

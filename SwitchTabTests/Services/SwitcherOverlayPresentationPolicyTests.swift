@@ -11,10 +11,12 @@ enum SwitcherOverlayPresentationPolicyTests {
         try testLocalEventMonitorSkipsKeyUpEvents()
         try testEventTapMaskIncludesKeyDownAndFlagsChanged()
         try testEventTapConsumesNavigationKeysAndPassesThroughOtherKeys()
+        try testConfiguredTriggerPrecedesEveryOverlappingOverlayCommand()
         try testEventTapHandlesCommandReleaseAndPassesThroughModifierEvent()
         try testEventTapIgnoresShiftReleaseWhileCommandRemainsHeld()
         try testEventTapOwnerDispatchesCommandReleaseWithoutConsumingModifierEvent()
         try testControllerSuppliesTriggerReleaseModifiersToEventTapOwner()
+        try testConfiguredApplicationTriggerCyclesBeforeGenericConfirmHandling()
         try testEventTapProducesOneDecisionForEachKeyDownIncludingAutorepeat()
         try testDisabledEventTapRequestsReenableWithoutDispatchingACommand()
         try testEventTapOwnerLifecycleAndExactOnceDispatch()
@@ -134,6 +136,49 @@ enum SwitcherOverlayPresentationPolicyTests {
         )
     }
 
+    static func testConfiguredTriggerPrecedesEveryOverlappingOverlayCommand() throws {
+        let overlappingKeyCodes: [UInt16] = [
+            36,
+            123,
+            124,
+            125,
+            126,
+            SwitcherCommand.quitSelectedApplicationKeyCode,
+            SwitcherCommand.closeSelectedKeyCode
+        ]
+
+        for keyCode in overlappingKeyCodes {
+            let trigger = ShortcutSetting(
+                id: "application-switching",
+                mode: .applicationSwitching,
+                keyEquivalent: "Custom",
+                keyCode: keyCode,
+                modifiers: ["command"],
+                isUsable: true
+            )
+            try expectEqual(
+                SwitcherOverlayEventTapPolicy.decision(
+                    eventType: .keyDown,
+                    keyCode: keyCode,
+                    isAutorepeat: true,
+                    modifiers: .command,
+                    triggerShortcut: trigger
+                ),
+                .consume(.moveDown)
+            )
+            try expectEqual(
+                SwitcherOverlayEventTapPolicy.decision(
+                    eventType: .keyDown,
+                    keyCode: keyCode,
+                    isAutorepeat: true,
+                    modifiers: [.command, .shift],
+                    triggerShortcut: trigger
+                ),
+                .consume(.moveUp)
+            )
+        }
+    }
+
     static func testEventTapHandlesCommandReleaseAndPassesThroughModifierEvent() throws {
         let decision = SwitcherOverlayEventTapPolicy.decision(
             eventType: .flagsChanged,
@@ -213,6 +258,66 @@ enum SwitcherOverlayPresentationPolicyTests {
             modifiers: .command
         ))
         try expectEqual(confirmedIDs, ["finder"])
+    }
+
+    static func testConfiguredApplicationTriggerCyclesBeforeGenericConfirmHandling() throws {
+        let backend = RecordingSwitcherOverlayEventTapBackend()
+        let controller = SwitcherOverlayController(
+            thumbnailStore: WindowThumbnailStore(),
+            eventTapBackend: backend,
+            eventSink: RecordingSwitcherOverlayEventSink()
+        )
+        let commandReturnTrigger = ShortcutSetting(
+            id: "application-switching",
+            mode: .applicationSwitching,
+            keyEquivalent: "Return",
+            keyCode: 36,
+            modifiers: ["command"],
+            isUsable: true
+        )
+        let items = closeTestItems(count: 3)
+        var confirmedIDs: [String] = []
+
+        controller.present(
+            mode: .applicationSwitching,
+            items: items,
+            triggerShortcut: commandReturnTrigger,
+            onConfirm: { item, _ in confirmedIDs.append(item.id) }
+        )
+        guard let connection = backend.connections.last else {
+            throw TestFailure.failed("Expected configured-trigger event-tap connection")
+        }
+
+        try expectTrue(connection.emit(keyCode: 36, modifiers: .command))
+        try expectTrue(connection.emit(
+            keyCode: 36,
+            isAutorepeat: true,
+            modifiers: .command
+        ))
+        try expectTrue(connection.emit(keyCode: 36, modifiers: [.command, .shift]))
+        try expectTrue(controller.isPresented)
+        try expectEqual(confirmedIDs, [])
+
+        try expectFalse(connection.emit(
+            eventType: .flagsChanged,
+            keyCode: 0,
+            modifiers: []
+        ))
+        try expectEqual(confirmedIDs, ["window-1"])
+
+        confirmedIDs.removeAll()
+        controller.present(
+            mode: .applicationSwitching,
+            items: items,
+            triggerShortcut: commandReturnTrigger,
+            onConfirm: { item, _ in confirmedIDs.append(item.id) }
+        )
+        guard let replacementConnection = backend.connections.last else {
+            throw TestFailure.failed("Expected replacement configured-trigger connection")
+        }
+
+        try expectTrue(replacementConnection.emit(keyCode: 36))
+        try expectEqual(confirmedIDs, ["window-0"])
     }
 
     static func testEventTapProducesOneDecisionForEachKeyDownIncludingAutorepeat() throws {

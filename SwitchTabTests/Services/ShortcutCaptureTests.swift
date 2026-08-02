@@ -198,12 +198,15 @@ enum ShortcutCaptureTests {
 
         let saved = viewModel.record(
             capture: ShortcutCapture(keyEquivalent: "j", modifiers: ["option", "control"]),
-            isUsable: true
+            for: .currentAppWindowSwitching
         )
 
         try expectTrue(saved)
-        try expectEqual(store.load().keyEquivalent, "J")
-        try expectEqual(store.load().modifiers, ["option", "control"])
+        let savedShortcut = store.loadConfigurations().first {
+            $0.mode == .currentAppWindowSwitching
+        }?.shortcut
+        try expectEqual(savedShortcut?.keyEquivalent, "J")
+        try expectEqual(savedShortcut?.modifiers, ["option", "control"])
     }
 
     static func testViewModelSavesRecordedShortcutKeyCodeIndependentOfInputLanguage() throws {
@@ -215,13 +218,16 @@ enum ShortcutCaptureTests {
 
         let saved = viewModel.record(
             capture: ShortcutCapture(keyEquivalent: "λ", modifiers: ["command"], keyCode: 40),
-            isUsable: true
+            for: .currentAppWindowSwitching
         )
 
         try expectTrue(saved)
-        try expectEqual(store.load().keyEquivalent, "K")
-        try expectEqual(store.load().keyCode, 40)
-        try expectEqual(store.load().modifiers, ["command"])
+        let savedShortcut = store.loadConfigurations().first {
+            $0.mode == .currentAppWindowSwitching
+        }?.shortcut
+        try expectEqual(savedShortcut?.keyEquivalent, "K")
+        try expectEqual(savedShortcut?.keyCode, 40)
+        try expectEqual(savedShortcut?.modifiers, ["command"])
     }
 
     static func testCocoaModifierResolverReturnsShortcutModifiers() throws {

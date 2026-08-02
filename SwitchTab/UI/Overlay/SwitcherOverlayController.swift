@@ -19,6 +19,7 @@ final class SwitcherOverlayController {
     private var onClose: ((SwitcherListItem, UInt64) -> Void)?
     private var onQuit: ((SwitcherListItem, Int) -> Void)?
     private var presentationID: UInt64 = 0
+    private var triggerShortcut: ShortcutSetting?
     private var triggerReleaseModifiers: SwitcherShortcutModifiers?
     var onDismiss: (() -> Void)?
     private var presentationLayoutSize = SwitcherOverlayLayoutPolicy.defaultSize
@@ -93,6 +94,7 @@ final class SwitcherOverlayController {
         self.onConfirm = onConfirm
         self.onClose = onClose
         self.onQuit = onQuit
+        self.triggerShortcut = triggerShortcut
         if let triggerShortcut {
             self.triggerReleaseModifiers = SwitcherShortcutModifiers.releaseRelevantModifiers(triggerShortcut)
         } else {
@@ -260,7 +262,8 @@ final class SwitcherOverlayController {
         let owner = SwitcherOverlayEventTapOwner(
             backend: eventTapBackend,
             eventSink: eventSink,
-            triggerReleaseModifiers: triggerReleaseModifiers
+            triggerReleaseModifiers: triggerReleaseModifiers,
+            triggerShortcut: triggerShortcut
         ) { @MainActor [weak self] command in
             guard let self else {
                 return
@@ -481,6 +484,15 @@ final class SwitcherOverlayController {
             _ = handle(.releaseShortcut)
             return true
         case .keyDown:
+            if let triggerCommand = SwitcherOverlayTriggerPolicy.command(
+                keyCode: event.keyCode,
+                modifiers: event.shortcutModifiers,
+                triggerShortcut: triggerShortcut
+            ) {
+                _ = handle(triggerCommand)
+                return true
+            }
+
             if let command = SwitcherCommand(keyCode: event.keyCode, modifiers: event.shortcutModifiers) {
                 guard !(event.isARepeat && command.repeatsAreDestructive) else {
                     return true
@@ -603,6 +615,7 @@ final class SwitcherOverlayController {
         onConfirm = nil
         onClose = nil
         onQuit = nil
+        triggerShortcut = nil
         triggerReleaseModifiers = nil
     }
 
@@ -673,6 +686,7 @@ final class SwitcherOverlayEventTapOwner {
     private let backend: any SwitcherOverlayEventTapBackend
     private let eventSink: any SwitcherOverlayEventRecording
     private let triggerReleaseModifiers: SwitcherShortcutModifiers?
+    private let triggerShortcut: ShortcutSetting?
     private let commandHandler: @MainActor (SwitcherCommand) -> Void
     private var connection: (any SwitcherOverlayEventTapConnection)?
     private var session: Session?
@@ -681,11 +695,13 @@ final class SwitcherOverlayEventTapOwner {
         backend: any SwitcherOverlayEventTapBackend,
         eventSink: any SwitcherOverlayEventRecording,
         triggerReleaseModifiers: SwitcherShortcutModifiers? = nil,
+        triggerShortcut: ShortcutSetting? = nil,
         commandHandler: @escaping @MainActor (SwitcherCommand) -> Void
     ) {
         self.backend = backend
         self.eventSink = eventSink
         self.triggerReleaseModifiers = triggerReleaseModifiers
+        self.triggerShortcut = triggerShortcut
         self.commandHandler = commandHandler
     }
 
@@ -726,7 +742,8 @@ final class SwitcherOverlayEventTapOwner {
             keyCode: input.keyCode,
             isAutorepeat: input.isAutorepeat,
             modifiers: input.modifiers,
-            triggerReleaseModifiers: triggerReleaseModifiers
+            triggerReleaseModifiers: triggerReleaseModifiers,
+            triggerShortcut: triggerShortcut
         ) {
         case .passThrough:
             return false

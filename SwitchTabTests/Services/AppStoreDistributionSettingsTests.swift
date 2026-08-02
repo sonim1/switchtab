@@ -1,5 +1,7 @@
+import AppKit
 import Foundation
 import XCTest
+@testable import SwitchTab
 
 final class AppSettingsCommandRoutingTests: XCTestCase {
     func testCommandCommaRoutesToCustomSettingsWindow() throws {
@@ -12,10 +14,21 @@ enum AppStoreDistributionSettingsTests {
         try testInfoPlistUsesAppStoreBundleIdentifier()
         try testInfoPlistDeclaresAppBundleMetadata()
         try testBuildAndDistributionPathsUseSwitchTab()
+        try testShortcutRowPresentationUsesModeSpecificLabelsAndStatus()
+        try testShortcutRowLayoutSupportsLongestShortcut()
         try testXcodeProjectUsesAppStoreBundleIdentifier()
         try testAppSandboxIsDisabledForGlobalWindowSwitching()
         try testSparkleAdapterIsDirectDistributionGuarded()
         try testSparkleErrorUIIsDirectDistributionGuarded()
+        try testEnabledApplicationConflictUsesConfiguredForwardAndShiftReverse()
+        try testDisabledApplicationContributesNoWindowConflicts()
+        try testWindowRegistrationConflictListsComeFromPolicyBoundary()
+        try testApplicationCandidateIsAWindowRegistrationConflict()
+        try testApplicationShortcutTransactionSucceedsInOrder()
+        try testApplicationShortcutTransactionRestoresAfterCandidateFailure()
+        try testApplicationShortcutTransactionReportsWindowRestorationFailure()
+        try testApplicationShortcutTransactionRejectsIncompleteEnabledSnapshots()
+        try testApplicationShortcutTransactionAcceptsDisabledEmptySnapshot()
         try testDirectDistributionScriptGeneratesIsolatedProjectVariant()
         try testDirectDistributionScriptPinsSparkleToExactRevision()
         try testDirectDistributionScriptRequiresSparklePublicKey()
@@ -59,6 +72,109 @@ enum AppStoreDistributionSettingsTests {
         try expectTrue(scriptContents.contains("SwitchTab.xcodeproj/project.pbxproj"))
         try expectFalse(scriptContents.contains("WindowSwitcher.xcodeproj/project.pbxproj"))
         try expectFalse(packageContents.contains("WindowSwitcher"))
+    }
+
+    static func testShortcutRowPresentationUsesModeSpecificLabelsAndStatus() throws {
+        let expectedTitles: [SwitcherMode: String] = [
+            .currentAppWindowSwitching: "Current App Windows",
+            .applicationSwitching: "Application Switching"
+        ]
+
+        for mode in SwitcherMode.allCases {
+            guard let expectedTitle = expectedTitles[mode] else {
+                throw TestFailure.failed("Missing expected title for \(mode.rawValue)")
+            }
+
+            let enabledPresentation = ShortcutSettingsRowPresentation(mode: mode, isEnabled: true)
+            try expectEqual(enabledPresentation.title, expectedTitle)
+            try expectEqual(enabledPresentation.statusText, "Enabled")
+            try expectEqual(enabledPresentation.toggleAccessibilityLabel, "Enable \(expectedTitle)")
+            try expectEqual(
+                enabledPresentation.resetAccessibilityLabel,
+                "Restore \(expectedTitle) default shortcut"
+            )
+            try expectEqual(
+                enabledPresentation.resetAccessibilityHint,
+                "Restore \(expectedTitle) default shortcut."
+            )
+            try expectEqual(
+                enabledPresentation.shortcutAccessibilityLabel,
+                "\(expectedTitle) shortcut"
+            )
+
+            let disabledPresentation = ShortcutSettingsRowPresentation(mode: mode, isEnabled: false)
+            try expectEqual(disabledPresentation.title, expectedTitle)
+            try expectEqual(disabledPresentation.statusText, "Disabled")
+            try expectEqual(disabledPresentation.toggleAccessibilityLabel, "Enable \(expectedTitle)")
+            try expectEqual(
+                disabledPresentation.resetAccessibilityLabel,
+                "Restore \(expectedTitle) default shortcut"
+            )
+            try expectEqual(
+                disabledPresentation.resetAccessibilityHint,
+                "Restore \(expectedTitle) default shortcut."
+            )
+        }
+    }
+
+    static func testShortcutRowLayoutSupportsLongestShortcut() throws {
+        let setting = ShortcutSetting(
+            id: "long-shortcut",
+            mode: .currentAppWindowSwitching,
+            keyEquivalent: "Return",
+            modifiers: ["command", "option", "control", "shift"],
+            isUsable: true
+        )
+        let presentation = ShortcutSettingsRowPresentation(
+            mode: setting.mode,
+            isEnabled: true
+        )
+        let layout = presentation.layout
+
+        try expectEqual(setting.displayText, "Cmd + Option + Ctrl + Shift + Return")
+        try expectTrue(layout.keycapWidth >= 170)
+        try expectTrue(layout.titleMinWidth >= 120)
+        try expectEqual(layout.statusWidth, 54)
+        try expectEqual(layout.keycapHorizontalPadding, 8)
+        try expectEqual(layout.minimumScaleFactor, 0.55)
+        try expectEqual(layout.keycapLineLimit, 1)
+        try expectEqual(layout.titleLineLimit, 1)
+        let keycapFont = NSFont.monospacedSystemFont(
+            ofSize: NSFont.systemFontSize,
+            weight: .semibold
+        )
+        let measuredKeycapWidth = (setting.displayText as NSString)
+            .size(withAttributes: [.font: keycapFont])
+            .width
+        let availableKeycapTextWidth = layout.keycapWidth - (2 * layout.keycapHorizontalPadding)
+        let keycapFitSafetyMargin: CGFloat = 4
+
+        XCTAssertLessThanOrEqual(
+            ceil(measuredKeycapWidth * layout.minimumScaleFactor) + keycapFitSafetyMargin,
+            availableKeycapTextWidth,
+            "Longest shortcut does not fit the keycap with the required rendering margin."
+        )
+        try expectTrue(layout.rightControlClusterIsFixed)
+        try expectEqual(layout.rowContentWidth, 544)
+
+        let titleFont = NSFont.systemFont(
+            ofSize: NSFont.systemFontSize,
+            weight: .medium
+        )
+        for mode in SwitcherMode.allCases {
+            let titlePresentation = ShortcutSettingsRowPresentation(
+                mode: mode,
+                isEnabled: true
+            )
+            let measuredTitleWidth = (titlePresentation.title as NSString)
+                .size(withAttributes: [.font: titleFont])
+                .width
+            XCTAssertLessThanOrEqual(
+                measuredTitleWidth,
+                layout.availableTitleWidth,
+                "\(titlePresentation.title) title does not fit the complete row allocation."
+            )
+        }
     }
 
     static func testAppSettingsCommandRoutesToCustomSettingsWindow() throws {
@@ -147,6 +263,283 @@ enum AppStoreDistributionSettingsTests {
         }
     }
 
+    static func testEnabledApplicationConflictUsesConfiguredForwardAndShiftReverse() throws {
+        let applicationShortcutConflicts = AppDelegateShortcutConflictPolicy
+            .enabledApplicationShortcuts(in: conflictConfigurations(applicationEnabled: true))
+
+        try expectEqual(applicationShortcutConflicts.count, 2)
+        try expectEqual(applicationShortcutConflicts[0], customApplicationShortcut)
+        try expectEqual(applicationShortcutConflicts[1].id, "application-switching-reverse")
+        try expectEqual(applicationShortcutConflicts[1].mode, .applicationSwitching)
+        try expectEqual(applicationShortcutConflicts[1].keyEquivalent, "Space")
+        try expectEqual(applicationShortcutConflicts[1].keyCode, 49)
+        try expectEqual(
+            applicationShortcutConflicts[1].modifiers,
+            ["option", "control", "shift"]
+        )
+        try expectTrue(applicationShortcutConflicts[1].isUsable)
+    }
+
+    static func testDisabledApplicationContributesNoWindowConflicts() throws {
+        let configurations = conflictConfigurations(applicationEnabled: false)
+
+        try expectEqual(
+            AppDelegateShortcutConflictPolicy.enabledApplicationShortcuts(in: configurations),
+            []
+        )
+
+        let existingShortcuts = AppDelegateShortcutConflictPolicy
+            .windowRegistrationExistingShortcuts(
+                windowSetting: conflictingWindowShortcut,
+                configurations: configurations
+            )
+        try expectEqual(existingShortcuts.forward, [])
+        try expectEqual(existingShortcuts.reverse, [conflictingWindowShortcut])
+    }
+
+    static func testWindowRegistrationConflictListsComeFromPolicyBoundary() throws {
+        let configurations = conflictConfigurations(applicationEnabled: true)
+        let applicationShortcutConflicts = AppDelegateShortcutConflictPolicy
+            .enabledApplicationShortcuts(in: configurations)
+
+        let registrationExistingShortcuts = AppDelegateShortcutConflictPolicy
+            .windowRegistrationExistingShortcuts(
+                windowSetting: conflictingWindowShortcut,
+                configurations: configurations
+            )
+        try expectEqual(registrationExistingShortcuts.forward, applicationShortcutConflicts)
+        try expectEqual(
+            registrationExistingShortcuts.reverse,
+            [conflictingWindowShortcut] + applicationShortcutConflicts
+        )
+
+        let registrar = AppDelegateConflictRecordingRegistrar()
+        let service = HotkeyService(registrar: registrar)
+        let result = service.registerFirstUsable(
+            primaryCandidate: conflictingWindowShortcut,
+            fallbackCandidate: .fallbackCurrentAppWindowSwitching,
+            existing: registrationExistingShortcuts.forward,
+            mode: .currentAppWindowSwitching
+        ) {}
+
+        try expectEqual(result, .registered)
+        try expectEqual(
+            service.registeredSetting(for: .currentAppWindowSwitching),
+            .fallbackCurrentAppWindowSwitching
+        )
+        try expectEqual(registrar.registeredKeyCodes, [50])
+    }
+
+    static func testApplicationCandidateIsAWindowRegistrationConflict() throws {
+        let windowShortcut = ShortcutSetting(
+            id: "current-app-window-switching",
+            mode: .currentAppWindowSwitching,
+            keyEquivalent: "K",
+            keyCode: 40,
+            modifiers: ["command"],
+            isUsable: true
+        )
+        let applicationCandidate = ShortcutSetting(
+            id: "application-switching",
+            mode: .applicationSwitching,
+            keyEquivalent: "`",
+            keyCode: 50,
+            modifiers: ["option", "control"],
+            isUsable: true
+        )
+        let configurations = [
+            SwitcherShortcutConfiguration(
+                mode: .currentAppWindowSwitching,
+                isEnabled: true,
+                shortcut: windowShortcut
+            ),
+            SwitcherShortcutConfiguration(
+                mode: .applicationSwitching,
+                isEnabled: true,
+                shortcut: applicationCandidate
+            )
+        ]
+
+        let conflicts = AppDelegateShortcutConflictPolicy
+            .windowRegistrationExistingShortcuts(
+                windowSetting: windowShortcut,
+                configurations: configurations
+            )
+
+        try expectEqual(conflicts.forward.first, applicationCandidate)
+        try expectEqual(
+            conflicts.forward.last,
+            applicationCandidate.reverseVariant(id: "application-switching-reverse")
+        )
+    }
+
+    static func testApplicationShortcutTransactionSucceedsInOrder() throws {
+        var events: [String] = []
+        let transaction = ApplicationShortcutLifecycleTransaction(
+            previousWindowSnapshot: mixedWindowRegistrationSnapshot,
+            suspendWindow: { events.append("suspend-window") },
+            registerApplicationCandidate: {
+                events.append("register-app-candidate")
+                return true
+            },
+            registerWindowWithCandidateConflicts: {
+                events.append("register-window")
+                return true
+            },
+            restorePreviousApplication: {
+                events.append("restore-app")
+                return true
+            },
+            restorePreviousWindow: { snapshot in
+                events.append("restore-window:\(snapshot.settings.count)")
+                return true
+            }
+        )
+
+        try expectEqual(transaction.apply(), .applied)
+        try expectEqual(
+            events,
+            ["suspend-window", "register-app-candidate", "register-window"]
+        )
+    }
+
+    static func testApplicationShortcutTransactionRestoresAfterCandidateFailure() throws {
+        var events: [String] = []
+        var restoredWindowSnapshot: HotkeyRegistrationSnapshot?
+        let transaction = ApplicationShortcutLifecycleTransaction(
+            previousWindowSnapshot: mixedWindowRegistrationSnapshot,
+            suspendWindow: { events.append("suspend-window") },
+            registerApplicationCandidate: {
+                events.append("register-app-candidate")
+                return false
+            },
+            registerWindowWithCandidateConflicts: {
+                events.append("register-window")
+                return true
+            },
+            restorePreviousApplication: {
+                events.append("restore-app")
+                return true
+            },
+            restorePreviousWindow: { snapshot in
+                events.append("restore-window")
+                restoredWindowSnapshot = snapshot
+                return true
+            }
+        )
+
+        try expectEqual(transaction.apply(), .rejectedPreviousRestored)
+        try expectEqual(restoredWindowSnapshot, mixedWindowRegistrationSnapshot)
+        try expectEqual(
+            events,
+            [
+                "suspend-window",
+                "register-app-candidate",
+                "restore-app",
+                "restore-window"
+            ]
+        )
+    }
+
+    static func testApplicationShortcutTransactionReportsWindowRestorationFailure() throws {
+        var events: [String] = []
+        var restoredWindowSnapshot: HotkeyRegistrationSnapshot?
+        let transaction = ApplicationShortcutLifecycleTransaction(
+            previousWindowSnapshot: mixedWindowRegistrationSnapshot,
+            suspendWindow: { events.append("suspend-window") },
+            registerApplicationCandidate: {
+                events.append("register-app-candidate")
+                return true
+            },
+            registerWindowWithCandidateConflicts: {
+                events.append("register-window")
+                return false
+            },
+            restorePreviousApplication: {
+                events.append("restore-app")
+                return true
+            },
+            restorePreviousWindow: { snapshot in
+                events.append("restore-window")
+                restoredWindowSnapshot = snapshot
+                return false
+            }
+        )
+
+        try expectEqual(transaction.apply(), .rollbackFailed)
+        try expectEqual(restoredWindowSnapshot, mixedWindowRegistrationSnapshot)
+        try expectEqual(
+            events,
+            [
+                "suspend-window",
+                "register-app-candidate",
+                "register-window",
+                "restore-app",
+                "restore-window"
+            ]
+        )
+    }
+
+    static func testApplicationShortcutTransactionRejectsIncompleteEnabledSnapshots() throws {
+        let incompleteSettings: [[ShortcutSetting]] = [
+            [],
+            [.defaultCurrentAppWindowSwitching]
+        ]
+
+        for settings in incompleteSettings {
+            let service = HotkeyService(registrar: AppDelegateConflictRecordingRegistrar())
+            let snapshot = HotkeyRegistrationSnapshot(
+                mode: .currentAppWindowSwitching,
+                expectedEnabled: true,
+                settings: settings,
+                registrationMessages: []
+            )
+            let transaction = ApplicationShortcutLifecycleTransaction(
+                previousWindowSnapshot: snapshot,
+                suspendWindow: { service.unregisterAll() },
+                registerApplicationCandidate: { false },
+                registerWindowWithCandidateConflicts: { true },
+                restorePreviousApplication: { true },
+                restorePreviousWindow: { snapshot in
+                    var restoredSettings: [ShortcutSetting] = []
+                    for setting in snapshot.settings {
+                        _ = service.register(
+                            setting: setting,
+                            existing: restoredSettings,
+                            mode: .currentAppWindowSwitching
+                        ) {}
+                        restoredSettings.append(setting)
+                    }
+                    return service.restoreRegistrationMetadata(from: snapshot)
+                }
+            )
+
+            try expectEqual(transaction.apply(), .rollbackFailed)
+        }
+    }
+
+    static func testApplicationShortcutTransactionAcceptsDisabledEmptySnapshot() throws {
+        let service = HotkeyService(registrar: AppDelegateConflictRecordingRegistrar())
+        let snapshot = HotkeyRegistrationSnapshot(
+            mode: .currentAppWindowSwitching,
+            expectedEnabled: false,
+            settings: [],
+            registrationMessages: []
+        )
+        let transaction = ApplicationShortcutLifecycleTransaction(
+            previousWindowSnapshot: snapshot,
+            suspendWindow: { service.unregisterAll() },
+            registerApplicationCandidate: { false },
+            registerWindowWithCandidateConflicts: { true },
+            restorePreviousApplication: { true },
+            restorePreviousWindow: { snapshot in
+                service.restoreRegistrationMetadata(from: snapshot)
+            }
+        )
+
+        try expectEqual(transaction.apply(), .rejectedPreviousRestored)
+    }
+
     static func testDirectDistributionScriptGeneratesIsolatedProjectVariant() throws {
         let scriptURL = projectRoot.appendingPathComponent("scripts/build-direct-distribution.sh")
         let contents = try String(contentsOf: scriptURL, encoding: .utf8)
@@ -224,10 +617,75 @@ enum AppStoreDistributionSettingsTests {
         try expectTrue(guideContents.contains("DEVELOPER_ID_APPLICATION"))
     }
 
+    private static var customApplicationShortcut: ShortcutSetting {
+        ShortcutSetting.defaultApplicationSwitching.replacingWithValidation(
+            keyEquivalent: "Space",
+            keyCode: 49,
+            modifiers: ["option", "control"],
+            isUsable: true
+        )
+    }
+
+    private static var conflictingWindowShortcut: ShortcutSetting {
+        ShortcutSetting(
+            id: "current-app-window-switching",
+            mode: .currentAppWindowSwitching,
+            keyEquivalent: "Space",
+            keyCode: 49,
+            modifiers: ["option", "control"],
+            isUsable: true
+        )
+    }
+
+    private static var mixedWindowRegistrationSnapshot: HotkeyRegistrationSnapshot {
+        HotkeyRegistrationSnapshot(
+            mode: .currentAppWindowSwitching,
+            expectedEnabled: true,
+            settings: [
+                .defaultCurrentAppWindowSwitching,
+                .fallbackCurrentAppWindowSwitchingReverse
+            ],
+            registrationMessages: [
+                ShortcutRegistrationMessage(
+                    mode: .currentAppWindowSwitching,
+                    message: "Primary reverse unavailable; fallback reverse active."
+                )
+            ]
+        )
+    }
+
+    private static func conflictConfigurations(
+        applicationEnabled: Bool
+    ) -> [SwitcherShortcutConfiguration] {
+        [
+            SwitcherShortcutConfiguration(
+                mode: .currentAppWindowSwitching,
+                isEnabled: true,
+                shortcut: conflictingWindowShortcut
+            ),
+            SwitcherShortcutConfiguration(
+                mode: .applicationSwitching,
+                isEnabled: applicationEnabled,
+                shortcut: customApplicationShortcut
+            )
+        ]
+    }
+
     private static var projectRoot: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
     }
+}
+
+private final class AppDelegateConflictRecordingRegistrar: HotkeyRegistering {
+    private(set) var registeredKeyCodes: [UInt16?] = []
+
+    func register(setting: ShortcutSetting, handler _: @escaping () -> Void) -> Bool {
+        registeredKeyCodes.append(setting.keyCode)
+        return true
+    }
+
+    func unregisterAll() {}
 }

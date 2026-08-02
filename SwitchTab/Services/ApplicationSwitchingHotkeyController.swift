@@ -1,6 +1,6 @@
 public final class ApplicationSwitchingHotkeyController {
     public static let registrationFailureMessage =
-        "Cmd-Tab replacement needs Accessibility permission. Grant access in Permissions, then return to SwitchTab."
+        "Application switching needs Accessibility permission. Grant access in Permissions, then return to SwitchTab."
 
     private let hotkeyService: HotkeyService
     private var registrationMessages: [ShortcutRegistrationMessage] = []
@@ -17,7 +17,9 @@ public final class ApplicationSwitchingHotkeyController {
 
     @discardableResult
     public func updateRegistration(
+        setting: ShortcutSetting,
         enabled: Bool,
+        existing: [ShortcutSetting] = [],
         forwardHandler: @escaping () -> Void,
         reverseHandler: @escaping () -> Void
     ) -> Bool {
@@ -29,8 +31,8 @@ public final class ApplicationSwitchingHotkeyController {
         }
 
         let forwardResult = hotkeyService.register(
-            setting: .defaultApplicationSwitching,
-            existing: [] as [ShortcutSetting],
+            setting: setting,
+            existing: existing,
             mode: .applicationSwitching,
             handler: forwardHandler
         )
@@ -38,9 +40,10 @@ public final class ApplicationSwitchingHotkeyController {
             return handleRegistrationFailure()
         }
 
+        let reverseSetting = setting.reverseVariant(id: "application-switching-reverse")
         let reverseResult = hotkeyService.register(
-            setting: .defaultApplicationSwitchingReverse,
-            existing: [.defaultApplicationSwitching],
+            setting: reverseSetting,
+            existing: existing + [setting],
             mode: .applicationSwitching,
             handler: reverseHandler
         )
