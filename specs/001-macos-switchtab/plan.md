@@ -6,10 +6,11 @@
 
 ## Summary
 
-Build a native macOS-only current-app window switcher that opens from a
-configurable keyboard shortcut, plus an opt-in application switcher that can
-replace Cmd+Tab while SwitchTab is running. Replacement defaults off, so native
-macOS Cmd+Tab remains the default. The application mode uses a dedicated
+Build a native macOS-only current-app window switcher and application switcher,
+each with an independently enabled and configurable keyboard shortcut. Fresh
+installs enable Command-backtick and Command-Tab; upgrades preserve explicit
+legacy application-switcher state and default that mode off when no prior
+choice is detectable. The application mode uses a dedicated
 Accessibility-backed EventTap, an application-only MRU, and the existing
 keyboard-first icon-strip overlay; the current-app window mode keeps its
 preview and permission behavior unchanged.
@@ -30,15 +31,15 @@ target has no third-party runtime dependency; the direct-distribution build
 script injects a pinned Sparkle package revision only into its generated
 workspace.
 
-**Storage**: UserDefaults for the window shortcut setting, shortcut
-registration messages, app settings, separate window/application MRU histories,
-and lightweight window-switching usage metrics. No database.
+**Storage**: UserDefaults for the versioned two-mode shortcut configuration,
+shortcut registration messages, app settings, separate window/application MRU
+histories, and lightweight window-switching usage metrics. No database.
 
 **Testing**: XCTest for pure logic and service boundaries; manual quickstart
-validation for live macOS window/application focus, opt-in Cmd+Tab replacement,
-permissions, global shortcuts, Screen Recording previews, and System Settings
-recovery. The eight Finder/Safari/Notes application scenarios are recorded in
-`.build/qa/application-switching/outcomes.md`.
+validation for live macOS window/application focus, configurable application
+switching, permissions, global shortcuts, Screen Recording previews, and System
+Settings recovery. The eight Finder/Safari/Notes application scenarios are
+recorded in `.build/qa/application-switching/outcomes.md`.
 
 **Target Platform**: macOS 14.0+ only.
 
@@ -48,9 +49,9 @@ recovery. The eight Finder/Safari/Notes application scenarios are recorded in
 keyboard selection updates stay responsive for 20 apps and 50 windows; no
 visible idle UI activity or user-noticeable slowdown over 10 minutes idle.
 
-**Constraints**: Keyboard-first interaction, configurable window shortcut,
-default-off application replacement, graceful handling of Accessibility and
-Screen Recording permission states, and no continuous polling for
+**Constraints**: Keyboard-first interaction, independently enabled and
+configurable shortcuts, graceful handling of Accessibility and Screen Recording
+permission states, and no continuous polling for
 window/application state unless justified by measurement. Application
 replacement uses a separate Accessibility EventTap and does not share the
 window shortcut registrar. Permission recovery must not synthesize System
@@ -58,7 +59,7 @@ Settings clicks, drags, or toggle changes. Screen Recording is not required for
 application icons or names.
 
 **Scale/Scope**: Single-user local desktop utility; the checked-in app covers
-current-app window switching, opt-in application switching, independent
+current-app window switching, configurable application switching, independent
 window/application shortcut and MRU state, permission guidance, menu bar
 visibility, overlay sizing, update hooks, and local usage metrics.
 
@@ -162,7 +163,7 @@ Trigger:
 - Allow opens the relevant System Settings privacy destination.
 - If permission is already granted, the row shows an enabled state and no
   recovery action.
-- Enabling `Replace macOS Cmd-Tab` while Accessibility is missing keeps the
+- Enabling application switching while Accessibility is missing keeps the
   setting saved but leaves the application EventTap unregistered; native
   Cmd+Tab is not consumed.
 

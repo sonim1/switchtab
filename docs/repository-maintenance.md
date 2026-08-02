@@ -1,6 +1,6 @@
 # Repository Maintenance
 
-Checked: 2026-07-31
+Checked: 2026-08-02
 
 ## Current Source Of Truth
 
@@ -20,11 +20,14 @@ Checked: 2026-07-31
 - `BLOCKERS.md`: validation that requires user-controlled macOS permissions,
   release credentials, or approval for live external mutations.
 
-The checked-in app implements current-app window switching and an optional
-application switcher. `Replace macOS Cmd-Tab` defaults off; enabling it uses a
-dedicated Accessibility-backed EventTap and a separate application MRU. The
-application overlay shows compact icons with metadata only for the selected
-app, while window thumbnails and their Screen Recording path remain unchanged.
+The checked-in app implements independently enabled and configurable
+current-app window and application switching. Fresh installs enable both modes
+with Command-backtick and Command-Tab; upgrades preserve explicit legacy state
+and keep application switching off when no prior choice is detectable. The
+application mode uses a dedicated Accessibility-backed EventTap and separate
+application MRU. Its overlay shows compact icons with metadata only for the
+selected app, while window thumbnails and their Screen Recording path remain
+unchanged.
 
 No `gbrain` or similarly named brain/context file was found in the repository
 scan.
