@@ -1,5 +1,10 @@
 import Foundation
 
+public enum ShortcutSettingsStoreError: Error, Equatable, Sendable {
+    case missingMode(SwitcherMode)
+    case duplicateMode(SwitcherMode)
+}
+
 public struct ShortcutSettingsStore {
     public static let legacyWindowShortcutStorageKey = "SwitchTab.shortcut.currentAppWindowSwitching"
     private static let configurationsStorageKey = "SwitchTab.shortcut.configurations"
@@ -25,16 +30,9 @@ public struct ShortcutSettingsStore {
     }
 
     public func load() -> ShortcutSetting {
-        if let configurations = persistedConfigurations() {
-            return configurations.first {
-                $0.mode == .currentAppWindowSwitching
-            }?.shortcut ?? .defaultCurrentAppWindowSwitching
-        }
-
-        return load(
-            key: Self.legacyWindowShortcutStorageKey,
-            defaultSetting: .defaultCurrentAppWindowSwitching
-        )
+        loadConfigurations().first {
+            $0.mode == .currentAppWindowSwitching
+        }?.shortcut ?? .defaultCurrentAppWindowSwitching
     }
 
     private func load(key: String, defaultSetting: ShortcutSetting) -> ShortcutSetting {
@@ -47,33 +45,15 @@ public struct ShortcutSettingsStore {
     }
 
     public func save(_ setting: ShortcutSetting) throws {
-        if var configurations = persistedConfigurations(),
-           let index = configurations.firstIndex(where: {
-               $0.mode == .currentAppWindowSwitching
-           }) {
-            configurations[index].shortcut = setting
-            try saveConfigurations(configurations)
+        var configurations = loadConfigurations()
+        guard let index = configurations.firstIndex(where: {
+            $0.mode == .currentAppWindowSwitching
+        }) else {
             return
         }
 
-        let key = Self.legacyWindowShortcutStorageKey
-        let defaultSetting = ShortcutSetting.defaultCurrentAppWindowSwitching
-
-        if setting == defaultSetting {
-            if userDefaults.data(forKey: key) != nil {
-                userDefaults.removeObject(forKey: key)
-            }
-            return
-        }
-
-        if let existingData = userDefaults.data(forKey: key),
-           let existingSetting = try? decoder.decode(ShortcutSetting.self, from: existingData),
-           existingSetting == setting {
-            return
-        }
-
-        let data = try encoder.encode(setting)
-        userDefaults.set(data, forKey: key)
+        configurations[index].shortcut = setting
+        try saveConfigurations(configurations)
     }
 
     public func loadConfigurations() -> [SwitcherShortcutConfiguration] {
@@ -98,6 +78,7 @@ public struct ShortcutSettingsStore {
     }
 
     public func saveConfigurations(_ configurations: [SwitcherShortcutConfiguration]) throws {
+        try validate(configurations)
         let payload = StoredConfigurations(
             version: Self.currentPayloadVersion,
             configurations: orderedConfigurations(configurations)
@@ -108,6 +89,23 @@ public struct ShortcutSettingsStore {
         }
 
         userDefaults.set(data, forKey: Self.configurationsStorageKey)
+    }
+
+    private func validate(_ configurations: [SwitcherShortcutConfiguration]) throws {
+        for mode in SwitcherMode.allCases {
+            let matchingCount = configurations.reduce(into: 0) { count, configuration in
+                if configuration.mode == mode {
+                    count += 1
+                }
+            }
+
+            if matchingCount == 0 {
+                throw ShortcutSettingsStoreError.missingMode(mode)
+            }
+            if matchingCount > 1 {
+                throw ShortcutSettingsStoreError.duplicateMode(mode)
+            }
+        }
     }
 
     private func isComplete(_ configurations: [SwitcherShortcutConfiguration]) -> Bool {
@@ -123,9 +121,8 @@ public struct ShortcutSettingsStore {
     private func orderedConfigurations(
         _ configurations: [SwitcherShortcutConfiguration]
     ) -> [SwitcherShortcutConfiguration] {
-        SwitcherMode.allCases.map { mode in
+        SwitcherMode.allCases.compactMap { mode in
             configurations.first { $0.mode == mode }
-                ?? .defaultValue(for: mode)
         }
     }
 

@@ -10,6 +10,9 @@ enum ShortcutSettingsStoreTests {
         try testLegacyFootprintWithoutExplicitAppStateKeepsAppSwitchingDisabled()
         try testUnifiedPayloadWinsOverLegacyValues()
         try testSavingUnchangedConfigurationsDoesNotRewrite()
+        try testCompatibilityWrappersMigrateIntoUnifiedPayload()
+        try testSavingIncompleteConfigurationsThrows()
+        try testSavingDuplicateConfigurationsThrows()
         try testInvalidSaveKeepsLastPersistedShortcut()
         try testRegistrationFailureKeepsLastPersistedShortcut()
         try testSavingDefaultShortcutDoesNotPersistWhenAlreadyImplicit()
@@ -126,6 +129,56 @@ enum ShortcutSettingsStoreTests {
         try expectEqual(defaults.writeCount, 1)
     }
 
+    static func testCompatibilityWrappersMigrateIntoUnifiedPayload() throws {
+        let defaults = makeDefaults()
+        let store = ShortcutSettingsStore(userDefaults: defaults)
+        let customSetting = ShortcutSetting(
+            id: "current-app-window-switching",
+            mode: .currentAppWindowSwitching,
+            keyEquivalent: "K",
+            modifiers: ["command"],
+            isUsable: true
+        )
+
+        try expectEqual(store.load(), .defaultCurrentAppWindowSwitching)
+        try expectTrue(defaults.data(forKey: "SwitchTab.shortcut.configurations") != nil)
+
+        try store.save(customSetting)
+
+        try expectEqual(store.load(), customSetting)
+        try expectEqual(
+            store.loadConfigurations().first { $0.mode == .currentAppWindowSwitching }?.shortcut,
+            customSetting
+        )
+    }
+
+    static func testSavingIncompleteConfigurationsThrows() throws {
+        let store = ShortcutSettingsStore(userDefaults: makeDefaults())
+
+        do {
+            try store.saveConfigurations([.defaultCurrentAppWindows])
+            throw TestFailure.failed("Expected incomplete configurations to be rejected")
+        } catch let error as ShortcutSettingsStoreError {
+            try expectEqual(error, .missingMode(.applicationSwitching))
+        }
+    }
+
+    static func testSavingDuplicateConfigurationsThrows() throws {
+        let store = ShortcutSettingsStore(userDefaults: makeDefaults())
+        let configurations = [
+            SwitcherShortcutConfiguration.defaultCurrentAppWindows,
+            SwitcherShortcutConfiguration.defaultApplicationSwitching,
+            SwitcherShortcutConfiguration.defaultApplicationSwitching
+        ]
+
+        do {
+            try store.saveConfigurations(configurations)
+            throw TestFailure.failed("Expected duplicate configurations to be rejected")
+        } catch let error as ShortcutSettingsStoreError {
+            try expectEqual(error, .duplicateMode(.applicationSwitching))
+        }
+    }
+
     static func testInvalidSaveKeepsLastPersistedShortcut() throws {
         let defaults = makeDefaults()
         let store = ShortcutSettingsStore(userDefaults: defaults)
@@ -188,7 +241,7 @@ enum ShortcutSettingsStoreTests {
         try store.save(setting)
         try store.save(setting)
 
-        try expectEqual(defaults.writeCount, 1)
+        try expectEqual(defaults.writeCount, 2)
     }
 
     static func testSavingDefaultShortcutDoesNotPersistWhenAlreadyImplicit() throws {
@@ -197,7 +250,7 @@ enum ShortcutSettingsStoreTests {
 
         try store.save(.defaultCurrentAppWindowSwitching)
 
-        try expectEqual(defaults.writeCount, 0)
+        try expectEqual(defaults.writeCount, 1)
         try expectEqual(defaults.removeCount, 0)
         try expectEqual(store.load(), .defaultCurrentAppWindowSwitching)
     }
@@ -216,8 +269,8 @@ enum ShortcutSettingsStoreTests {
         try store.save(customSetting)
         try store.save(.defaultCurrentAppWindowSwitching)
 
-        try expectEqual(defaults.writeCount, 1)
-        try expectEqual(defaults.removeCount, 1)
+        try expectEqual(defaults.writeCount, 3)
+        try expectEqual(defaults.removeCount, 0)
         try expectEqual(store.load(), .defaultCurrentAppWindowSwitching)
     }
 
@@ -239,7 +292,7 @@ enum ShortcutSettingsStoreTests {
         )
 
         try expectTrue(didSave)
-        try expectEqual(defaults.writeCount, 0)
+        try expectEqual(defaults.writeCount, 1)
         try expectEqual(notificationCount, 0)
     }
 
