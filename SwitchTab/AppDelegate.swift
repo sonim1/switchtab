@@ -1,5 +1,20 @@
 import AppKit
 
+enum AppDelegateShortcutConflictPolicy {
+    static func enabledApplicationShortcuts(
+        in configurations: [SwitcherShortcutConfiguration]
+    ) -> [ShortcutSetting] {
+        guard let applicationConfiguration = configurations.first(where: {
+            $0.mode == .applicationSwitching
+        }), applicationConfiguration.isEnabled else {
+            return []
+        }
+
+        let forward = applicationConfiguration.shortcut
+        return [forward, forward.reverseVariant(id: "\(forward.id)-reverse")]
+    }
+}
+
 @MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayController: SwitcherOverlayController?
@@ -60,10 +75,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         observeSettingsRequests()
         observeAboutRequests()
         observeUpdateCheckRequests()
-        registerWindowHotkeys(setting: shortcutStore.load())
-        if applicationSettingsStore.replacesCommandTab {
-            updateApplicationHotkeyRegistration()
-        }
+        refreshHotkeyRegistrations()
         showSettingsWindowIfNeededOnLaunch()
     }
 
@@ -325,7 +337,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func observeApplicationSettingsChanges() {
         observe(.commandTabReplacementDidChange, storing: &applicationSettingsObserver) { [weak self] in
-            self?.updateApplicationHotkeyRegistration()
+            self?.refreshHotkeyRegistrations()
         }
     }
 
@@ -404,8 +416,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
-            self.registerWindowHotkeys(setting: self.shortcutStore.load())
-            self.updateApplicationHotkeyRegistration()
+            self.refreshHotkeyRegistrations()
         }
     }
 
@@ -570,11 +581,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyService.unregisterAll()
 
         let windowReverseSetting = windowSetting.reverseVariant(id: "\(windowSetting.id)-reverse")
+        let applicationShortcutConflicts = AppDelegateShortcutConflictPolicy
+            .enabledApplicationShortcuts(in: shortcutStore.loadConfigurations())
 
         let forwardResult = hotkeyService.registerFirstUsable(
             primaryCandidate: windowSetting,
             fallbackCandidate: .fallbackCurrentAppWindowSwitching,
-            existing: [] as [ShortcutSetting],
+            existing: applicationShortcutConflicts,
             mode: .currentAppWindowSwitching
         ) { [weak self] in
             self?.showCurrentAppSwitcher()
@@ -584,7 +597,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         let reverseResult = hotkeyService.registerFirstUsable(
             primaryCandidate: windowReverseSetting,
             fallbackCandidate: .fallbackCurrentAppWindowSwitchingReverse,
-            existing: [windowSetting],
+            existing: [windowSetting] + applicationShortcutConflicts,
             mode: .currentAppWindowSwitching
         ) { [weak self] in
             self?.showCurrentAppSwitcher(reverse: true)
@@ -592,6 +605,17 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         debugLog("registered reverse shortcut=\(windowReverseSetting.displayText) keyCode=\(String(describing: windowReverseSetting.keyCode)) result=\(reverseResult)")
 
         persistRegistrationMessages()
+    }
+
+    private func refreshHotkeyRegistrations() {
+        let applicationSwitchingEnabled = applicationSettingsStore.replacesCommandTab
+        if !applicationSwitchingEnabled {
+            updateApplicationHotkeyRegistration()
+        }
+        registerWindowHotkeys(setting: shortcutStore.load())
+        if applicationSwitchingEnabled {
+            updateApplicationHotkeyRegistration()
+        }
     }
 
     private func updateApplicationHotkeyRegistration() {
@@ -636,10 +660,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func registerExactWindowHotkeys(setting windowSetting: ShortcutSetting) -> Bool {
         hotkeyService.unregisterAll()
+        let applicationShortcutConflicts = AppDelegateShortcutConflictPolicy
+            .enabledApplicationShortcuts(in: shortcutStore.loadConfigurations())
 
         let forwardResult = hotkeyService.register(
             setting: windowSetting,
-            existing: [] as [ShortcutSetting],
+            existing: applicationShortcutConflicts,
             mode: .currentAppWindowSwitching
         ) { [weak self] in
             self?.showCurrentAppSwitcher()
@@ -651,7 +677,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         let reverseSetting = windowSetting.reverseVariant(id: "\(windowSetting.id)-reverse")
         let reverseResult = hotkeyService.register(
             setting: reverseSetting,
-            existing: [windowSetting],
+            existing: [windowSetting] + applicationShortcutConflicts,
             mode: .currentAppWindowSwitching
         ) { [weak self] in
             self?.showCurrentAppSwitcher(reverse: true)

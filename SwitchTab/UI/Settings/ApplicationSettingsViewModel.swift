@@ -64,8 +64,22 @@ public final class ApplicationSettingsViewModel: ObservableObject {
         store.replacesCommandTab
     }
 
-    public func setReplacesCommandTab(_ enabled: Bool) {
-        store.saveReplacesCommandTab(enabled)
+    @discardableResult
+    public func setReplacesCommandTab(_ enabled: Bool) -> Bool {
+        guard replacesCommandTab != enabled else {
+            return true
+        }
+        guard store.saveReplacesCommandTab(enabled) else {
+            setErrorMessage("Application switching could not be updated.")
+            return false
+        }
+
+        if errorMessage == nil {
+            objectWillChange.send()
+        } else {
+            setErrorMessage(nil)
+        }
+        return true
     }
 
     public func setOverlaySizeScale(_ scale: OverlaySizeScale) {

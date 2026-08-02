@@ -25,9 +25,11 @@ enum ShortcutSettingsStoreTests {
         try testResetRestoresOnlyModeDefaultAndPreservesEnabledState()
         try testUnchangedEnabledStateDoesNotWritePublishOrCallback()
         try testUnchangedShortcutDoesNotWritePublishOrCallback()
+        try testUnchangedShortcutClearsOnlyItsModeError()
         try testEnabledPersistenceFailureKeepsConfigurationAndSetsModeError()
         try testRegistrationFailureKeepsConfigurationsAndSetsModeError()
         try testPersistenceFailureRollsBackLiveRegistration()
+        try testPersistenceFailureReportsFailedLiveRegistrationRollback()
         try testForwardConflictAcrossModesIsRejected()
         try testAutoShiftReverseConflictAcrossModesIsRejected()
         try testInvalidSaveKeepsLastPersistedShortcut()
@@ -463,6 +465,59 @@ enum ShortcutSettingsStoreTests {
         try expectEqual(publishCount, 0)
     }
 
+    static func testUnchangedShortcutClearsOnlyItsModeError() throws {
+        let defaults = CountingShortcutDefaults()
+        var callbackCount = 0
+        let viewModel = ShortcutSettingsViewModel(
+            store: ShortcutSettingsStore(userDefaults: defaults),
+            onShortcutChanged: { _, _ in
+                callbackCount += 1
+                return true
+            }
+        )
+        let initialWriteCount = defaults.writeCount
+        let invalidCapture = ShortcutCapture(
+            keyEquivalent: "Space",
+            modifiers: [],
+            keyCode: 49
+        )
+
+        try expectFalse(viewModel.record(
+            capture: invalidCapture,
+            for: .currentAppWindowSwitching
+        ))
+        try expectFalse(viewModel.record(
+            capture: invalidCapture,
+            for: .applicationSwitching
+        ))
+        try expectEqual(
+            viewModel.errorMessage(for: .currentAppWindowSwitching),
+            "Shortcut must include at least one modifier."
+        )
+        try expectEqual(
+            viewModel.errorMessage(for: .applicationSwitching),
+            "Shortcut must include at least one modifier."
+        )
+
+        let didRecord = viewModel.record(
+            capture: ShortcutCapture(
+                keyEquivalent: ShortcutSetting.defaultCurrentAppWindowSwitching.keyEquivalent,
+                modifiers: ShortcutSetting.defaultCurrentAppWindowSwitching.modifiers,
+                keyCode: ShortcutSetting.defaultCurrentAppWindowSwitching.keyCode
+            ),
+            for: .currentAppWindowSwitching
+        )
+
+        try expectTrue(didRecord)
+        try expectEqual(viewModel.errorMessage(for: .currentAppWindowSwitching), nil)
+        try expectEqual(
+            viewModel.errorMessage(for: .applicationSwitching),
+            "Shortcut must include at least one modifier."
+        )
+        try expectEqual(defaults.writeCount, initialWriteCount)
+        try expectEqual(callbackCount, 0)
+    }
+
     static func testEnabledPersistenceFailureKeepsConfigurationAndSetsModeError() throws {
         let store = ShortcutSettingsStore(userDefaults: makeDefaults())
         var callbackCount = 0
@@ -571,6 +626,62 @@ enum ShortcutSettingsStoreTests {
             viewModel.errorMessage(for: .applicationSwitching),
             "Shortcut could not be saved."
         )
+    }
+
+    static func testPersistenceFailureReportsFailedLiveRegistrationRollback() throws {
+        let store = ShortcutSettingsStore(userDefaults: makeDefaults())
+        let previousConfigurations = store.loadConfigurations()
+        let previousApplication = previousConfigurations[1]
+        let expectedCandidate = SwitcherShortcutConfiguration(
+            mode: .applicationSwitching,
+            isEnabled: previousApplication.isEnabled,
+            shortcut: previousApplication.shortcut.replacingWithValidation(
+                keyEquivalent: "Space",
+                keyCode: 49,
+                modifiers: ["option"],
+                isUsable: true
+            )
+        )
+        var callbackCandidates: [SwitcherShortcutConfiguration] = []
+        var callbackPreviousValues: [SwitcherShortcutConfiguration] = []
+        var callbackResults = [true, false]
+        var saveAttemptCount = 0
+        let viewModel = ShortcutSettingsViewModel(
+            store: store,
+            saveConfigurations: { _ in
+                saveAttemptCount += 1
+                throw TestFailure.failed("save failed")
+            },
+            onShortcutChanged: { candidate, previous in
+                callbackCandidates.append(candidate)
+                callbackPreviousValues.append(previous)
+                return callbackResults.removeFirst()
+            }
+        )
+
+        let didRecord = viewModel.record(
+            capture: ShortcutCapture(
+                keyEquivalent: "Space",
+                modifiers: ["option"],
+                keyCode: 49
+            ),
+            for: .applicationSwitching
+        )
+
+        try expectFalse(didRecord)
+        try expectEqual(saveAttemptCount, 1)
+        try expectEqual(callbackCandidates, [expectedCandidate, previousApplication])
+        try expectEqual(callbackPreviousValues, [previousApplication, expectedCandidate])
+        try expectEqual(store.loadConfigurations(), previousConfigurations)
+        try expectEqual(
+            viewModel.configuration(for: .applicationSwitching),
+            previousApplication
+        )
+        try expectEqual(
+            viewModel.errorMessage(for: .applicationSwitching),
+            "Shortcut could not be saved, and the previous shortcut could not be restored."
+        )
+        try expectEqual(viewModel.errorMessage(for: .currentAppWindowSwitching), nil)
     }
 
     static func testForwardConflictAcrossModesIsRejected() throws {

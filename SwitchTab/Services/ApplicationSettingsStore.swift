@@ -45,21 +45,27 @@ public struct ApplicationSettingsStore {
     }
 
     // TODO(Task 5): Remove this deprecated forwarding shim after the settings UI uses ShortcutSettingsViewModel.
-    public func saveReplacesCommandTab(_ enabled: Bool) {
+    @discardableResult
+    public func saveReplacesCommandTab(_ enabled: Bool) -> Bool {
         let shortcutStore = ShortcutSettingsStore(userDefaults: userDefaults)
         var configurations = shortcutStore.loadConfigurations()
-        guard let index = configurations.firstIndex(where: { $0.mode == .applicationSwitching }),
-              configurations[index].isEnabled != enabled else {
-            return
+        guard let index = configurations.firstIndex(where: { $0.mode == .applicationSwitching }) else {
+            return false
+        }
+        guard configurations[index].isEnabled != enabled else {
+            return true
         }
 
         configurations[index].isEnabled = enabled
-        guard (try? shortcutStore.saveConfigurations(configurations)) != nil else {
-            return
+        do {
+            try shortcutStore.saveConfigurations(configurations)
+        } catch {
+            return false
         }
 
         NotificationCenter.default.post(name: .applicationSettingsDidChange, object: nil)
         NotificationCenter.default.post(name: .commandTabReplacementDidChange, object: nil)
+        return true
     }
 
     public var overlaySizeScale: OverlaySizeScale {

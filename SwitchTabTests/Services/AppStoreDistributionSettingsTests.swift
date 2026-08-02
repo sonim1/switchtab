@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+@testable import SwitchTab
 
 final class AppSettingsCommandRoutingTests: XCTestCase {
     func testCommandCommaRoutesToCustomSettingsWindow() throws {
@@ -16,6 +17,7 @@ enum AppStoreDistributionSettingsTests {
         try testAppSandboxIsDisabledForGlobalWindowSwitching()
         try testSparkleAdapterIsDirectDistributionGuarded()
         try testSparkleErrorUIIsDirectDistributionGuarded()
+        try testAppDelegateTreatsEnabledApplicationShortcutsAsWindowConflicts()
         try testDirectDistributionScriptGeneratesIsolatedProjectVariant()
         try testDirectDistributionScriptPinsSparkleToExactRevision()
         try testDirectDistributionScriptRequiresSparklePublicKey()
@@ -147,6 +149,72 @@ enum AppStoreDistributionSettingsTests {
         }
     }
 
+    static func testAppDelegateTreatsEnabledApplicationShortcutsAsWindowConflicts() throws {
+        let conflictingWindowShortcut = ShortcutSetting(
+            id: "current-app-window-switching",
+            mode: .currentAppWindowSwitching,
+            keyEquivalent: "Tab",
+            keyCode: 48,
+            modifiers: ["command"],
+            isUsable: true
+        )
+        let configurations = [
+            SwitcherShortcutConfiguration(
+                mode: .currentAppWindowSwitching,
+                isEnabled: true,
+                shortcut: conflictingWindowShortcut
+            ),
+            SwitcherShortcutConfiguration.defaultApplicationSwitching
+        ]
+        let applicationShortcutConflicts = AppDelegateShortcutConflictPolicy
+            .enabledApplicationShortcuts(in: configurations)
+        let expectedApplicationForward = ShortcutSetting.defaultApplicationSwitching
+        let expectedApplicationReverse = expectedApplicationForward.reverseVariant(
+            id: "\(expectedApplicationForward.id)-reverse"
+        )
+
+        try expectEqual(
+            applicationShortcutConflicts,
+            [expectedApplicationForward, expectedApplicationReverse]
+        )
+
+        let registrar = AppDelegateConflictRecordingRegistrar()
+        let service = HotkeyService(registrar: registrar)
+        let result = service.registerFirstUsable(
+            primaryCandidate: conflictingWindowShortcut,
+            fallbackCandidate: .fallbackCurrentAppWindowSwitching,
+            existing: applicationShortcutConflicts,
+            mode: .currentAppWindowSwitching
+        ) {}
+
+        try expectEqual(result, .registered)
+        try expectEqual(
+            service.registeredSetting(for: .currentAppWindowSwitching),
+            .fallbackCurrentAppWindowSwitching
+        )
+        try expectEqual(registrar.registeredKeyCodes, [50])
+
+        var disabledConfigurations = configurations
+        disabledConfigurations[1].isEnabled = false
+        try expectEqual(
+            AppDelegateShortcutConflictPolicy.enabledApplicationShortcuts(
+                in: disabledConfigurations
+            ),
+            []
+        )
+
+        let appDelegateSource = try String(
+            contentsOf: projectRoot.appendingPathComponent("SwitchTab/AppDelegate.swift"),
+            encoding: .utf8
+        )
+        try expectTrue(appDelegateSource.contains("AppDelegateShortcutConflictPolicy"))
+        try expectTrue(appDelegateSource.contains("enabledApplicationShortcuts"))
+        try expectTrue(appDelegateSource.contains("existing: applicationShortcutConflicts"))
+        try expectTrue(appDelegateSource.contains(
+            "existing: [windowSetting] + applicationShortcutConflicts"
+        ))
+    }
+
     static func testDirectDistributionScriptGeneratesIsolatedProjectVariant() throws {
         let scriptURL = projectRoot.appendingPathComponent("scripts/build-direct-distribution.sh")
         let contents = try String(contentsOf: scriptURL, encoding: .utf8)
@@ -230,4 +298,15 @@ enum AppStoreDistributionSettingsTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
     }
+}
+
+private final class AppDelegateConflictRecordingRegistrar: HotkeyRegistering {
+    private(set) var registeredKeyCodes: [UInt16?] = []
+
+    func register(setting: ShortcutSetting, handler _: @escaping () -> Void) -> Bool {
+        registeredKeyCodes.append(setting.keyCode)
+        return true
+    }
+
+    func unregisterAll() {}
 }

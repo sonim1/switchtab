@@ -264,6 +264,7 @@ public final class ShortcutSettingsViewModel: ObservableObject {
         var candidate = previous
         candidate.shortcut = candidateShortcut
         guard candidate != previous else {
+            setErrorMessage(nil, for: mode)
             return true
         }
 
@@ -292,8 +293,13 @@ public final class ShortcutSettingsViewModel: ObservableObject {
         do {
             try saveConfigurations(configurations)
         } catch {
-            _ = onShortcutChanged(previous, candidate)
-            setErrorMessage("Shortcut could not be saved.", for: mode)
+            let didRestorePreviousShortcut = onShortcutChanged(previous, candidate)
+            setErrorMessage(
+                didRestorePreviousShortcut
+                    ? "Shortcut could not be saved."
+                    : "Shortcut could not be saved, and the previous shortcut could not be restored.",
+                for: mode
+            )
             return false
         }
 
