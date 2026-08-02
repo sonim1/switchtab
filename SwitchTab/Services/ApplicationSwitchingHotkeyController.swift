@@ -19,6 +19,7 @@ public final class ApplicationSwitchingHotkeyController {
     public func updateRegistration(
         setting: ShortcutSetting,
         enabled: Bool,
+        existing: [ShortcutSetting] = [],
         forwardHandler: @escaping () -> Void,
         reverseHandler: @escaping () -> Void
     ) -> Bool {
@@ -31,7 +32,7 @@ public final class ApplicationSwitchingHotkeyController {
 
         let forwardResult = hotkeyService.register(
             setting: setting,
-            existing: [] as [ShortcutSetting],
+            existing: existing,
             mode: .applicationSwitching,
             handler: forwardHandler
         )
@@ -42,7 +43,7 @@ public final class ApplicationSwitchingHotkeyController {
         let reverseSetting = setting.reverseVariant(id: "application-switching-reverse")
         let reverseResult = hotkeyService.register(
             setting: reverseSetting,
-            existing: [setting],
+            existing: existing + [setting],
             mode: .applicationSwitching,
             handler: reverseHandler
         )

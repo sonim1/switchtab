@@ -64,6 +64,37 @@ enum SwitcherOverlayEventTapDecision: Equatable, Sendable {
     case reenable
 }
 
+enum SwitcherOverlayTriggerPolicy {
+    static func command(
+        keyCode: UInt16,
+        modifiers: SwitcherShortcutModifiers,
+        triggerShortcut: ShortcutSetting?
+    ) -> SwitcherCommand? {
+        guard let triggerShortcut,
+              triggerShortcut.isUsable,
+              let triggerKeyCode = triggerShortcut.keyCode
+                ?? ShortcutKeyCodeResolver.keyCode(for: triggerShortcut.keyEquivalent),
+              keyCode == triggerKeyCode else {
+            return nil
+        }
+
+        let forwardModifiers = SwitcherShortcutModifiers(
+            modifiers: triggerShortcut.modifiers
+        )
+        if modifiers == forwardModifiers {
+            return .moveDown
+        }
+
+        let reverseShortcut = triggerShortcut.reverseVariant(
+            id: "\(triggerShortcut.id)-overlay-reverse"
+        )
+        let reverseModifiers = SwitcherShortcutModifiers(
+            modifiers: reverseShortcut.modifiers
+        )
+        return modifiers == reverseModifiers ? .moveUp : nil
+    }
+}
+
 enum SwitcherOverlayEventTapPolicy {
     static let eventMask = CGEventMask(1 << CGEventType.keyDown.rawValue)
         | CGEventMask(1 << CGEventType.flagsChanged.rawValue)
@@ -73,7 +104,8 @@ enum SwitcherOverlayEventTapPolicy {
         keyCode: UInt16,
         isAutorepeat: Bool,
         modifiers: SwitcherShortcutModifiers = [],
-        triggerReleaseModifiers: SwitcherShortcutModifiers? = nil
+        triggerReleaseModifiers: SwitcherShortcutModifiers? = nil,
+        triggerShortcut: ShortcutSetting? = nil
     ) -> SwitcherOverlayEventTapDecision {
         switch eventType {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
@@ -87,6 +119,13 @@ enum SwitcherOverlayEventTapPolicy {
                 ? .handleAndPassThrough(.releaseShortcut)
                 : .passThrough
         case .keyDown:
+            if let triggerCommand = SwitcherOverlayTriggerPolicy.command(
+                keyCode: keyCode,
+                modifiers: modifiers,
+                triggerShortcut: triggerShortcut
+            ) {
+                return .consume(triggerCommand)
+            }
             guard let command = SwitcherCommand(keyCode: keyCode, modifiers: modifiers) else {
                 return .passThrough
             }

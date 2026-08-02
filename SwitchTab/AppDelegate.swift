@@ -53,6 +53,33 @@ struct ApplicationShortcutLifecycleTransaction {
 }
 
 @MainActor
+struct ShortcutEnabledLifecycle {
+    let windowHotkeyService: HotkeyService
+    let registerWindowHotkeys: @MainActor (ShortcutSetting) -> Bool
+    let updateApplicationHotkeyRegistration: @MainActor (
+        SwitcherShortcutConfiguration
+    ) -> Bool
+    let dismissWindowOverlayIfActive: @MainActor () -> Void
+    let persistRegistrationMessages: @MainActor () -> Void
+
+    func apply(configuration: SwitcherShortcutConfiguration) {
+        switch configuration.mode {
+        case .currentAppWindowSwitching:
+            if configuration.isEnabled {
+                _ = registerWindowHotkeys(configuration.shortcut)
+            } else {
+                windowHotkeyService.unregisterAll()
+                dismissWindowOverlayIfActive()
+            }
+        case .applicationSwitching:
+            _ = updateApplicationHotkeyRegistration(configuration)
+        }
+
+        persistRegistrationMessages()
+    }
+}
+
+@MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayController: SwitcherOverlayController?
     private let windowProvider = AccessibilityWindowProvider()
@@ -672,7 +699,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @discardableResult
     private func updateApplicationHotkeyRegistration(
-        configuration: SwitcherShortcutConfiguration
+        configuration: SwitcherShortcutConfiguration,
+        existingShortcuts: [ShortcutSetting] = []
     ) -> Bool {
         guard configuration.isEnabled else {
             applicationHotkeyController.unregisterAll()
@@ -685,6 +713,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         return applicationHotkeyController.updateRegistration(
             setting: configuration.shortcut,
             enabled: true,
+            existing: existingShortcuts,
             forwardHandler: { [weak self] in
                 self?.showApplicationSwitcher()
             },
@@ -807,8 +836,38 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         return .applied
     }
 
-    private func applyEnabledChange(configuration _: SwitcherShortcutConfiguration) {
-        registerConfiguredHotkeys(shortcutStore.loadConfigurations())
+    private func applyEnabledChange(configuration: SwitcherShortcutConfiguration) {
+        let configurations = replacing(
+            configuration,
+            in: shortcutStore.loadConfigurations()
+        )
+        let lifecycle = ShortcutEnabledLifecycle(
+            windowHotkeyService: hotkeyService,
+            registerWindowHotkeys: { setting in
+                self.registerWindowHotkeys(
+                    setting: setting,
+                    configurations: configurations
+                )
+            },
+            updateApplicationHotkeyRegistration: { configuration in
+                self.updateApplicationHotkeyRegistration(
+                    configuration: configuration,
+                    existingShortcuts: self.hotkeyService.registeredSettings(
+                        for: .currentAppWindowSwitching
+                    )
+                )
+            },
+            dismissWindowOverlayIfActive: {
+                guard self.overlayController?.activeMode == .currentAppWindowSwitching else {
+                    return
+                }
+                self.overlayController?.dismiss()
+            },
+            persistRegistrationMessages: {
+                self.persistRegistrationMessages()
+            }
+        )
+        lifecycle.apply(configuration: configuration)
     }
 
     private func registerExactWindowHotkeys(
