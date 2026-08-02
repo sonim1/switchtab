@@ -7,6 +7,22 @@ public enum HotkeyRegistrationResult: Equatable, Sendable {
     case noUsableShortcut
 }
 
+struct HotkeyRegistrationSnapshot: Equatable, Sendable {
+    let mode: SwitcherMode
+    let expectedEnabled: Bool
+    let settings: [ShortcutSetting]
+    let registrationMessages: [ShortcutRegistrationMessage]
+
+    var hasCompleteLiveRegistrationState: Bool {
+        guard settings.allSatisfy({ $0.mode == mode }),
+              registrationMessages.allSatisfy({ $0.mode == mode }) else {
+            return false
+        }
+
+        return expectedEnabled ? settings.count == 2 : settings.isEmpty
+    }
+}
+
 public protocol HotkeyRegistering {
     @discardableResult
     func register(setting: ShortcutSetting, handler: @escaping () -> Void) -> Bool
@@ -102,6 +118,29 @@ public final class HotkeyService {
 
     public func registrationMessageSnapshot() -> [ShortcutRegistrationMessage] {
         registrationMessages
+    }
+
+    func registrationSnapshot(
+        for mode: SwitcherMode,
+        expectedEnabled: Bool
+    ) -> HotkeyRegistrationSnapshot {
+        HotkeyRegistrationSnapshot(
+            mode: mode,
+            expectedEnabled: expectedEnabled,
+            settings: registeredSettings(for: mode),
+            registrationMessages: registrationMessages.filter { $0.mode == mode }
+        )
+    }
+
+    func restoreRegistrationMetadata(from snapshot: HotkeyRegistrationSnapshot) -> Bool {
+        guard snapshot.hasCompleteLiveRegistrationState,
+              registeredSettings(for: snapshot.mode) == snapshot.settings else {
+            return false
+        }
+
+        registrationMessages.removeAll { $0.mode == snapshot.mode }
+        registrationMessages.append(contentsOf: snapshot.registrationMessages)
+        return true
     }
 
     private func registerIfUsable(

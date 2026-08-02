@@ -24,6 +24,8 @@ enum AppStoreDistributionSettingsTests {
         try testApplicationShortcutTransactionSucceedsInOrder()
         try testApplicationShortcutTransactionRestoresAfterCandidateFailure()
         try testApplicationShortcutTransactionReportsWindowRestorationFailure()
+        try testApplicationShortcutTransactionRejectsIncompleteEnabledSnapshots()
+        try testApplicationShortcutTransactionAcceptsDisabledEmptySnapshot()
         try testDirectDistributionScriptGeneratesIsolatedProjectVariant()
         try testDirectDistributionScriptPinsSparkleToExactRevision()
         try testDirectDistributionScriptRequiresSparklePublicKey()
@@ -268,7 +270,7 @@ enum AppStoreDistributionSettingsTests {
     static func testApplicationShortcutTransactionSucceedsInOrder() throws {
         var events: [String] = []
         let transaction = ApplicationShortcutLifecycleTransaction(
-            previousWindowSettings: mixedWindowRegistrationSnapshot,
+            previousWindowSnapshot: mixedWindowRegistrationSnapshot,
             suspendWindow: { events.append("suspend-window") },
             registerApplicationCandidate: {
                 events.append("register-app-candidate")
@@ -282,8 +284,8 @@ enum AppStoreDistributionSettingsTests {
                 events.append("restore-app")
                 return true
             },
-            restorePreviousWindow: { settings in
-                events.append("restore-window:\(settings.count)")
+            restorePreviousWindow: { snapshot in
+                events.append("restore-window:\(snapshot.settings.count)")
                 return true
             }
         )
@@ -297,9 +299,9 @@ enum AppStoreDistributionSettingsTests {
 
     static func testApplicationShortcutTransactionRestoresAfterCandidateFailure() throws {
         var events: [String] = []
-        var restoredWindowSettings: [ShortcutSetting] = []
+        var restoredWindowSnapshot: HotkeyRegistrationSnapshot?
         let transaction = ApplicationShortcutLifecycleTransaction(
-            previousWindowSettings: mixedWindowRegistrationSnapshot,
+            previousWindowSnapshot: mixedWindowRegistrationSnapshot,
             suspendWindow: { events.append("suspend-window") },
             registerApplicationCandidate: {
                 events.append("register-app-candidate")
@@ -313,15 +315,15 @@ enum AppStoreDistributionSettingsTests {
                 events.append("restore-app")
                 return true
             },
-            restorePreviousWindow: { settings in
+            restorePreviousWindow: { snapshot in
                 events.append("restore-window")
-                restoredWindowSettings = settings
+                restoredWindowSnapshot = snapshot
                 return true
             }
         )
 
         try expectEqual(transaction.apply(), .rejectedPreviousRestored)
-        try expectEqual(restoredWindowSettings, mixedWindowRegistrationSnapshot)
+        try expectEqual(restoredWindowSnapshot, mixedWindowRegistrationSnapshot)
         try expectEqual(
             events,
             [
@@ -335,9 +337,9 @@ enum AppStoreDistributionSettingsTests {
 
     static func testApplicationShortcutTransactionReportsWindowRestorationFailure() throws {
         var events: [String] = []
-        var restoredWindowSettings: [ShortcutSetting] = []
+        var restoredWindowSnapshot: HotkeyRegistrationSnapshot?
         let transaction = ApplicationShortcutLifecycleTransaction(
-            previousWindowSettings: mixedWindowRegistrationSnapshot,
+            previousWindowSnapshot: mixedWindowRegistrationSnapshot,
             suspendWindow: { events.append("suspend-window") },
             registerApplicationCandidate: {
                 events.append("register-app-candidate")
@@ -351,15 +353,15 @@ enum AppStoreDistributionSettingsTests {
                 events.append("restore-app")
                 return true
             },
-            restorePreviousWindow: { settings in
+            restorePreviousWindow: { snapshot in
                 events.append("restore-window")
-                restoredWindowSettings = settings
+                restoredWindowSnapshot = snapshot
                 return false
             }
         )
 
         try expectEqual(transaction.apply(), .rollbackFailed)
-        try expectEqual(restoredWindowSettings, mixedWindowRegistrationSnapshot)
+        try expectEqual(restoredWindowSnapshot, mixedWindowRegistrationSnapshot)
         try expectEqual(
             events,
             [
@@ -370,6 +372,66 @@ enum AppStoreDistributionSettingsTests {
                 "restore-window"
             ]
         )
+    }
+
+    static func testApplicationShortcutTransactionRejectsIncompleteEnabledSnapshots() throws {
+        let incompleteSettings: [[ShortcutSetting]] = [
+            [],
+            [.defaultCurrentAppWindowSwitching]
+        ]
+
+        for settings in incompleteSettings {
+            let service = HotkeyService(registrar: AppDelegateConflictRecordingRegistrar())
+            let snapshot = HotkeyRegistrationSnapshot(
+                mode: .currentAppWindowSwitching,
+                expectedEnabled: true,
+                settings: settings,
+                registrationMessages: []
+            )
+            let transaction = ApplicationShortcutLifecycleTransaction(
+                previousWindowSnapshot: snapshot,
+                suspendWindow: { service.unregisterAll() },
+                registerApplicationCandidate: { false },
+                registerWindowWithCandidateConflicts: { true },
+                restorePreviousApplication: { true },
+                restorePreviousWindow: { snapshot in
+                    var restoredSettings: [ShortcutSetting] = []
+                    for setting in snapshot.settings {
+                        _ = service.register(
+                            setting: setting,
+                            existing: restoredSettings,
+                            mode: .currentAppWindowSwitching
+                        ) {}
+                        restoredSettings.append(setting)
+                    }
+                    return service.restoreRegistrationMetadata(from: snapshot)
+                }
+            )
+
+            try expectEqual(transaction.apply(), .rollbackFailed)
+        }
+    }
+
+    static func testApplicationShortcutTransactionAcceptsDisabledEmptySnapshot() throws {
+        let service = HotkeyService(registrar: AppDelegateConflictRecordingRegistrar())
+        let snapshot = HotkeyRegistrationSnapshot(
+            mode: .currentAppWindowSwitching,
+            expectedEnabled: false,
+            settings: [],
+            registrationMessages: []
+        )
+        let transaction = ApplicationShortcutLifecycleTransaction(
+            previousWindowSnapshot: snapshot,
+            suspendWindow: { service.unregisterAll() },
+            registerApplicationCandidate: { false },
+            registerWindowWithCandidateConflicts: { true },
+            restorePreviousApplication: { true },
+            restorePreviousWindow: { snapshot in
+                service.restoreRegistrationMetadata(from: snapshot)
+            }
+        )
+
+        try expectEqual(transaction.apply(), .rejectedPreviousRestored)
     }
 
     static func testDirectDistributionScriptGeneratesIsolatedProjectVariant() throws {
@@ -469,11 +531,21 @@ enum AppStoreDistributionSettingsTests {
         )
     }
 
-    private static var mixedWindowRegistrationSnapshot: [ShortcutSetting] {
-        [
-            .defaultCurrentAppWindowSwitching,
-            .fallbackCurrentAppWindowSwitchingReverse
-        ]
+    private static var mixedWindowRegistrationSnapshot: HotkeyRegistrationSnapshot {
+        HotkeyRegistrationSnapshot(
+            mode: .currentAppWindowSwitching,
+            expectedEnabled: true,
+            settings: [
+                .defaultCurrentAppWindowSwitching,
+                .fallbackCurrentAppWindowSwitchingReverse
+            ],
+            registrationMessages: [
+                ShortcutRegistrationMessage(
+                    mode: .currentAppWindowSwitching,
+                    message: "Primary reverse unavailable; fallback reverse active."
+                )
+            ]
+        )
     }
 
     private static func conflictConfigurations(
