@@ -133,6 +133,7 @@ enum AppStoreDistributionSettingsTests {
             isEnabled: true
         )
         let layout = presentation.layout
+        let initialWindowCount = NSApp.windows.count
 
         try expectEqual(setting.displayText, "Cmd + Option + Ctrl + Shift + Return")
         try expectTrue(layout.keycapWidth >= 170)
@@ -140,38 +141,119 @@ enum AppStoreDistributionSettingsTests {
         try expectEqual(layout.statusWidth, 54)
         try expectEqual(layout.keycapLineLimit, 1)
         try expectEqual(layout.titleLineLimit, 1)
-        let renderedKeycap = NSHostingController(
-            rootView: Text(setting.displayText)
-                .font(.system(.body, design: .monospaced).weight(.semibold))
-                .lineLimit(layout.keycapLineLimit)
-                .minimumScaleFactor(layout.minimumScaleFactor)
-                .padding(.horizontal, layout.keycapHorizontalPadding)
-                .padding(.vertical, 7)
-        )
-        let frame = NSRect(x: 0, y: 0, width: 320, height: 40)
-        let window = NSWindow(
-            contentRect: frame,
-            styleMask: .borderless,
-            backing: .buffered,
-            defer: false
-        )
-        window.contentViewController = renderedKeycap
-        window.orderFront(nil)
-        defer {
-            window.orderOut(nil)
-            window.contentViewController = nil
-        }
-        renderedKeycap.view.layoutSubtreeIfNeeded()
-        renderedKeycap.view.displayIfNeeded()
-        let intrinsicTextWidth = renderedKeycap.view.fittingSize.width
-            - (2 * layout.keycapHorizontalPadding)
-        let availableKeycapTextWidth = layout.keycapWidth - (2 * layout.keycapHorizontalPadding)
+        do {
+            let renderedKeycap = NSHostingController(
+                rootView: Text(setting.displayText)
+                    .font(.system(.body, design: .monospaced).weight(.semibold))
+                    .lineLimit(layout.keycapLineLimit)
+                    .minimumScaleFactor(layout.minimumScaleFactor)
+                    .padding(.horizontal, layout.keycapHorizontalPadding)
+                    .padding(.vertical, 7)
+            )
+            let frame = NSRect(x: 0, y: 0, width: 320, height: 40)
+            let window = NSWindow(
+                contentRect: frame,
+                styleMask: .borderless,
+                backing: .buffered,
+                defer: false
+            )
+            window.contentViewController = renderedKeycap
+            window.orderFront(nil)
+            defer {
+                window.orderOut(nil)
+                window.contentViewController = nil
+                window.close()
+                XCTAssertFalse(NSApp.windows.contains { $0 === window })
+                XCTAssertEqual(NSApp.windows.count, initialWindowCount)
+            }
+            renderedKeycap.view.layoutSubtreeIfNeeded()
+            renderedKeycap.view.displayIfNeeded()
+            let intrinsicTextWidth = renderedKeycap.view.fittingSize.width
+                - (2 * layout.keycapHorizontalPadding)
+            let availableKeycapTextWidth = layout.keycapWidth - (2 * layout.keycapHorizontalPadding)
 
-        XCTAssertTrue(
-            ceil(intrinsicTextWidth * layout.minimumScaleFactor) < availableKeycapTextWidth,
-            "Longest shortcut does not fit the keycap at the configured minimum scale."
-        )
-        try expectTrue(layout.rightControlClusterIsFixed)
+            XCTAssertTrue(
+                ceil(intrinsicTextWidth * layout.minimumScaleFactor) < availableKeycapTextWidth,
+                "Longest shortcut does not fit the keycap at the configured minimum scale."
+            )
+            try expectTrue(layout.rightControlClusterIsFixed)
+            try expectEqual(layout.rowContentWidth, 544)
+        }
+
+        for mode in SwitcherMode.allCases {
+            let titlePresentation = ShortcutSettingsRowPresentation(
+                mode: mode,
+                isEnabled: true
+            )
+            let titleMeasurement = NSHostingController(
+                rootView: Text(titlePresentation.title)
+                    .font(.body.weight(.medium))
+                    .lineLimit(layout.titleLineLimit)
+            )
+            titleMeasurement.view.layoutSubtreeIfNeeded()
+            XCTAssertLessThanOrEqual(
+                titleMeasurement.view.fittingSize.width,
+                layout.availableTitleWidth,
+                "\(titlePresentation.title) title does not fit the complete row allocation."
+            )
+
+            let rowSetting = ShortcutSetting(
+                id: "long-shortcut-\(mode.rawValue)",
+                mode: mode,
+                keyEquivalent: "Return",
+                modifiers: ["command", "option", "control", "shift"],
+                isUsable: true
+            )
+            let configuration = SwitcherShortcutConfiguration(
+                mode: mode,
+                isEnabled: true,
+                shortcut: rowSetting
+            )
+            let row = ShortcutRecorderRow(
+                configuration: configuration,
+                errorMessage: nil,
+                registrationMessage: nil,
+                recordingCoordinator: ShortcutRecordingCoordinator(),
+                onEnabledChanged: { _ in },
+                onRecord: { _ in },
+                onReset: {}
+            )
+            do {
+                let renderedRow = NSHostingController(
+                    rootView: row.frame(width: layout.rowContentWidth, alignment: .leading)
+                )
+                let rowFrame = NSRect(
+                    x: 0,
+                    y: 0,
+                    width: layout.rowContentWidth,
+                    height: 80
+                )
+                let rowWindow = NSWindow(
+                    contentRect: rowFrame,
+                    styleMask: .borderless,
+                    backing: .buffered,
+                    defer: false
+                )
+                rowWindow.contentViewController = renderedRow
+                rowWindow.orderFront(nil)
+                let rowWindowNumber = rowWindow.windowNumber
+                defer {
+                    rowWindow.orderOut(nil)
+                    rowWindow.contentViewController = nil
+                    rowWindow.close()
+                    XCTAssertFalse(NSApp.windows.contains { $0.windowNumber == rowWindowNumber })
+                    XCTAssertEqual(NSApp.windows.count, initialWindowCount)
+                }
+                renderedRow.view.frame = rowFrame
+                renderedRow.view.layoutSubtreeIfNeeded()
+                renderedRow.view.displayIfNeeded()
+                XCTAssertLessThanOrEqual(
+                    renderedRow.view.fittingSize.width,
+                    layout.rowContentWidth,
+                    "\(titlePresentation.title) row exceeds the Settings panel content width."
+                )
+            }
+        }
     }
 
     static func testAppSettingsCommandRoutesToCustomSettingsWindow() throws {

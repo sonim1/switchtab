@@ -439,10 +439,17 @@ private struct SettingsDivider: View {
 
 struct ShortcutSettingsRowLayout: Equatable, Sendable {
     static let standard = ShortcutSettingsRowLayout(
-    keycapWidth: 184,
+        keycapWidth: 184,
         keycapHorizontalPadding: 8,
         titleMinWidth: 126,
+        titleSpacerMinLength: 8,
         statusWidth: 54,
+        toggleWidth: 54,
+        resetWidth: 20,
+        rowContentWidth: 544,
+        rowIconWidth: 28,
+        rowHorizontalSpacing: 10,
+        rightControlClusterSpacing: 6,
         minimumScaleFactor: 0.55,
         keycapLineLimit: 1,
         titleLineLimit: 1,
@@ -452,11 +459,30 @@ struct ShortcutSettingsRowLayout: Equatable, Sendable {
     let keycapWidth: CGFloat
     let keycapHorizontalPadding: CGFloat
     let titleMinWidth: CGFloat
+    let titleSpacerMinLength: CGFloat
     let statusWidth: CGFloat
+    let toggleWidth: CGFloat
+    let resetWidth: CGFloat
+    let rowContentWidth: CGFloat
+    let rowIconWidth: CGFloat
+    let rowHorizontalSpacing: CGFloat
+    let rightControlClusterSpacing: CGFloat
     let minimumScaleFactor: CGFloat
     let keycapLineLimit: Int
     let titleLineLimit: Int
     let rightControlClusterIsFixed: Bool
+
+    var availableTitleWidth: CGFloat {
+        rowContentWidth
+            - rowIconWidth
+            - (3 * rowHorizontalSpacing)
+            - titleSpacerMinLength
+            - statusWidth
+            - toggleWidth
+            - keycapWidth
+            - resetWidth
+            - (3 * rightControlClusterSpacing)
+    }
 }
 
 struct ShortcutSettingsRowPresentation: Equatable, Sendable {
@@ -515,7 +541,7 @@ public final class ShortcutRecordingCoordinator: ObservableObject {
     }
 }
 
-private struct ShortcutRecorderRow: View {
+struct ShortcutRecorderRow: View {
     let configuration: SwitcherShortcutConfiguration
     let errorMessage: String?
     let registrationMessage: String?
@@ -575,9 +601,9 @@ private struct ShortcutRecorderRow: View {
                 .frame(minWidth: layout.titleMinWidth, alignment: .leading)
                 .layoutPriority(1)
 
-                Spacer(minLength: 16)
+                Spacer(minLength: layout.titleSpacerMinLength)
 
-                HStack(spacing: 10) {
+                HStack(spacing: layout.rightControlClusterSpacing) {
                     Text(presentation.statusText)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(configuration.isEnabled ? .primary : .secondary)
