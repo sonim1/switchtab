@@ -23,6 +23,30 @@ enum AppDelegateShortcutConflictPolicy {
     }
 }
 
+struct ApplicationShortcutLifecycleTransaction {
+    let suspendWindow: () -> Void
+    let registerApplicationCandidate: () -> Bool
+    let registerWindowWithCandidateConflicts: () -> Bool
+    let restorePreviousApplication: () -> Void
+    let restorePreviousWindow: () -> Void
+
+    func apply() -> Bool {
+        suspendWindow()
+        guard registerApplicationCandidate() else {
+            restorePreviousApplication()
+            restorePreviousWindow()
+            return false
+        }
+        guard registerWindowWithCandidateConflicts() else {
+            restorePreviousApplication()
+            restorePreviousWindow()
+            return false
+        }
+
+        return true
+    }
+}
+
 @MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayController: SwitcherOverlayController?
@@ -574,10 +598,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             ?? SwitcherShortcutConfiguration.defaultValue(for: mode).shortcut
     }
 
+    @discardableResult
     private func registerWindowHotkeys(
         setting windowSetting: ShortcutSetting,
         configurations: [SwitcherShortcutConfiguration]
-    ) {
+    ) -> Bool {
         hotkeyService.unregisterAll()
 
         let windowReverseSetting = windowSetting.reverseVariant(id: "\(windowSetting.id)-reverse")
@@ -607,6 +632,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         debugLog("registered reverse shortcut=\(windowReverseSetting.displayText) keyCode=\(String(describing: windowReverseSetting.keyCode)) result=\(reverseResult)")
 
+        return forwardResult == .registered && reverseResult == .registered
     }
 
     private func registerConfiguredHotkeys(
@@ -718,38 +744,53 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 candidateConfiguration,
                 in: configurations
             )
-            hotkeyService.unregisterAll()
-
-            guard updateApplicationHotkeyRegistration(
-                configuration: candidateConfiguration
-            ) else {
-                _ = updateApplicationHotkeyRegistration(
-                    configuration: previousConfiguration
-                )
-                if let previousWindowLiveSetting {
-                    _ = registerExactWindowHotkeys(
-                        setting: previousWindowLiveSetting,
-                        configurations: replacing(
-                            previousConfiguration,
-                            in: configurations
-                        )
-                    )
-                } else {
-                    hotkeyService.unregisterAll()
-                }
-                persistRegistrationMessages()
-                return false
-            }
-
             let windowConfiguration = configuration(
                 for: .currentAppWindowSwitching,
                 in: candidateConfigurations
             )
-            if windowConfiguration.isEnabled {
-                registerWindowHotkeys(
-                    setting: windowConfiguration.shortcut,
-                    configurations: candidateConfigurations
-                )
+            let previousConfigurations = replacing(
+                previousConfiguration,
+                in: configurations
+            )
+            let transaction = ApplicationShortcutLifecycleTransaction(
+                suspendWindow: {
+                    self.hotkeyService.unregisterAll()
+                },
+                registerApplicationCandidate: {
+                    self.updateApplicationHotkeyRegistration(
+                        configuration: candidateConfiguration
+                    )
+                },
+                registerWindowWithCandidateConflicts: {
+                    guard windowConfiguration.isEnabled else {
+                        return true
+                    }
+
+                    return self.registerWindowHotkeys(
+                        setting: windowConfiguration.shortcut,
+                        configurations: candidateConfigurations
+                    )
+                },
+                restorePreviousApplication: {
+                    self.hotkeyService.unregisterAll()
+                    _ = self.updateApplicationHotkeyRegistration(
+                        configuration: previousConfiguration
+                    )
+                },
+                restorePreviousWindow: {
+                    if let previousWindowLiveSetting {
+                        _ = self.registerExactWindowHotkeys(
+                            setting: previousWindowLiveSetting,
+                            configurations: previousConfigurations
+                        )
+                    } else {
+                        self.hotkeyService.unregisterAll()
+                    }
+                }
+            )
+            guard transaction.apply() else {
+                persistRegistrationMessages()
+                return false
             }
         }
 

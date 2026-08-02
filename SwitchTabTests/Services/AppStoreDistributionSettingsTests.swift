@@ -21,6 +21,9 @@ enum AppStoreDistributionSettingsTests {
         try testDisabledApplicationContributesNoWindowConflicts()
         try testWindowRegistrationConflictListsComeFromPolicyBoundary()
         try testApplicationCandidateIsAWindowRegistrationConflict()
+        try testApplicationShortcutTransactionSucceedsInOrder()
+        try testApplicationShortcutTransactionRestoresAfterCandidateFailure()
+        try testApplicationShortcutTransactionRestoresAfterWindowFailure()
         try testAppDelegateReferencesShortcutConflictPolicy()
         try testAppDelegateUsesUnifiedShortcutLifecycle()
         try testSettingsWindowInjectsUnifiedShortcutCallbacks()
@@ -265,6 +268,86 @@ enum AppStoreDistributionSettingsTests {
         )
     }
 
+    static func testApplicationShortcutTransactionSucceedsInOrder() throws {
+        var events: [String] = []
+        let transaction = ApplicationShortcutLifecycleTransaction(
+            suspendWindow: { events.append("suspend-window") },
+            registerApplicationCandidate: {
+                events.append("register-app-candidate")
+                return true
+            },
+            registerWindowWithCandidateConflicts: {
+                events.append("register-window")
+                return true
+            },
+            restorePreviousApplication: { events.append("restore-app") },
+            restorePreviousWindow: { events.append("restore-window") }
+        )
+
+        try expectTrue(transaction.apply())
+        try expectEqual(
+            events,
+            ["suspend-window", "register-app-candidate", "register-window"]
+        )
+    }
+
+    static func testApplicationShortcutTransactionRestoresAfterCandidateFailure() throws {
+        var events: [String] = []
+        let transaction = ApplicationShortcutLifecycleTransaction(
+            suspendWindow: { events.append("suspend-window") },
+            registerApplicationCandidate: {
+                events.append("register-app-candidate")
+                return false
+            },
+            registerWindowWithCandidateConflicts: {
+                events.append("register-window")
+                return true
+            },
+            restorePreviousApplication: { events.append("restore-app") },
+            restorePreviousWindow: { events.append("restore-window") }
+        )
+
+        try expectFalse(transaction.apply())
+        try expectEqual(
+            events,
+            [
+                "suspend-window",
+                "register-app-candidate",
+                "restore-app",
+                "restore-window"
+            ]
+        )
+    }
+
+    static func testApplicationShortcutTransactionRestoresAfterWindowFailure() throws {
+        var events: [String] = []
+        let transaction = ApplicationShortcutLifecycleTransaction(
+            suspendWindow: { events.append("suspend-window") },
+            registerApplicationCandidate: {
+                events.append("register-app-candidate")
+                return true
+            },
+            registerWindowWithCandidateConflicts: {
+                events.append("register-window")
+                return false
+            },
+            restorePreviousApplication: { events.append("restore-app") },
+            restorePreviousWindow: { events.append("restore-window") }
+        )
+
+        try expectFalse(transaction.apply())
+        try expectEqual(
+            events,
+            [
+                "suspend-window",
+                "register-app-candidate",
+                "register-window",
+                "restore-app",
+                "restore-window"
+            ]
+        )
+    }
+
     static func testAppDelegateReferencesShortcutConflictPolicy() throws {
         let appDelegateSource = try String(
             contentsOf: projectRoot.appendingPathComponent("SwitchTab/AppDelegate.swift"),
@@ -320,23 +403,6 @@ enum AppStoreDistributionSettingsTests {
             startingAt: "private func applyShortcutChange",
             endingBefore: "private func applyEnabledChange"
         )
-        guard let applicationCase = shortcutTransaction.range(
-            of: "case .applicationSwitching:"
-        ) else {
-            throw TestFailure.failed("Expected application shortcut transaction")
-        }
-        let applicationTransaction = shortcutTransaction[applicationCase.lowerBound...]
-        guard let windowUnregister = applicationTransaction.range(
-            of: "hotkeyService.unregisterAll"
-        ), let candidateRegistration = applicationTransaction.range(
-            of: "updateApplicationHotkeyRegistration"
-        ), let windowReregistration = applicationTransaction.range(
-            of: "registerWindowHotkeys"
-        ) else {
-            throw TestFailure.failed(
-                "Expected window suspend, application registration, and window restore"
-            )
-        }
         let requiredSymbols = [
             "shortcutStore.loadConfigurations()",
             "registerConfiguredHotkeys",
@@ -360,8 +426,7 @@ enum AppStoreDistributionSettingsTests {
         try expectFalse(applicationPresentation.contains(".defaultApplicationSwitching"))
         try expectTrue(triggerShortcuts.contains("configuredShortcut"))
         try expectFalse(triggerShortcuts.contains(".defaultApplicationSwitching"))
-        try expectTrue(windowUnregister.lowerBound < candidateRegistration.lowerBound)
-        try expectTrue(candidateRegistration.lowerBound < windowReregistration.lowerBound)
+        try expectTrue(shortcutTransaction.contains("ApplicationShortcutLifecycleTransaction"))
     }
 
     static func testSettingsWindowInjectsUnifiedShortcutCallbacks() throws {
