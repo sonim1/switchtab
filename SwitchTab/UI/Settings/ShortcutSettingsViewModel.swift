@@ -9,43 +9,78 @@ public extension Notification.Name {
 }
 
 public final class ShortcutSettingsViewModel: ObservableObject {
-    private struct RegistrationMessageText: Equatable {
-        let currentAppWindowSwitching: String?
-        let applicationSwitching: String?
+    private struct ModeMessageText: Equatable {
+        var currentAppWindowSwitching: String?
+        var applicationSwitching: String?
 
-        static let empty = RegistrationMessageText(
+        static let empty = ModeMessageText(
             currentAppWindowSwitching: nil,
             applicationSwitching: nil
         )
+
+        func message(for mode: SwitcherMode) -> String? {
+            switch mode {
+            case .currentAppWindowSwitching:
+                currentAppWindowSwitching
+            case .applicationSwitching:
+                applicationSwitching
+            }
+        }
+
+        mutating func set(_ message: String?, for mode: SwitcherMode) {
+            switch mode {
+            case .currentAppWindowSwitching:
+                currentAppWindowSwitching = message
+            case .applicationSwitching:
+                applicationSwitching = message
+            }
+        }
     }
 
-    @Published public private(set) var currentAppWindowShortcut: ShortcutSetting
-    @Published public private(set) var permissionState: PermissionState
-    @Published public private(set) var errorMessage: String?
-    @Published private var registrationMessageText: RegistrationMessageText
+    private struct ShortcutState: Equatable {
+        var configurations: [SwitcherShortcutConfiguration]
+        var errorMessageText: ModeMessageText
+    }
 
-    private let store: ShortcutSettingsStore
+    @Published public private(set) var permissionState: PermissionState
+    @Published private var shortcutState: ShortcutState
+    @Published private var registrationMessageText: ModeMessageText
+
     private let validator: ShortcutValidationService
     private let permissionStateProvider: () -> PermissionState
-    private let onValidSettingsChanged: (ShortcutSetting, ShortcutSetting) -> Bool
+    private let saveConfigurations: ([SwitcherShortcutConfiguration]) throws -> Void
+    private let onShortcutChanged: (
+        SwitcherShortcutConfiguration,
+        SwitcherShortcutConfiguration
+    ) -> Bool
+    private let onEnabledChanged: (SwitcherShortcutConfiguration) -> Void
     private var registrationMessageCancellable: AnyCancellable?
 
     public init(
         store: ShortcutSettingsStore = ShortcutSettingsStore(),
         validator: ShortcutValidationService = ShortcutValidationService(),
         permissionStateProvider: @escaping () -> PermissionState = { PermissionService().currentState() },
-        onValidSettingsChanged: @escaping (ShortcutSetting, ShortcutSetting) -> Bool = { _, _ in true }
+        saveConfigurations: (([SwitcherShortcutConfiguration]) throws -> Void)? = nil,
+        onShortcutChanged: @escaping (
+            SwitcherShortcutConfiguration,
+            SwitcherShortcutConfiguration
+        ) -> Bool = { _, _ in true },
+        onEnabledChanged: @escaping (SwitcherShortcutConfiguration) -> Void = { _ in }
     ) {
-        let savedShortcut = store.load()
+        let configurations = store.loadConfigurations()
         let loadedRegistrationMessages = store.loadRegistrationMessages()
         let registrationMessageText = Self.registrationMessageText(from: loadedRegistrationMessages)
 
-        self.store = store
         self.validator = validator
         self.permissionStateProvider = permissionStateProvider
-        self.onValidSettingsChanged = onValidSettingsChanged
-        self.currentAppWindowShortcut = savedShortcut
+        self.saveConfigurations = saveConfigurations ?? { try store.saveConfigurations($0) }
+        self.onShortcutChanged = onShortcutChanged
+        self.onEnabledChanged = onEnabledChanged
         self.permissionState = permissionStateProvider()
+        self.shortcutState = ShortcutState(
+            configurations: configurations,
+            errorMessageText: .empty
+        )
         self.registrationMessageText = registrationMessageText
 
         registrationMessageCancellable = NotificationCenter.default.publisher(for: .shortcutRegistrationDidChange)
@@ -63,12 +98,53 @@ public final class ShortcutSettingsViewModel: ObservableObject {
             }
     }
 
+    // TODO(Task 5): Remove this deprecated compatibility shim when the settings UI uses configuration(for:).
+    public var currentAppWindowShortcut: ShortcutSetting {
+        configuration(for: .currentAppWindowSwitching).shortcut
+    }
+
+    // TODO(Task 5): Remove this deprecated compatibility shim when errors render per mode.
+    public var errorMessage: String? {
+        errorMessage(for: .currentAppWindowSwitching)
+            ?? errorMessage(for: .applicationSwitching)
+    }
+
+    // TODO(Task 4): Remove this deprecated initializer after callback wiring accepts configurations.
+    public convenience init(
+        store: ShortcutSettingsStore = ShortcutSettingsStore(),
+        validator: ShortcutValidationService = ShortcutValidationService(),
+        permissionStateProvider: @escaping () -> PermissionState = { PermissionService().currentState() },
+        onValidSettingsChanged: @escaping (ShortcutSetting, ShortcutSetting) -> Bool
+    ) {
+        self.init(
+            store: store,
+            validator: validator,
+            permissionStateProvider: permissionStateProvider,
+            onShortcutChanged: { candidate, previous in
+                onValidSettingsChanged(candidate.shortcut, previous.shortcut)
+            }
+        )
+    }
+
+    public func configuration(for mode: SwitcherMode) -> SwitcherShortcutConfiguration {
+        shortcutState.configurations.first { $0.mode == mode }
+            ?? .defaultValue(for: mode)
+    }
+
+    public func errorMessage(for mode: SwitcherMode) -> String? {
+        shortcutState.errorMessageText.message(for: mode)
+    }
+
+    public func registrationMessage(for mode: SwitcherMode) -> String? {
+        registrationMessageText.message(for: mode)
+    }
+
     public func registrationMessage() -> String? {
-        registrationMessageText.currentAppWindowSwitching
+        registrationMessage(for: .currentAppWindowSwitching)
     }
 
     public func applicationSwitchingRegistrationMessage() -> String? {
-        registrationMessageText.applicationSwitching
+        registrationMessage(for: .applicationSwitching)
     }
 
     public func refreshPermissionState() {
@@ -80,6 +156,57 @@ public final class ShortcutSettingsViewModel: ObservableObject {
         permissionState = refreshedPermissionState
     }
 
+    public func setEnabled(_ enabled: Bool, for mode: SwitcherMode) {
+        guard let index = index(for: mode) else {
+            return
+        }
+
+        let previous = shortcutState.configurations[index]
+        guard previous.isEnabled != enabled else {
+            return
+        }
+
+        var candidate = previous
+        candidate.isEnabled = enabled
+        var configurations = shortcutState.configurations
+        configurations[index] = candidate
+
+        do {
+            try saveConfigurations(configurations)
+        } catch {
+            setErrorMessage("Shortcut could not be saved.", for: mode)
+            return
+        }
+
+        assign(configurations: configurations, clearingErrorFor: mode)
+        postSettingsDidChange(configurations)
+        onEnabledChanged(candidate)
+    }
+
+    @discardableResult
+    public func record(capture: ShortcutCapture, for mode: SwitcherMode) -> Bool {
+        updateShortcut(
+            keyEquivalent: capture.keyEquivalent,
+            keyCode: capture.keyCode,
+            modifiers: capture.modifiers,
+            isUsable: true,
+            for: mode
+        )
+    }
+
+    @discardableResult
+    public func resetToDefault(for mode: SwitcherMode) -> Bool {
+        let defaultShortcut = SwitcherShortcutConfiguration.defaultValue(for: mode).shortcut
+        return updateShortcut(
+            keyEquivalent: defaultShortcut.keyEquivalent,
+            keyCode: defaultShortcut.keyCode,
+            modifiers: defaultShortcut.modifiers,
+            isUsable: defaultShortcut.isUsable,
+            for: mode
+        )
+    }
+
+    // TODO(Task 5): Remove this deprecated window-only compatibility API with the old settings row.
     @discardableResult
     public func save(
         keyEquivalent: String,
@@ -87,51 +214,16 @@ public final class ShortcutSettingsViewModel: ObservableObject {
         modifiers: [String],
         isUsable: Bool
     ) -> Bool {
-        let current = currentAppWindowShortcut
-        let candidate = current.replacingWithValidation(
+        updateShortcut(
             keyEquivalent: keyEquivalent,
             keyCode: keyCode,
             modifiers: modifiers,
-            isUsable: isUsable
+            isUsable: isUsable,
+            for: .currentAppWindowSwitching
         )
-        guard candidate != current else {
-            setErrorMessage(nil)
-            return true
-        }
-
-        let validationResult = validator.validate(
-            candidate,
-            existing: []
-        )
-
-        guard validationResult == .valid else {
-            setErrorMessage(errorMessage(for: validationResult))
-            return false
-        }
-
-        do {
-            try store.save(candidate)
-            guard onValidSettingsChanged(candidate, current) else {
-                try store.save(current)
-                setErrorMessage("Shortcut could not be registered. The previous shortcut is still active.")
-                return false
-            }
-
-            assign(candidate)
-            setErrorMessage(nil)
-            let updatedSettings = [currentAppWindowShortcut]
-            NotificationCenter.default.post(
-                name: .shortcutSettingsDidChange,
-                object: nil,
-                userInfo: ["settings": updatedSettings]
-            )
-            return true
-        } catch {
-            setErrorMessage("Shortcut could not be saved.")
-            return false
-        }
     }
 
+    // TODO(Task 5): Remove this deprecated window-only compatibility API with the old settings row.
     @discardableResult
     public func record(
         capture: ShortcutCapture,
@@ -145,31 +237,127 @@ public final class ShortcutSettingsViewModel: ObservableObject {
         )
     }
 
+    // TODO(Task 5): Remove this deprecated window-only compatibility API with the old settings row.
     @discardableResult
     public func resetToDefault() -> Bool {
-        return save(
-            keyEquivalent: ShortcutSetting.defaultCurrentAppWindowSwitching.keyEquivalent,
-            keyCode: ShortcutSetting.defaultCurrentAppWindowSwitching.keyCode,
-            modifiers: ShortcutSetting.defaultCurrentAppWindowSwitching.modifiers,
-            isUsable: true
+        resetToDefault(for: .currentAppWindowSwitching)
+    }
+
+    private func updateShortcut(
+        keyEquivalent: String,
+        keyCode: UInt16?,
+        modifiers: [String],
+        isUsable: Bool,
+        for mode: SwitcherMode
+    ) -> Bool {
+        guard let index = index(for: mode) else {
+            return false
+        }
+
+        let previous = shortcutState.configurations[index]
+        let candidateShortcut = previous.shortcut.replacingWithValidation(
+            keyEquivalent: keyEquivalent,
+            keyCode: keyCode,
+            modifiers: modifiers,
+            isUsable: isUsable
+        )
+        var candidate = previous
+        candidate.shortcut = candidateShortcut
+        guard candidate != previous else {
+            return true
+        }
+
+        guard let other = shortcutState.configurations.first(where: { $0.mode != mode }) else {
+            return false
+        }
+        let validationResult = validationResult(
+            for: candidate.shortcut,
+            other: other.shortcut
+        )
+        guard validationResult == .valid else {
+            setErrorMessage(validationErrorMessage(for: validationResult), for: mode)
+            return false
+        }
+
+        guard onShortcutChanged(candidate, previous) else {
+            setErrorMessage(
+                "Shortcut could not be registered. The previous shortcut is still active.",
+                for: mode
+            )
+            return false
+        }
+
+        var configurations = shortcutState.configurations
+        configurations[index] = candidate
+        do {
+            try saveConfigurations(configurations)
+        } catch {
+            _ = onShortcutChanged(previous, candidate)
+            setErrorMessage("Shortcut could not be saved.", for: mode)
+            return false
+        }
+
+        assign(configurations: configurations, clearingErrorFor: mode)
+        postSettingsDidChange(configurations)
+        return true
+    }
+
+    private func validationResult(
+        for candidate: ShortcutSetting,
+        other: ShortcutSetting
+    ) -> ShortcutValidationResult {
+        let otherReverse = other.reverseVariant(id: "\(other.id)-reverse")
+        let existing = [other, otherReverse]
+        let forwardResult = validator.validate(candidate, existing: existing)
+        guard forwardResult == .valid else {
+            return forwardResult
+        }
+
+        return validator.validate(
+            candidate.reverseVariant(id: "\(candidate.id)-reverse"),
+            existing: existing
         )
     }
 
-    private func assign(_ setting: ShortcutSetting) {
-        currentAppWindowShortcut = setting
+    private func index(for mode: SwitcherMode) -> Int? {
+        shortcutState.configurations.firstIndex { $0.mode == mode }
     }
 
-    private func setErrorMessage(_ message: String?) {
-        guard errorMessage != message else {
+    private func assign(
+        configurations: [SwitcherShortcutConfiguration],
+        clearingErrorFor mode: SwitcherMode
+    ) {
+        var updatedState = shortcutState
+        updatedState.configurations = configurations
+        updatedState.errorMessageText.set(nil, for: mode)
+        guard updatedState != shortcutState else {
             return
         }
 
-        errorMessage = message
+        shortcutState = updatedState
+    }
+
+    private func setErrorMessage(_ message: String?, for mode: SwitcherMode) {
+        guard shortcutState.errorMessageText.message(for: mode) != message else {
+            return
+        }
+
+        var updatedState = shortcutState
+        updatedState.errorMessageText.set(message, for: mode)
+        shortcutState = updatedState
+    }
+
+    private func postSettingsDidChange(_ configurations: [SwitcherShortcutConfiguration]) {
+        NotificationCenter.default.post(
+            name: .shortcutSettingsDidChange,
+            object: nil,
+            userInfo: ["settings": configurations.map(\.shortcut)]
+        )
     }
 
     private static func registrationMessageText(
         from messages: [ShortcutRegistrationMessage]
-    ) -> RegistrationMessageText {
+    ) -> ModeMessageText {
         guard !messages.isEmpty else {
             return .empty
         }
@@ -186,7 +374,7 @@ public final class ShortcutSettingsViewModel: ObservableObject {
             }
         }
 
-        return RegistrationMessageText(
+        return ModeMessageText(
             currentAppWindowSwitching: currentAppWindowSwitchingText.isEmpty ? nil : currentAppWindowSwitchingText,
             applicationSwitching: applicationSwitchingText.isEmpty ? nil : applicationSwitchingText
         )
@@ -202,7 +390,7 @@ public final class ShortcutSettingsViewModel: ObservableObject {
         text += message
     }
 
-    private func errorMessage(for result: ShortcutValidationResult) -> String {
+    private func validationErrorMessage(for result: ShortcutValidationResult) -> String {
         switch result {
         case .valid:
             ""

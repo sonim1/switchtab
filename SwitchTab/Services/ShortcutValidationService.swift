@@ -1,9 +1,4 @@
 public struct ShortcutValidationService: Sendable {
-    private static let applicationSwitchingReservedShortcuts: [ShortcutSetting] = [
-        .defaultApplicationSwitching,
-        .defaultApplicationSwitchingReverse
-    ]
-
     public init() {}
 
     public func validate<Settings: Sequence>(
@@ -18,16 +13,8 @@ public struct ShortcutValidationService: Sendable {
             return .missingModifier
         }
 
-        if setting.mode == .currentAppWindowSwitching,
-           Self.applicationSwitchingReservedShortcuts.contains(where: {
-               $0.hasSamePhysicalKey(as: setting) && $0.modifiers == setting.modifiers
-           }) {
-            return .duplicate
-        }
-
         for existingSetting in settings
-            where existingSetting.id != setting.id
-                && existingSetting.hasSamePhysicalKey(as: setting)
+            where existingSetting.hasSamePhysicalKey(as: setting)
                 && existingSetting.modifiers == setting.modifiers {
             return .duplicate
         }

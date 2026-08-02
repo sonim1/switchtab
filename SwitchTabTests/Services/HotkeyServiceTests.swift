@@ -5,7 +5,7 @@ import CoreGraphics
 enum HotkeyServiceTests {
     static func run() throws {
         try testFallbackRegistrationRecordsWarningWhenRequestedShortcutUnavailable()
-        try testPersistedWindowCmdTabFallsBackWithoutRegisteringReservedKey()
+        try testDynamicWindowCmdTabCandidateIsForwardedToRegistrar()
         try testExactRegistrationDoesNotUseFallbackWhenRequestedShortcutIsUnavailable()
         try testSameModeForwardAndReverseHotkeysCanHaveSeparateHandlers()
         try testEventTapDispatcherInvokesApplicationAutorepeats()
@@ -37,7 +37,7 @@ enum HotkeyServiceTests {
         try expectTrue(registrationMessages.first?.message.contains("Option + Ctrl + `") == true)
     }
 
-    static func testPersistedWindowCmdTabFallsBackWithoutRegisteringReservedKey() throws {
+    static func testDynamicWindowCmdTabCandidateIsForwardedToRegistrar() throws {
         let registrar = CountingHotkeyRegistrar(shouldRegister: true)
         let service = HotkeyService(registrar: registrar)
         let persistedWindowShortcut = ShortcutSetting(
@@ -59,10 +59,9 @@ enum HotkeyServiceTests {
         try expectEqual(result, .registered)
         try expectEqual(
             service.registeredSetting(for: .currentAppWindowSwitching),
-            .fallbackCurrentAppWindowSwitching
+            persistedWindowShortcut
         )
-        try expectEqual(registrar.registeredKeyCodes, [50])
-        try expectFalse(registrar.registeredKeyCodes.contains(48))
+        try expectEqual(registrar.registeredKeyCodes, [48])
     }
 
     static func testExactRegistrationDoesNotUseFallbackWhenRequestedShortcutIsUnavailable() throws {

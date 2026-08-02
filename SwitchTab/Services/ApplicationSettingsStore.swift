@@ -3,6 +3,7 @@ import ServiceManagement
 
 public extension Notification.Name {
     static let applicationSettingsDidChange = Notification.Name("SwitchTab.applicationSettingsDidChange")
+    // TODO(Task 4): Remove this deprecated compatibility notification with AppDelegate's legacy observer.
     static let commandTabReplacementDidChange = Notification.Name(
         "SwitchTab.commandTabReplacementDidChange"
     )
@@ -10,6 +11,7 @@ public extension Notification.Name {
 
 public struct ApplicationSettingsStore {
     public static let menuBarIconVisibleKey = "ApplicationSettings.menuBarIconVisible"
+    /// Legacy migration key. Active app-switching state lives in ShortcutSettingsStore.
     public static let replacesCommandTabKey = "ApplicationSettings.replacesCommandTab"
     public static let overlaySizeScaleKey = "ApplicationSettings.overlaySizeScale"
     /// Legacy three-step preference, read once to migrate onto the scale.
@@ -34,16 +36,28 @@ public struct ApplicationSettingsStore {
         NotificationCenter.default.post(name: .applicationSettingsDidChange, object: nil)
     }
 
+    // TODO(Task 4): Remove this deprecated forwarding shim after AppDelegate reads unified configurations.
     public var replacesCommandTab: Bool {
-        userDefaults.object(forKey: Self.replacesCommandTabKey) as? Bool ?? false
+        ShortcutSettingsStore(userDefaults: userDefaults)
+            .loadConfigurations()
+            .first { $0.mode == .applicationSwitching }?
+            .isEnabled ?? SwitcherShortcutConfiguration.defaultApplicationSwitching.isEnabled
     }
 
+    // TODO(Task 5): Remove this deprecated forwarding shim after the settings UI uses ShortcutSettingsViewModel.
     public func saveReplacesCommandTab(_ enabled: Bool) {
-        guard replacesCommandTab != enabled else {
+        let shortcutStore = ShortcutSettingsStore(userDefaults: userDefaults)
+        var configurations = shortcutStore.loadConfigurations()
+        guard let index = configurations.firstIndex(where: { $0.mode == .applicationSwitching }),
+              configurations[index].isEnabled != enabled else {
             return
         }
 
-        userDefaults.set(enabled, forKey: Self.replacesCommandTabKey)
+        configurations[index].isEnabled = enabled
+        guard (try? shortcutStore.saveConfigurations(configurations)) != nil else {
+            return
+        }
+
         NotificationCenter.default.post(name: .applicationSettingsDidChange, object: nil)
         NotificationCenter.default.post(name: .commandTabReplacementDidChange, object: nil)
     }
