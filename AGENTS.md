@@ -1,5 +1,5 @@
-<!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
-at specs/001-macos-switchtab/plan.md
-<!-- SPECKIT END -->
+## Project context
+
+Read `docs/AI_CONTEXT.md` before repository work. Read only the relevant
+feature section of `docs/PROJECT_HISTORY.md` when a task needs historical
+decisions, rationale, changed requirements, or superseded approaches.
