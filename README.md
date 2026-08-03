@@ -73,6 +73,7 @@ swift test
 
 ## Documentation
 
+- [Landing page](docs/index.html) — a visual introduction to the SwitchTab workflow
 - [Development](docs/development.md) — local setup, build, test, and verification
 - [AI context and verification](docs/AI_CONTEXT.md) — current architecture, invariants, and compact macOS QA guidance
 - [Project history](docs/PROJECT_HISTORY.md) — task-selective decisions, rationale, changed requirements, and release evidence
