@@ -1,14 +1,14 @@
 ---
 name: spec-flow
-description: Work on SwitchTab features against the speckit plan (specs/001-macos-switchtab). Use before starting any feature-sized change.
+description: Work on SwitchTab features from current context and task-selective decision history. Use before starting any feature-sized change.
 ---
 
-# Spec Flow (SwitchTab)
+# Context Flow (SwitchTab)
 
-AGENTS.md delegates context to `specs/001-macos-switchtab/plan.md` — the plan is the requirements source.
+AGENTS.md delegates current context to `docs/AI_CONTEXT.md` and historical lookup to `docs/PROJECT_HISTORY.md`.
 
-1. Read `specs/001-macos-switchtab/plan.md` (+ sibling spec files) for the area you're changing; the plan defines tech choices, structure, and shell commands.
-2. Conflict between plan and code reality → code reality wins for HOW, plan wins for WHAT; report drift rather than silently picking.
-3. Feature-sized work: state which plan section you're implementing in your report; keep changes inside that section's scope.
-4. Plan doesn't cover the request → that's a scope decision: present a short proposal (what/where/tests) before implementing.
-5. Finish through the verify skill; update the spec files only when Kendrick asks (they're his planning artifacts).
+1. Read `docs/AI_CONTEXT.md`; it defines current behavior, boundaries, and verification commands.
+2. Read only the relevant feature section of `docs/PROJECT_HISTORY.md` when prior rationale, changed requirements, or superseded choices matter.
+3. Current code, tests, and live runbooks win when historical intent disagrees; report meaningful drift.
+4. For feature-sized work, state the requested behavior, affected boundaries, and verification before implementing.
+5. Finish through the verify skill; update current context/history only when the delivered change alters their durable facts.
