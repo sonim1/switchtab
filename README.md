@@ -74,7 +74,8 @@ swift test
 ## Documentation
 
 - [Development](docs/development.md) — local setup, build, test, and verification
-- [Application and window QA](specs/001-macos-switchtab/quickstart.md) — permission checks and the Finder/Safari/Notes acceptance contract
+- [AI context and verification](docs/AI_CONTEXT.md) — current architecture, invariants, and compact macOS QA guidance
+- [Project history](docs/PROJECT_HISTORY.md) — task-selective decisions, rationale, changed requirements, and release evidence
 - [Direct distribution](docs/direct-distribution.md) — generated Sparkle workspace and signed DMG builds
 - [Update hosting](docs/update-hosting.md) — Cloudflare R2, Sparkle publishing, and local fallback operations
 - [Release workflow](docs/release-workflow.md) — versioning, GitHub releases, Homebrew integration, and recovery

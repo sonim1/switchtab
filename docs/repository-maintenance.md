@@ -13,10 +13,10 @@ Checked: 2026-08-02
   fallback operations.
 - `docs/release-workflow.md`: pull-request versioning, automated releases,
   Homebrew integration, and recovery.
-- `specs/001-macos-switchtab/plan.md`: current source layout and implementation
-  verification notes.
-- `specs/001-macos-switchtab/quickstart.md`: manual macOS validation scenarios
-  and recorded validation history.
+- `docs/AI_CONTEXT.md`: compact current source layout, invariants, verification
+  commands, and manual macOS QA guidance.
+- `docs/PROJECT_HISTORY.md`: task-selective decisions, rationale, changed
+  requirements, superseded approaches, and release evidence.
 - `BLOCKERS.md`: validation that requires user-controlled macOS permissions,
   release credentials, or approval for live external mutations.
 
