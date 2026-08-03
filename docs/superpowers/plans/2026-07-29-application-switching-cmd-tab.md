@@ -562,7 +562,7 @@ Load the existing main-worktree release environment only inside a non-echoing
 subshell and build the local direct-distribution Release app:
 
 ```bash
-rtk proxy bash -lc 'set -a; source /Users/kendrick/projects/switchtab/.env.release.local; set +a; exec scripts/build-direct-distribution.sh'
+rtk proxy bash -lc 'set -a; source /Users/example/projects/switchtab/.env.release.local; set +a; exec scripts/build-direct-distribution.sh'
 ```
 
 `SPARKLE_PUBLIC_ED_KEY` must be present, but do not print it. This local QA build

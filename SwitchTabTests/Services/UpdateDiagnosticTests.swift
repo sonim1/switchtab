@@ -106,7 +106,7 @@ enum UpdateDiagnosticTests {
 
     static func testDiagnosticExcludesRawPrivateErrorData() throws {
         let privateURL = "https://updates.example.test/private?employee=kendrick"
-        let privatePath = "/Users/kendrick/Secret/update.dmg"
+        let privatePath = "/Users/example/Secret/update.dmg"
         let error = NSError(
             domain: NSURLErrorDomain,
             code: NSURLErrorCannotConnectToHost,

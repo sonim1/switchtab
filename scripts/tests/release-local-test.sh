@@ -633,9 +633,19 @@ fi
 grep -Eq 'v\*.*(ruleset|protection)|(ruleset|protection).*v\*' "${DOCUMENTATION_FILES[@]}" || \
     fail "documentation is missing v* tag protection guidance"
 
-absolute_macos_user_path='/Users/[^/[:space:]]+'
+absolute_macos_user_path='/'"Users/"'[^/[:space:]]+'
 if grep -Eq "$absolute_macos_user_path" "${DOCUMENTATION_FILES[@]}"; then
     fail "documentation contains an absolute macOS user path"
+fi
+
+tracked_macos_user_path='/'"Users/"'[^/[:space:]]+/'
+unexpected_macos_user_paths="$(
+    git -C "$PROJECT_ROOT" grep -n -I -E "$tracked_macos_user_path" -- . \
+        | grep -Fv '/Users/example/' \
+        || true
+)"
+if [[ -n "$unexpected_macos_user_paths" ]]; then
+    fail "tracked files contain a non-placeholder macOS user path"
 fi
 
 if grep -Eq -- '-----BEGIN (OPENSSH |RSA |EC |ED25519 )?PRIVATE KEY-----' "${DOCUMENTATION_FILES[@]}"; then

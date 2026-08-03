@@ -8,7 +8,7 @@
 
 **기술:** Swift 5.10+, SwiftUI, AppKit, XCTest 호환 커스텀 테스트 러너, Xcode macOS 앱 타깃
 
-**격리 작업공간:** `/Users/kendrick/projects/switchtab/.worktrees/application-switcher-focus-layout`
+**격리 작업공간:** `/Users/example/projects/switchtab/.worktrees/application-switcher-focus-layout`
 
 ---
 
