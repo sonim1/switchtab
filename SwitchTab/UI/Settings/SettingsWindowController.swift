@@ -16,6 +16,8 @@ public enum SettingsWindowSizingPolicy {
 
 @MainActor
 enum FloatingPanelFactory {
+    static let windowLevel: NSWindow.Level = .normal
+
     static func hostingController<Content: View>(
         rootView: Content,
         contentSize: NSSize
@@ -41,7 +43,7 @@ enum FloatingPanelFactory {
         window.title = title
         window.contentViewController = contentViewController
         window.isReleasedWhenClosed = false
-        window.level = .floating
+        window.level = windowLevel
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         return window
     }

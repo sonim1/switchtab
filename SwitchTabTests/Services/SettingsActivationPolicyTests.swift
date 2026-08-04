@@ -1,4 +1,4 @@
-import SwitchTab
+@testable import SwitchTab
 
 enum SettingsActivationPolicyTests {
     @MainActor
@@ -6,6 +6,7 @@ enum SettingsActivationPolicyTests {
         try testSettingsWindowShowMakesApplicationRegular()
         try testSettingsWindowCloseRestoresApplicationAccessoryPolicy()
         try testSettingsWindowUsesVisibleContentSize()
+        try testFloatingPanelUsesNormalWindowLevel()
     }
 
     @MainActor
@@ -31,6 +32,11 @@ enum SettingsActivationPolicyTests {
     static func testSettingsWindowUsesVisibleContentSize() throws {
         try expectEqual(SettingsWindowSizingPolicy.contentSize.width, 620)
         try expectEqual(SettingsWindowSizingPolicy.contentSize.height, 500)
+    }
+
+    @MainActor
+    static func testFloatingPanelUsesNormalWindowLevel() throws {
+        try expectEqual(FloatingPanelFactory.windowLevel, .normal)
     }
 }
 
