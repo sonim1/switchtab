@@ -19,8 +19,7 @@ enum SwitcherOverlayPresentationTests {
         try testOverlaySizeScaleScalesLayout()
         try testOverlaySizeScaleScalesMultiRowLayout()
         try testOverlaySizeScaleClampsOutOfRangeValues()
-        try testPanelPaddingBudgetsGridPaddingAcrossModesAndScales()
-        try testDefaultPanelPaddingPreservesWindowInset()
+        try testDirectionalPanelInsetsMatchApprovedLayout()
         try testSelectionScrollingPolicyCoversModesAndScales()
         try testLegacyOverlaySizePreferenceMapsOntoScale()
         try testDefaultThumbnailIsLargerThanRetiredLargePreset()
@@ -150,8 +149,16 @@ enum SwitcherOverlayPresentationTests {
         let metrics = SwitcherOverlayLayoutMetrics.metrics(for: .default)
 
         try expectEqual(layout.gridColumnCount, 1)
-        try expectEqual(layout.size.width, metrics.tileSize.width + metrics.gridPadding)
-        try expectEqual(layout.size.height, metrics.tileSize.height + metrics.gridPadding)
+        try expectEqual(
+            layout.size.width,
+            metrics.tileSize.width + metrics.panelHorizontalPadding * 2
+        )
+        try expectEqual(
+            layout.size.height,
+            metrics.tileSize.height
+                + metrics.panelTopPadding
+                + metrics.panelBottomPadding
+        )
     }
 
     static func testTwoItemLayoutFitsTwoColumns() throws {
@@ -165,9 +172,16 @@ enum SwitcherOverlayPresentationTests {
         try expectEqual(layout.gridColumnCount, 2)
         try expectEqual(
             layout.size.width,
-            metrics.tileSize.width * 2 + metrics.gridSpacing + metrics.gridPadding
+            metrics.tileSize.width * 2
+                + metrics.gridSpacing
+                + metrics.panelHorizontalPadding * 2
         )
-        try expectEqual(layout.size.height, metrics.tileSize.height + metrics.gridPadding)
+        try expectEqual(
+            layout.size.height,
+            metrics.tileSize.height
+                + metrics.panelTopPadding
+                + metrics.panelBottomPadding
+        )
     }
 
     static func testOverlaySizeScaleScalesLayout() throws {
@@ -232,26 +246,7 @@ enum SwitcherOverlayPresentationTests {
         try expectEqual(OverlaySizeScale(1.2).percentageText, "120%")
     }
 
-    static func testPanelPaddingBudgetsGridPaddingAcrossModesAndScales() throws {
-        let scales = [
-            OverlaySizeScale(OverlaySizeScale.minimum),
-            OverlaySizeScale.default,
-            OverlaySizeScale(OverlaySizeScale.maximum)
-        ]
-        let modes: [SwitcherMode] = [
-            .currentAppWindowSwitching,
-            .applicationSwitching
-        ]
-
-        for mode in modes {
-            for scale in scales {
-                let metrics = SwitcherOverlayLayoutMetrics.metrics(for: scale, mode: mode)
-                try expectTrue(metrics.panelPadding * 2 <= metrics.gridPadding)
-            }
-        }
-    }
-
-    static func testDefaultPanelPaddingPreservesWindowInset() throws {
+    static func testDirectionalPanelInsetsMatchApprovedLayout() throws {
         let windowMetrics = SwitcherOverlayLayoutMetrics.metrics(
             for: .default,
             mode: .currentAppWindowSwitching
@@ -261,8 +256,12 @@ enum SwitcherOverlayPresentationTests {
             mode: .applicationSwitching
         )
 
-        try expectEqual(windowMetrics.panelPadding, 12)
-        try expectEqual(applicationMetrics.panelPadding * 2, applicationMetrics.gridPadding)
+        try expectEqual(windowMetrics.panelHorizontalPadding, 10)
+        try expectEqual(windowMetrics.panelTopPadding, 8)
+        try expectEqual(windowMetrics.panelBottomPadding, 8)
+        try expectEqual(applicationMetrics.panelHorizontalPadding, 10)
+        try expectEqual(applicationMetrics.panelTopPadding, 8)
+        try expectEqual(applicationMetrics.panelBottomPadding, 0)
     }
 
     static func testSelectionScrollingPolicyCoversModesAndScales() throws {
@@ -343,20 +342,18 @@ enum SwitcherOverlayPresentationTests {
             mode: .applicationSwitching
         )
 
-        try expectEqual(windowMetrics.tileSize, CGSize(width: 168, height: 158))
+        try expectEqual(windowMetrics.tileSize, CGSize(width: 168, height: 134))
         try expectEqual(windowMetrics.tileContentSpacing, 6)
         try expectEqual(windowMetrics.gridSpacing, 14)
-        try expectEqual(windowMetrics.gridPadding, 28)
-        try expectEqual(applicationMetrics.tileSize, CGSize(width: 104, height: 119))
+        try expectEqual(applicationMetrics.tileSize, CGSize(width: 100, height: 115))
         try expectEqual(applicationMetrics.thumbnailSize, CGSize(width: 96, height: 96))
         try expectEqual(applicationMetrics.fallbackIconSize, CGSize(width: 96, height: 96))
-        try expectEqual(applicationMetrics.selectionContainerSize, CGSize(width: 104, height: 104))
+        try expectEqual(applicationMetrics.selectionContainerSize, CGSize(width: 100, height: 100))
         try expectEqual(applicationMetrics.selectionCornerRadius, 26)
         try expectEqual(applicationMetrics.captionHeight, 14)
         try expectEqual(applicationMetrics.captionMaxWidth, 240)
         try expectEqual(applicationMetrics.tileContentSpacing, 1)
         try expectEqual(applicationMetrics.gridSpacing, 4)
-        try expectEqual(applicationMetrics.gridPadding, 16)
         try expectTrue(applicationMetrics.tileSize.width < windowMetrics.tileSize.width)
         try expectEqual(
             SwitcherOverlayLayoutMetrics.metrics(
@@ -374,7 +371,7 @@ enum SwitcherOverlayPresentationTests {
             mode: .applicationSwitching
         )
 
-        try expectEqual(layout.metrics.tileSize.height, 119)
+        try expectEqual(layout.metrics.tileSize.height, 115)
         try expectEqual(
             layout.metrics.selectionContainerSize.height
                 + layout.metrics.tileContentSpacing
@@ -391,7 +388,7 @@ enum SwitcherOverlayPresentationTests {
         )
         let metrics = oneItemLayout.metrics
 
-        try expectEqual(oneItemLayout.size.width, 256)
+        try expectEqual(oneItemLayout.size.width, 260)
         try expectEqual(
             ApplicationSwitcherCaptionLayoutPolicy.width(
                 columnCount: 1,
@@ -404,7 +401,7 @@ enum SwitcherOverlayPresentationTests {
                 columnCount: 2,
                 metrics: metrics
             ),
-            212
+            204
         )
         try expectEqual(
             ApplicationSwitcherCaptionLayoutPolicy.width(
@@ -467,7 +464,7 @@ enum SwitcherOverlayPresentationTests {
         let metrics = SwitcherOverlayLayoutMetrics.metrics(for: scale)
         return CGFloat(columnCount) * metrics.tileSize.width
             + CGFloat(columnCount - 1) * metrics.gridSpacing
-            + metrics.gridPadding
+            + metrics.panelHorizontalPadding * 2
     }
 
     private static func expectedHeight(
@@ -477,7 +474,8 @@ enum SwitcherOverlayPresentationTests {
         let metrics = SwitcherOverlayLayoutMetrics.metrics(for: scale)
         return CGFloat(rowCount) * metrics.tileSize.height
             + CGFloat(rowCount - 1) * metrics.gridSpacing
-            + metrics.gridPadding
+            + metrics.panelTopPadding
+            + metrics.panelBottomPadding
     }
 
     private static var projectRoot: URL {

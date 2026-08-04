@@ -29,8 +29,9 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
     public let closeButtonSize: CGFloat
     public let closeButtonHitTargetSize: CGSize
     public let gridSpacing: CGFloat
-    public let gridPadding: CGFloat
-    public let panelPadding: CGFloat
+    public let panelHorizontalPadding: CGFloat
+    public let panelTopPadding: CGFloat
+    public let panelBottomPadding: CGFloat
 
     // Base geometry at scale 1. Every other size is derived from these so the
     // slider stays continuous instead of snapping to hand-tuned presets.
@@ -38,12 +39,12 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
     private static let baseWindowHeaderIconExtent: CGFloat = 18
     private static let baseWindowTileContentPadding: CGFloat = 4
     private static let baseWindowTileContentSpacing: CGFloat = 6
-    private static let baseWindowTileVerticalChrome: CGFloat = 30
     private static let baseWindowTitleFontSize: CGFloat = 13
     private static let baseWindowGridSpacing: CGFloat = 14
-    private static let baseWindowGridPadding: CGFloat = 28
-    private static let baseWindowPanelPadding: CGFloat = 12
-    private static let baseApplicationSelectionExtent: CGFloat = 104
+    private static let baseWindowPanelHorizontalPadding: CGFloat = 10
+    private static let baseWindowPanelTopPadding: CGFloat = 8
+    private static let baseWindowPanelBottomPadding: CGFloat = 8
+    private static let baseApplicationSelectionExtent: CGFloat = 100
     private static let baseApplicationIconExtent: CGFloat = 96
     private static let baseApplicationCaptionHeight: CGFloat = 14
     private static let baseApplicationCaptionMaxWidth: CGFloat = 240
@@ -51,7 +52,9 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
     private static let baseApplicationSelectionCornerRadius: CGFloat = 26
     private static let baseApplicationTitleFontSize: CGFloat = 12
     private static let baseApplicationGridSpacing: CGFloat = 4
-    private static let baseApplicationGridPadding: CGFloat = 16
+    private static let baseApplicationPanelHorizontalPadding: CGFloat = 10
+    private static let baseApplicationPanelTopPadding: CGFloat = 8
+    private static let baseApplicationPanelBottomPadding: CGFloat = 0
     private static let baseCloseButtonSize: CGFloat = 16
     private static let fallbackIconThumbnailRatio: CGFloat = 0.92
 
@@ -76,11 +79,9 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
         let fallbackIconExtent = (thumbnailHeight * fallbackIconThumbnailRatio).rounded()
         let closeButtonSize = scaled(baseCloseButtonSize, by: factor)
         let closeButtonHitTargetExtent = max(24, closeButtonSize + 8)
-        let gridPadding = scaled(baseWindowGridPadding, by: factor)
-        let panelPadding = scaled(baseWindowPanelPadding, by: factor)
         let tileSize = CGSize(
             width: thumbnailWidth + (tileContentPadding * 2),
-            height: thumbnailHeight + headerIconExtent + scaled(baseWindowTileVerticalChrome, by: factor)
+            height: thumbnailHeight + headerIconExtent + baseWindowTileContentSpacing
         )
 
         return SwitcherOverlayLayoutMetrics(
@@ -102,8 +103,9 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
                 height: closeButtonHitTargetExtent
             ),
             gridSpacing: scaled(baseWindowGridSpacing, by: factor),
-            gridPadding: gridPadding,
-            panelPadding: panelPadding
+            panelHorizontalPadding: scaled(baseWindowPanelHorizontalPadding, by: factor),
+            panelTopPadding: scaled(baseWindowPanelTopPadding, by: factor),
+            panelBottomPadding: scaled(baseWindowPanelBottomPadding, by: factor)
         )
     }
 
@@ -115,8 +117,6 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
         let contentSpacing = scaled(baseApplicationTileContentSpacing, by: factor)
         let closeButtonSize = scaled(baseCloseButtonSize, by: factor)
         let closeButtonHitTargetExtent = max(24, closeButtonSize + 8)
-        let gridPadding = scaled(baseApplicationGridPadding, by: factor)
-
         return SwitcherOverlayLayoutMetrics(
             tileSize: CGSize(
                 width: selectionExtent,
@@ -139,8 +139,9 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
                 height: closeButtonHitTargetExtent
             ),
             gridSpacing: scaled(baseApplicationGridSpacing, by: factor),
-            gridPadding: gridPadding,
-            panelPadding: gridPadding / 2
+            panelHorizontalPadding: scaled(baseApplicationPanelHorizontalPadding, by: factor),
+            panelTopPadding: scaled(baseApplicationPanelTopPadding, by: factor),
+            panelBottomPadding: baseApplicationPanelBottomPadding
         )
     }
 
@@ -271,7 +272,7 @@ public enum SwitcherOverlayLayoutPolicy {
         forOverlayWidth width: CGFloat,
         metrics: SwitcherOverlayLayoutMetrics
     ) -> Int {
-        let contentWidth = max(1, width - metrics.gridPadding)
+        let contentWidth = max(1, width - metrics.panelHorizontalPadding * 2)
         return max(1, Int(((contentWidth + metrics.gridSpacing) / (metrics.tileSize.width + metrics.gridSpacing)).rounded(.down)))
     }
 
@@ -281,7 +282,7 @@ public enum SwitcherOverlayLayoutPolicy {
     ) -> CGFloat {
         CGFloat(columnCount) * metrics.tileSize.width
             + CGFloat(max(columnCount - 1, 0)) * metrics.gridSpacing
-            + metrics.gridPadding
+            + metrics.panelHorizontalPadding * 2
     }
 
     private static func iconGridContentHeight(
@@ -290,7 +291,8 @@ public enum SwitcherOverlayLayoutPolicy {
     ) -> CGFloat {
         CGFloat(rowCount) * metrics.tileSize.height
             + CGFloat(max(rowCount - 1, 0)) * metrics.gridSpacing
-            + metrics.gridPadding
+            + metrics.panelTopPadding
+            + metrics.panelBottomPadding
     }
 
     private static func maximumRowsThatFit(
@@ -298,7 +300,10 @@ public enum SwitcherOverlayLayoutPolicy {
         metrics: SwitcherOverlayLayoutMetrics
     ) -> Int {
         let availableHeight = availableScreenHeight(screenSize: screenSize)
-        let rowBudget = max(0, availableHeight - metrics.gridPadding)
+        let rowBudget = max(
+            0,
+            availableHeight - metrics.panelTopPadding - metrics.panelBottomPadding
+        )
         return max(
             1,
             Int(((rowBudget + metrics.gridSpacing) / (metrics.tileSize.height + metrics.gridSpacing)).rounded(.down))
@@ -316,7 +321,7 @@ public enum SwitcherOverlayLayoutPolicy {
     ) -> CGSize {
         let availableWidth = max(180, screenSize.width - screenHorizontalMargin)
         let gridWidth = iconGridContentWidth(columnCount: columnCount, metrics: metrics)
-        let captionSafeWidth = metrics.captionMaxWidth + metrics.gridPadding
+        let captionSafeWidth = metrics.captionMaxWidth + metrics.panelHorizontalPadding * 2
         let desiredWidth = columnCount == 1 && metrics.captionHeight > 0
             ? max(gridWidth, captionSafeWidth)
             : gridWidth
