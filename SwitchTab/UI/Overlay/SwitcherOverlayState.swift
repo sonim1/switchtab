@@ -1,9 +1,5 @@
 import CoreGraphics
 
-public enum SwitcherOverlayChromePolicy {
-    public static let usesNativeBlurBackground = true
-}
-
 public enum SwitcherOverlayThumbnailPolicy {
     public static func showsThumbnails(for mode: SwitcherMode) -> Bool {
         mode == .currentAppWindowSwitching

@@ -5,7 +5,7 @@ import SwitchTab
 enum SwitcherOverlayPresentationTests {
     static func run() throws {
         try testWindowSessionCanUseIconStripPresentation()
-        try testOverlayChromeUsesNativeBlurBackground()
+        try testOverlayChromeUsesLiquidGlassWithPopoverFallback()
         try testWindowModeUsesThumbnailRendering()
         try testIconGridUsesOneRowForFewItems()
         try testWindowModeUsesIconGridLayout()
@@ -44,8 +44,16 @@ enum SwitcherOverlayPresentationTests {
         try expectEqual(state.session?.items.first?.id, "finder")
     }
 
-    static func testOverlayChromeUsesNativeBlurBackground() throws {
-        try expectTrue(SwitcherOverlayChromePolicy.usesNativeBlurBackground)
+    static func testOverlayChromeUsesLiquidGlassWithPopoverFallback() throws {
+        let sourceURL = projectRoot
+            .appendingPathComponent("SwitchTab/UI/Overlay/SwitcherOverlayRootView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        try expectTrue(source.contains("#available(macOS 26.0, *)"))
+        try expectTrue(source.contains("NSGlassEffectView()"))
+        try expectTrue(source.contains("view.material = .popover"))
+        try expectTrue(source.contains("view.blendingMode = .behindWindow"))
+        try expectFalse(source.contains("view.material = .hudWindow"))
     }
 
     static func testWindowModeUsesThumbnailRendering() throws {
