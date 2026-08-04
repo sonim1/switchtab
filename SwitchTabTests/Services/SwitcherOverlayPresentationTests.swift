@@ -27,7 +27,7 @@ enum SwitcherOverlayPresentationTests {
         try testApplicationModeUsesCompactLayoutMetrics()
         try testApplicationCaptionKeepsPanelHeightStable()
         try testApplicationCaptionFitsInsidePanelBounds()
-        try testApplicationCaptionAlignsTowardGridInterior()
+        try testApplicationCaptionsStayCenteredWithinPanelBounds()
         try testApplicationTileSeparatesSelectionContainerFromCaption()
         try testApplicationModeFitsMoreColumnsThanWindowMode()
     }
@@ -391,6 +391,7 @@ enum SwitcherOverlayPresentationTests {
         try expectEqual(oneItemLayout.size.width, 260)
         try expectEqual(
             ApplicationSwitcherCaptionLayoutPolicy.width(
+                index: 0,
                 columnCount: 1,
                 metrics: metrics
             ),
@@ -398,13 +399,15 @@ enum SwitcherOverlayPresentationTests {
         )
         try expectEqual(
             ApplicationSwitcherCaptionLayoutPolicy.width(
+                index: 0,
                 columnCount: 2,
                 metrics: metrics
             ),
-            204
+            120
         )
         try expectEqual(
             ApplicationSwitcherCaptionLayoutPolicy.width(
+                index: 1,
                 columnCount: 3,
                 metrics: metrics
             ),
@@ -412,22 +415,35 @@ enum SwitcherOverlayPresentationTests {
         )
     }
 
-    static func testApplicationCaptionAlignsTowardGridInterior() throws {
+    static func testApplicationCaptionsStayCenteredWithinPanelBounds() throws {
+        let metrics = SwitcherOverlayLayoutMetrics.metrics(
+            for: .default,
+            mode: .applicationSwitching
+        )
+
         try expectEqual(
-            ApplicationSwitcherCaptionLayoutPolicy.alignment(index: 0, columnCount: 1),
-            .center
+            ApplicationSwitcherCaptionLayoutPolicy.width(
+                index: 0,
+                columnCount: 3,
+                metrics: metrics
+            ),
+            120
         )
         try expectEqual(
-            ApplicationSwitcherCaptionLayoutPolicy.alignment(index: 0, columnCount: 3),
-            .leading
+            ApplicationSwitcherCaptionLayoutPolicy.width(
+                index: 1,
+                columnCount: 3,
+                metrics: metrics
+            ),
+            240
         )
         try expectEqual(
-            ApplicationSwitcherCaptionLayoutPolicy.alignment(index: 1, columnCount: 3),
-            .center
-        )
-        try expectEqual(
-            ApplicationSwitcherCaptionLayoutPolicy.alignment(index: 2, columnCount: 3),
-            .trailing
+            ApplicationSwitcherCaptionLayoutPolicy.width(
+                index: 2,
+                columnCount: 3,
+                metrics: metrics
+            ),
+            120
         )
     }
 

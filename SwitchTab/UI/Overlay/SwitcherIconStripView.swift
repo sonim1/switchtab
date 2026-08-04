@@ -210,12 +210,9 @@ private struct SwitcherWindowTile: View {
             windowCountText: item.subtitle
         )
         let captionWidth = ApplicationSwitcherCaptionLayoutPolicy.width(
+            index: index,
             columnCount: gridColumnCount,
             metrics: layoutMetrics
-        )
-        let captionAlignment = ApplicationSwitcherCaptionLayoutPolicy.alignment(
-            index: index,
-            columnCount: gridColumnCount
         )
 
         return VStack(alignment: .center, spacing: layoutMetrics.tileContentSpacing) {
@@ -223,7 +220,7 @@ private struct SwitcherWindowTile: View {
 
             Color.clear
                 .frame(height: layoutMetrics.captionHeight)
-                .overlay(alignment: swiftUIAlignment(for: captionAlignment)) {
+                .overlay(alignment: .center) {
                     if metadata.showsTitle {
                         applicationMetadata(
                             for: item,
@@ -284,19 +281,6 @@ private struct SwitcherWindowTile: View {
             }
         }
         .frame(width: width)
-    }
-
-    private func swiftUIAlignment(
-        for alignment: ApplicationSwitcherCaptionAlignment
-    ) -> Alignment {
-        switch alignment {
-        case .leading:
-            .leading
-        case .center:
-            .center
-        case .trailing:
-            .trailing
-        }
     }
 
     private var closeButton: some View {

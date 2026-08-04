@@ -150,14 +150,9 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
     }
 }
 
-public enum ApplicationSwitcherCaptionAlignment: Equatable, Sendable {
-    case leading
-    case center
-    case trailing
-}
-
 public enum ApplicationSwitcherCaptionLayoutPolicy {
     public static func width(
+        index: Int,
         columnCount: Int,
         metrics: SwitcherOverlayLayoutMetrics
     ) -> CGFloat {
@@ -165,27 +160,15 @@ public enum ApplicationSwitcherCaptionLayoutPolicy {
             return metrics.captionMaxWidth
         }
 
-        let gridSpan = CGFloat(columnCount) * metrics.tileSize.width
-            + CGFloat(columnCount - 1) * metrics.gridSpacing
-        return min(metrics.captionMaxWidth, gridSpan)
-    }
-
-    public static func alignment(
-        index: Int,
-        columnCount: Int
-    ) -> ApplicationSwitcherCaptionAlignment {
-        guard columnCount > 1 else {
-            return .center
+        let columnIndex = index % columnCount
+        let isEdgeColumn = columnIndex == 0 || columnIndex == columnCount - 1
+        guard isEdgeColumn else {
+            return metrics.captionMaxWidth
         }
 
-        switch index % columnCount {
-        case 0:
-            return .leading
-        case columnCount - 1:
-            return .trailing
-        default:
-            return .center
-        }
+        let centeredEdgeWidth = metrics.tileSize.width
+            + metrics.panelHorizontalPadding * 2
+        return min(metrics.captionMaxWidth, centeredEdgeWidth)
     }
 }
 
