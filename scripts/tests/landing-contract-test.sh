@@ -14,6 +14,7 @@ test "$(rg -o '<h1\b' "$page" | wc -l | tr -d ' ')" = 1
 rg -q '<main\b' "$page"
 rg -q '<footer\b' "$page"
 rg -q 'id="how-it-works"' "$page"
+rg -q 'brew install --cask sonim1/tap/switchtab' "$page"
 ! rg -qi '<script\b|tracker|analytics|http://' "$page" "$style"
 rg -q 'X-Content-Type-Options: nosniff' "$headers"
 rg -q 'X-Frame-Options: DENY' "$headers"

@@ -195,7 +195,10 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .source-cta__inner { display: flex; align-items: center; justify-content: space-between; gap: 40px; padding: 44px 48px; border: 1px solid rgba(109, 168, 255, 0.16); border-radius: var(--radius-lg); background: linear-gradient(115deg, rgba(45, 70, 119, 0.4), rgba(30, 33, 49, 0.72) 65%); box-shadow: 0 22px 60px rgba(0, 0, 0, 0.25); }
 .source-cta h2 { margin-bottom: 15px; font-size: clamp(32px, 4vw, 51px); font-weight: 600; line-height: 1; }
 .source-cta__inner > div:first-child { max-width: 460px; }.source-cta__inner .eyebrow { margin-bottom: 15px; }
-.source-command { display: flex; align-items: center; width: min(100%, 310px); min-height: 55px; gap: 11px; padding: 0 16px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 12px; background: rgba(4, 6, 11, 0.52); color: var(--text-soft); }
+.install-options { display: grid; width: min(100%, 390px); gap: 13px; }
+.install-option { display: grid; gap: 6px; }
+.install-option__label { color: var(--text-faint); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.source-command { display: flex; align-items: center; width: 100%; min-height: 55px; gap: 11px; padding: 0 16px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 12px; background: rgba(4, 6, 11, 0.52); color: var(--text-soft); }
 .source-command__prompt { color: var(--blue); }.source-command code { flex: 1; overflow: hidden; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; white-space: nowrap; }.source-command a { color: var(--blue); font-size: 20px; }
 
 .site-footer { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-top: 26px; padding-bottom: 30px; border-top: 1px solid var(--line-soft); }
