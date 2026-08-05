@@ -20,6 +20,7 @@ enum SwitcherOverlayPresentationTests {
         try testOverlaySizeScaleScalesMultiRowLayout()
         try testOverlaySizeScaleClampsOutOfRangeValues()
         try testDirectionalPanelInsetsMatchApprovedLayout()
+        try testOverlayViewsApplyDirectionalPadding()
         try testSelectionScrollingPolicyCoversModesAndScales()
         try testLegacyOverlaySizePreferenceMapsOntoScale()
         try testDefaultThumbnailIsLargerThanRetiredLargePreset()
@@ -270,6 +271,25 @@ enum SwitcherOverlayPresentationTests {
         try expectEqual(applicationMetrics.panelHorizontalPadding, 10)
         try expectEqual(applicationMetrics.panelTopPadding, 8)
         try expectEqual(applicationMetrics.panelBottomPadding, 0)
+    }
+
+    static func testOverlayViewsApplyDirectionalPadding() throws {
+        let rootSourceURL = projectRoot
+            .appendingPathComponent("SwitchTab/UI/Overlay/SwitcherOverlayRootView.swift")
+        let rootSource = try String(contentsOf: rootSourceURL, encoding: .utf8)
+        let tileSourceURL = projectRoot
+            .appendingPathComponent("SwitchTab/UI/Overlay/SwitcherIconStripView.swift")
+        let tileSource = try String(contentsOf: tileSourceURL, encoding: .utf8)
+
+        try expectTrue(
+            rootSource.contains(".padding(.horizontal, layoutMetrics.panelHorizontalPadding)")
+        )
+        try expectTrue(rootSource.contains(".padding(.top, layoutMetrics.panelTopPadding)"))
+        try expectTrue(rootSource.contains(".padding(.bottom, layoutMetrics.panelBottomPadding)"))
+        try expectTrue(
+            tileSource.contains(".padding(.horizontal, layoutMetrics.tileContentPadding)")
+        )
+        try expectFalse(tileSource.contains(".padding(layoutMetrics.tileContentPadding)"))
     }
 
     static func testSelectionScrollingPolicyCoversModesAndScales() throws {
