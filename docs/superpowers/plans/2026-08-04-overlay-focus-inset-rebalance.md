@@ -4,7 +4,7 @@
 
 **Goal:** Give application captions bottom breathing room and add a small content inset inside window selection outlines.
 
-**Architecture:** Keep the geometry contract in `SwitcherOverlayLayoutMetrics`. Add one directional tile metric for window vertical content padding, then make the layout calculation and SwiftUI rendering consume the same value.
+**Architecture:** Keep the geometry contract in `SwitcherOverlayLayoutMetrics`. Add one directional tile metric for window vertical content padding, then make the layout calculation and SwiftUI rendering consume the same value. Keep the app icon's layout frame independent from its smaller visual selection background.
 
 **Tech Stack:** Swift 6, SwiftUI, CoreGraphics, XCTest, Xcode 26.
 
@@ -26,11 +26,12 @@
 Update the default metric expectations to require:
 
 ```swift
-try expectEqual(windowMetrics.tileSize, CGSize(width: 168, height: 138))
-try expectEqual(windowMetrics.tileVerticalContentPadding, 2)
-try expectEqual(applicationMetrics.tileSize, CGSize(width: 100, height: 113))
-try expectEqual(applicationMetrics.selectionContainerSize, CGSize(width: 98, height: 98))
-try expectEqual(applicationMetrics.panelBottomPadding, 2)
+try expectEqual(windowMetrics.tileSize, CGSize(width: 172, height: 146))
+try expectEqual(windowMetrics.tileContentPadding, 6)
+try expectEqual(windowMetrics.tileVerticalContentPadding, 6)
+try expectEqual(applicationMetrics.tileSize, CGSize(width: 100, height: 111))
+try expectEqual(applicationMetrics.selectionContainerSize, CGSize(width: 94, height: 94))
+try expectEqual(applicationMetrics.panelBottomPadding, 4)
 ```
 
 In `testApplicationCaptionKeepsPanelHeightStable()`, assert:
@@ -75,10 +76,11 @@ public let tileVerticalContentPadding: CGFloat
 Use these default constants:
 
 ```swift
-private static let baseWindowTileVerticalContentPadding: CGFloat = 2
+private static let baseWindowTileContentPadding: CGFloat = 6
+private static let baseWindowTileVerticalContentPadding: CGFloat = 6
 private static let baseApplicationTileWidth: CGFloat = 100
-private static let baseApplicationSelectionExtent: CGFloat = 98
-private static let baseApplicationPanelBottomPadding: CGFloat = 2
+private static let baseApplicationSelectionExtent: CGFloat = 94
+private static let baseApplicationPanelBottomPadding: CGFloat = 4
 ```
 
 For window mode, scale the vertical inset and include both edges in tile height:
@@ -94,7 +96,7 @@ let tileSize = CGSize(
 )
 ```
 
-Set application `tileVerticalContentPadding` to zero and window mode to the scaled value.
+Set application `tileVerticalContentPadding` to zero and window mode to the scaled value. Base the application tile height on the 96 pt icon extent rather than the 94 pt visual selection extent.
 
 - [ ] **Step 2: Render the new window inset**
 
@@ -103,6 +105,8 @@ After the existing horizontal padding in `windowContent(for:)`, add:
 ```swift
 .padding(.vertical, layoutMetrics.tileVerticalContentPadding)
 ```
+
+Center the 94 pt application selection background inside a separate 96 pt icon frame so shrinking the focus treatment does not shrink the icon or panel layout.
 
 - [ ] **Step 3: Run the focused suite and verify GREEN**
 

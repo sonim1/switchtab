@@ -38,8 +38,8 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
     // slider stays continuous instead of snapping to hand-tuned presets.
     private static let baseWindowThumbnailSize = CGSize(width: 160, height: 110)
     private static let baseWindowHeaderIconExtent: CGFloat = 18
-    private static let baseWindowTileContentPadding: CGFloat = 4
-    private static let baseWindowTileVerticalContentPadding: CGFloat = 2
+    private static let baseWindowTileContentPadding: CGFloat = 6
+    private static let baseWindowTileVerticalContentPadding: CGFloat = 6
     private static let baseWindowTileContentSpacing: CGFloat = 6
     private static let baseWindowTitleFontSize: CGFloat = 13
     private static let baseWindowGridSpacing: CGFloat = 14
@@ -47,7 +47,7 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
     private static let baseWindowPanelTopPadding: CGFloat = 8
     private static let baseWindowPanelBottomPadding: CGFloat = 8
     private static let baseApplicationTileWidth: CGFloat = 100
-    private static let baseApplicationSelectionExtent: CGFloat = 98
+    private static let baseApplicationSelectionExtent: CGFloat = 94
     private static let baseApplicationIconExtent: CGFloat = 96
     private static let baseApplicationCaptionHeight: CGFloat = 14
     private static let baseApplicationCaptionMaxWidth: CGFloat = 240
@@ -57,7 +57,7 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
     private static let baseApplicationGridSpacing: CGFloat = 4
     private static let baseApplicationPanelHorizontalPadding: CGFloat = 10
     private static let baseApplicationPanelTopPadding: CGFloat = 8
-    private static let baseApplicationPanelBottomPadding: CGFloat = 2
+    private static let baseApplicationPanelBottomPadding: CGFloat = 4
     private static let baseCloseButtonSize: CGFloat = 16
     private static let fallbackIconThumbnailRatio: CGFloat = 0.92
 
@@ -132,7 +132,7 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
         return SwitcherOverlayLayoutMetrics(
             tileSize: CGSize(
                 width: tileWidth,
-                height: selectionExtent + contentSpacing + captionHeight
+                height: iconExtent + contentSpacing + captionHeight
             ),
             tileContentPadding: 0,
             tileVerticalContentPadding: 0,

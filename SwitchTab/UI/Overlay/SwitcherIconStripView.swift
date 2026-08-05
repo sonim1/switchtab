@@ -243,10 +243,10 @@ private struct SwitcherWindowTile: View {
                 width: layoutMetrics.selectionContainerSize.width,
                 height: layoutMetrics.selectionContainerSize.height
             )
-            .background(isSelected ? Color.accentColor.opacity(0.28) : Color.clear)
-            .clipShape(
+            .background {
                 RoundedRectangle(cornerRadius: layoutMetrics.selectionCornerRadius)
-            )
+                    .fill(isSelected ? Color.accentColor.opacity(0.28) : Color.clear)
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: layoutMetrics.selectionCornerRadius)
                     .strokeBorder(
@@ -254,6 +254,10 @@ private struct SwitcherWindowTile: View {
                         lineWidth: 2
                     )
             }
+            .frame(
+                width: layoutMetrics.thumbnailSize.width,
+                height: layoutMetrics.thumbnailSize.height
+            )
     }
 
     private func applicationMetadata(
