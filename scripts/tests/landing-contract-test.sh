@@ -4,7 +4,7 @@ set -euo pipefail
 page='docs/index.html'
 style='docs/landing.css'
 headers='docs/_headers'
-icon='docs/assets/AppIcon-256.png'
+icon='docs/AppIcon-256.png'
 
 for path in "$page" "$style" "$headers" "$icon"; do
   test -s "$path" || { echo "missing landing asset: $path" >&2; exit 1; }

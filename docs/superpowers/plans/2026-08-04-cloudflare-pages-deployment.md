@@ -21,7 +21,7 @@
 ## File map
 
 - Create: `docs/_headers` — static response security policy consumed by Cloudflare Pages.
-- Create: `docs/assets/AppIcon-256.png` and `docs/assets/AppIcon-32.png` — copies of the app icons that remain inside the Pages output directory.
+- Create: `docs/AppIcon-256.png` and `docs/AppIcon-32.png` — copies of the app icons at the Pages output root so static asset paths resolve on the deployed site.
 - Modify: `docs/index.html` — add the Cloudflare Web Analytics beacon only after the production site token is available; keep it absent from local previews and non-production branches.
 - Create: `.github/workflows/landing-contract.yml` — validate landing assets, forbidden dependencies, and `_headers` syntax on pull requests.
 - Modify: `README.md:76` — replace the repository-relative landing link with the public URL only after the domain is live; keep the source link in the same entry.
