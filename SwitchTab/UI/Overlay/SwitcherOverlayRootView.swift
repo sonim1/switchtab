@@ -41,14 +41,12 @@ struct SwitcherOverlayRootView: View {
         VStack(alignment: .leading, spacing: 12) {
             rows
         }
-        .padding(layoutMetrics.panelPadding)
+        .padding(.horizontal, layoutMetrics.panelHorizontalPadding)
+        .padding(.top, layoutMetrics.panelTopPadding)
+        .padding(.bottom, layoutMetrics.panelBottomPadding)
         .frame(width: layoutSize.width, height: layoutSize.height, alignment: .center)
         .background {
-            if SwitcherOverlayChromePolicy.usesNativeBlurBackground {
-                SwitcherOverlayBlurBackground()
-            } else {
-                Color.black.opacity(0.72)
-            }
+            SwitcherOverlayGlassBackground()
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
@@ -81,16 +79,21 @@ struct SwitcherOverlayRootView: View {
     }
 }
 
-private struct SwitcherOverlayBlurBackground: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = .hudWindow
-        view.blendingMode = .behindWindow
-        view.state = .active
-        view.isEmphasized = true
-        return view
+private struct SwitcherOverlayGlassBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        if #available(macOS 26.0, *) {
+            let view = NSGlassEffectView()
+            view.cornerRadius = 12
+            return view
+        } else {
+            let view = NSVisualEffectView()
+            view.material = .popover
+            view.blendingMode = .behindWindow
+            view.state = .active
+            return view
+        }
     }
 
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {
+    func updateNSView(_ view: NSView, context: Context) {
     }
 }
