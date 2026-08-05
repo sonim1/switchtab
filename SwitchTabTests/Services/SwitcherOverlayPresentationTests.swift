@@ -270,7 +270,7 @@ enum SwitcherOverlayPresentationTests {
         try expectEqual(windowMetrics.panelBottomPadding, 8)
         try expectEqual(applicationMetrics.panelHorizontalPadding, 10)
         try expectEqual(applicationMetrics.panelTopPadding, 8)
-        try expectEqual(applicationMetrics.panelBottomPadding, 0)
+        try expectEqual(applicationMetrics.panelBottomPadding, 2)
     }
 
     static func testOverlayViewsApplyDirectionalPadding() throws {
@@ -288,6 +288,9 @@ enum SwitcherOverlayPresentationTests {
         try expectTrue(rootSource.contains(".padding(.bottom, layoutMetrics.panelBottomPadding)"))
         try expectTrue(
             tileSource.contains(".padding(.horizontal, layoutMetrics.tileContentPadding)")
+        )
+        try expectTrue(
+            tileSource.contains(".padding(.vertical, layoutMetrics.tileVerticalContentPadding)")
         )
         try expectFalse(tileSource.contains(".padding(layoutMetrics.tileContentPadding)"))
     }
@@ -370,13 +373,15 @@ enum SwitcherOverlayPresentationTests {
             mode: .applicationSwitching
         )
 
-        try expectEqual(windowMetrics.tileSize, CGSize(width: 168, height: 134))
+        try expectEqual(windowMetrics.tileSize, CGSize(width: 168, height: 138))
+        try expectEqual(windowMetrics.tileVerticalContentPadding, 2)
         try expectEqual(windowMetrics.tileContentSpacing, 6)
         try expectEqual(windowMetrics.gridSpacing, 14)
-        try expectEqual(applicationMetrics.tileSize, CGSize(width: 100, height: 115))
+        try expectEqual(applicationMetrics.tileSize, CGSize(width: 100, height: 113))
+        try expectEqual(applicationMetrics.tileVerticalContentPadding, 0)
         try expectEqual(applicationMetrics.thumbnailSize, CGSize(width: 96, height: 96))
         try expectEqual(applicationMetrics.fallbackIconSize, CGSize(width: 96, height: 96))
-        try expectEqual(applicationMetrics.selectionContainerSize, CGSize(width: 100, height: 100))
+        try expectEqual(applicationMetrics.selectionContainerSize, CGSize(width: 98, height: 98))
         try expectEqual(applicationMetrics.selectionCornerRadius, 26)
         try expectEqual(applicationMetrics.captionHeight, 14)
         try expectEqual(applicationMetrics.captionMaxWidth, 240)
@@ -399,7 +404,8 @@ enum SwitcherOverlayPresentationTests {
             mode: .applicationSwitching
         )
 
-        try expectEqual(layout.metrics.tileSize.height, 115)
+        try expectEqual(layout.metrics.tileSize.height, 113)
+        try expectEqual(layout.size.height, 123)
         try expectEqual(
             layout.metrics.selectionContainerSize.height
                 + layout.metrics.tileContentSpacing
