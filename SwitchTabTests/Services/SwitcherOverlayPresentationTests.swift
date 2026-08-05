@@ -27,6 +27,7 @@ enum SwitcherOverlayPresentationTests {
         try testMinimumScaleTileContentFitsWithinTile()
         try testApplicationModeUsesCompactLayoutMetrics()
         try testApplicationCaptionKeepsPanelHeightStable()
+        try testApplicationBottomInsetScalesWithOverlaySize()
         try testApplicationCaptionFitsInsidePanelBounds()
         try testApplicationCaptionsStayCenteredWithinPanelBounds()
         try testApplicationTileSeparatesSelectionContainerFromCaption()
@@ -270,7 +271,7 @@ enum SwitcherOverlayPresentationTests {
         try expectEqual(windowMetrics.panelBottomPadding, 8)
         try expectEqual(applicationMetrics.panelHorizontalPadding, 10)
         try expectEqual(applicationMetrics.panelTopPadding, 8)
-        try expectEqual(applicationMetrics.panelBottomPadding, 0)
+        try expectEqual(applicationMetrics.panelBottomPadding, 4)
     }
 
     static func testOverlayViewsApplyDirectionalPadding() throws {
@@ -288,6 +289,9 @@ enum SwitcherOverlayPresentationTests {
         try expectTrue(rootSource.contains(".padding(.bottom, layoutMetrics.panelBottomPadding)"))
         try expectTrue(
             tileSource.contains(".padding(.horizontal, layoutMetrics.tileContentPadding)")
+        )
+        try expectTrue(
+            tileSource.contains(".padding(.vertical, layoutMetrics.tileVerticalContentPadding)")
         )
         try expectFalse(tileSource.contains(".padding(layoutMetrics.tileContentPadding)"))
     }
@@ -342,7 +346,7 @@ enum SwitcherOverlayPresentationTests {
         // must be roomier than that, per the bigger-by-default requirement.
         try expectTrue(metrics.thumbnailSize.width > 144)
         try expectTrue(metrics.thumbnailSize.height > 100)
-        try expectEqual(metrics.tileSize.width, metrics.thumbnailSize.width + 8)
+        try expectEqual(metrics.tileSize.width, metrics.thumbnailSize.width + 12)
         try expectTrue(metrics.fallbackIconSize.height <= metrics.thumbnailSize.height)
         try expectTrue(metrics.titleFontSize > 0)
         try expectTrue(metrics.symbolFontSize > 0)
@@ -370,13 +374,16 @@ enum SwitcherOverlayPresentationTests {
             mode: .applicationSwitching
         )
 
-        try expectEqual(windowMetrics.tileSize, CGSize(width: 168, height: 134))
+        try expectEqual(windowMetrics.tileSize, CGSize(width: 172, height: 146))
+        try expectEqual(windowMetrics.tileContentPadding, 6)
+        try expectEqual(windowMetrics.tileVerticalContentPadding, 6)
         try expectEqual(windowMetrics.tileContentSpacing, 6)
         try expectEqual(windowMetrics.gridSpacing, 14)
-        try expectEqual(applicationMetrics.tileSize, CGSize(width: 100, height: 115))
+        try expectEqual(applicationMetrics.tileSize, CGSize(width: 100, height: 111))
+        try expectEqual(applicationMetrics.tileVerticalContentPadding, 0)
         try expectEqual(applicationMetrics.thumbnailSize, CGSize(width: 96, height: 96))
         try expectEqual(applicationMetrics.fallbackIconSize, CGSize(width: 96, height: 96))
-        try expectEqual(applicationMetrics.selectionContainerSize, CGSize(width: 100, height: 100))
+        try expectEqual(applicationMetrics.selectionContainerSize, CGSize(width: 94, height: 94))
         try expectEqual(applicationMetrics.selectionCornerRadius, 26)
         try expectEqual(applicationMetrics.captionHeight, 14)
         try expectEqual(applicationMetrics.captionMaxWidth, 240)
@@ -399,13 +406,31 @@ enum SwitcherOverlayPresentationTests {
             mode: .applicationSwitching
         )
 
-        try expectEqual(layout.metrics.tileSize.height, 115)
+        try expectEqual(layout.metrics.tileSize.height, 111)
+        try expectEqual(layout.size.height, 123)
         try expectEqual(
-            layout.metrics.selectionContainerSize.height
+            layout.metrics.thumbnailSize.height
                 + layout.metrics.tileContentSpacing
                 + layout.metrics.captionHeight,
             layout.metrics.tileSize.height
         )
+    }
+
+    static func testApplicationBottomInsetScalesWithOverlaySize() throws {
+        let cases: [(OverlaySizeScale, CGFloat)] = [
+            (OverlaySizeScale(OverlaySizeScale.minimum), 3),
+            (.default, 4),
+            (OverlaySizeScale(OverlaySizeScale.maximum), 6)
+        ]
+
+        for (scale, expectedBottomInset) in cases {
+            let metrics = SwitcherOverlayLayoutMetrics.metrics(
+                for: scale,
+                mode: .applicationSwitching
+            )
+
+            try expectEqual(metrics.panelBottomPadding, expectedBottomInset)
+        }
     }
 
     static func testApplicationCaptionFitsInsidePanelBounds() throws {
@@ -484,6 +509,26 @@ enum SwitcherOverlayPresentationTests {
         try expectTrue(source.contains("ApplicationSwitcherMetadataPolicy.presentation("))
         try expectTrue(source.contains(".frame(height: layoutMetrics.captionHeight)"))
         try expectTrue(source.contains("cornerRadius: layoutMetrics.selectionCornerRadius"))
+
+        guard let functionStart = source.range(
+            of: "private func applicationIconSelection(for item: SwitcherListItem)"
+        ), let functionEnd = source.range(
+            of: "private func applicationMetadata(",
+            range: functionStart.upperBound..<source.endIndex
+        ) else {
+            throw TestFailure.failed("Application selection function could not be inspected.")
+        }
+
+        let functionSource = String(source[functionStart.lowerBound..<functionEnd.lowerBound])
+        guard let selectionFrame = functionSource.range(
+            of: "width: layoutMetrics.selectionContainerSize.width"
+        ), let iconLayoutFrame = functionSource.range(
+            of: "width: layoutMetrics.thumbnailSize.width"
+        ) else {
+            throw TestFailure.failed("Application selection and icon layout frames must both exist.")
+        }
+
+        try expectTrue(selectionFrame.upperBound < iconLayoutFrame.lowerBound)
     }
 
     static func testApplicationModeFitsMoreColumnsThanWindowMode() throws {

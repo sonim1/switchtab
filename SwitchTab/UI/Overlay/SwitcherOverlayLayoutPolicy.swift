@@ -16,6 +16,7 @@ public struct SwitcherOverlayPresentationLayout: Equatable {
 public struct SwitcherOverlayLayoutMetrics: Equatable {
     public let tileSize: CGSize
     public let tileContentPadding: CGFloat
+    public let tileVerticalContentPadding: CGFloat
     public let tileContentSpacing: CGFloat
     public let thumbnailSize: CGSize
     public let fallbackIconSize: CGSize
@@ -37,14 +38,16 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
     // slider stays continuous instead of snapping to hand-tuned presets.
     private static let baseWindowThumbnailSize = CGSize(width: 160, height: 110)
     private static let baseWindowHeaderIconExtent: CGFloat = 18
-    private static let baseWindowTileContentPadding: CGFloat = 4
+    private static let baseWindowTileContentPadding: CGFloat = 6
+    private static let baseWindowTileVerticalContentPadding: CGFloat = 6
     private static let baseWindowTileContentSpacing: CGFloat = 6
     private static let baseWindowTitleFontSize: CGFloat = 13
     private static let baseWindowGridSpacing: CGFloat = 14
     private static let baseWindowPanelHorizontalPadding: CGFloat = 10
     private static let baseWindowPanelTopPadding: CGFloat = 8
     private static let baseWindowPanelBottomPadding: CGFloat = 8
-    private static let baseApplicationSelectionExtent: CGFloat = 100
+    private static let baseApplicationTileWidth: CGFloat = 100
+    private static let baseApplicationSelectionExtent: CGFloat = 94
     private static let baseApplicationIconExtent: CGFloat = 96
     private static let baseApplicationCaptionHeight: CGFloat = 14
     private static let baseApplicationCaptionMaxWidth: CGFloat = 240
@@ -54,7 +57,7 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
     private static let baseApplicationGridSpacing: CGFloat = 4
     private static let baseApplicationPanelHorizontalPadding: CGFloat = 10
     private static let baseApplicationPanelTopPadding: CGFloat = 8
-    private static let baseApplicationPanelBottomPadding: CGFloat = 0
+    private static let baseApplicationPanelBottomPadding: CGFloat = 4
     private static let baseCloseButtonSize: CGFloat = 16
     private static let fallbackIconThumbnailRatio: CGFloat = 0.92
 
@@ -76,17 +79,25 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
         let thumbnailHeight = scaled(baseWindowThumbnailSize.height, by: factor)
         let headerIconExtent = scaled(baseWindowHeaderIconExtent, by: factor)
         let tileContentPadding = scaled(baseWindowTileContentPadding, by: factor)
+        let tileVerticalContentPadding = scaled(
+            baseWindowTileVerticalContentPadding,
+            by: factor
+        )
         let fallbackIconExtent = (thumbnailHeight * fallbackIconThumbnailRatio).rounded()
         let closeButtonSize = scaled(baseCloseButtonSize, by: factor)
         let closeButtonHitTargetExtent = max(24, closeButtonSize + 8)
         let tileSize = CGSize(
             width: thumbnailWidth + (tileContentPadding * 2),
-            height: thumbnailHeight + headerIconExtent + baseWindowTileContentSpacing
+            height: thumbnailHeight
+                + headerIconExtent
+                + baseWindowTileContentSpacing
+                + tileVerticalContentPadding * 2
         )
 
         return SwitcherOverlayLayoutMetrics(
             tileSize: tileSize,
             tileContentPadding: tileContentPadding,
+            tileVerticalContentPadding: tileVerticalContentPadding,
             tileContentSpacing: baseWindowTileContentSpacing,
             thumbnailSize: CGSize(width: thumbnailWidth, height: thumbnailHeight),
             fallbackIconSize: CGSize(width: fallbackIconExtent, height: fallbackIconExtent),
@@ -112,6 +123,7 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
     private static func applicationMetrics(for scale: OverlaySizeScale) -> SwitcherOverlayLayoutMetrics {
         let factor = CGFloat(scale.value)
         let iconExtent = scaled(baseApplicationIconExtent, by: factor)
+        let tileWidth = scaled(baseApplicationTileWidth, by: factor)
         let selectionExtent = scaled(baseApplicationSelectionExtent, by: factor)
         let captionHeight = scaled(baseApplicationCaptionHeight, by: factor)
         let contentSpacing = scaled(baseApplicationTileContentSpacing, by: factor)
@@ -119,10 +131,11 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
         let closeButtonHitTargetExtent = max(24, closeButtonSize + 8)
         return SwitcherOverlayLayoutMetrics(
             tileSize: CGSize(
-                width: selectionExtent,
-                height: selectionExtent + contentSpacing + captionHeight
+                width: tileWidth,
+                height: iconExtent + contentSpacing + captionHeight
             ),
             tileContentPadding: 0,
+            tileVerticalContentPadding: 0,
             tileContentSpacing: contentSpacing,
             thumbnailSize: CGSize(width: iconExtent, height: iconExtent),
             fallbackIconSize: CGSize(width: iconExtent, height: iconExtent),
@@ -141,7 +154,7 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
             gridSpacing: scaled(baseApplicationGridSpacing, by: factor),
             panelHorizontalPadding: scaled(baseApplicationPanelHorizontalPadding, by: factor),
             panelTopPadding: scaled(baseApplicationPanelTopPadding, by: factor),
-            panelBottomPadding: baseApplicationPanelBottomPadding
+            panelBottomPadding: scaled(baseApplicationPanelBottomPadding, by: factor)
         )
     }
 
