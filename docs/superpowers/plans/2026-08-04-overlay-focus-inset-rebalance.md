@@ -28,7 +28,7 @@ Update the default metric expectations to require:
 ```swift
 try expectEqual(windowMetrics.tileSize, CGSize(width: 168, height: 138))
 try expectEqual(windowMetrics.tileVerticalContentPadding, 2)
-try expectEqual(applicationMetrics.tileSize, CGSize(width: 98, height: 113))
+try expectEqual(applicationMetrics.tileSize, CGSize(width: 100, height: 113))
 try expectEqual(applicationMetrics.selectionContainerSize, CGSize(width: 98, height: 98))
 try expectEqual(applicationMetrics.panelBottomPadding, 2)
 ```
@@ -76,6 +76,7 @@ Use these default constants:
 
 ```swift
 private static let baseWindowTileVerticalContentPadding: CGFloat = 2
+private static let baseApplicationTileWidth: CGFloat = 100
 private static let baseApplicationSelectionExtent: CGFloat = 98
 private static let baseApplicationPanelBottomPadding: CGFloat = 2
 ```

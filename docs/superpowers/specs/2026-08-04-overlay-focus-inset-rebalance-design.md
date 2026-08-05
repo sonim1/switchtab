@@ -9,10 +9,11 @@ Rebalance the space immediately around each blue selection outline without chang
 - Keep the application panel's total default height unchanged.
 - Keep the application icon at 96 pt.
 - Reduce the selection container from 100 pt to 98 pt, leaving a 1 pt inset around the icon.
+- Keep the 100 pt grid-cell width so columns and caption bounds do not move.
 - Move the recovered 2 pt to the panel bottom inset so the selected caption has breathing room below it.
 - Keep the existing 8 pt panel top inset, 1 pt icon-to-caption spacing, and 14 pt caption row.
 
-At default scale the total remains 123 pt: `8 top + 113 tile + 2 bottom`.
+At default scale the total remains 123 pt: `8 top + 113 tile height + 2 bottom`.
 
 ## Window Switcher
 
