@@ -154,7 +154,7 @@ public struct SwitcherOverlayLayoutMetrics: Equatable {
             gridSpacing: scaled(baseApplicationGridSpacing, by: factor),
             panelHorizontalPadding: scaled(baseApplicationPanelHorizontalPadding, by: factor),
             panelTopPadding: scaled(baseApplicationPanelTopPadding, by: factor),
-            panelBottomPadding: baseApplicationPanelBottomPadding
+            panelBottomPadding: scaled(baseApplicationPanelBottomPadding, by: factor)
         )
     }
 

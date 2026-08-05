@@ -12,6 +12,7 @@ Rebalance the space immediately around each blue selection outline without chang
 - Keep the icon's 96 pt layout frame independent from the smaller, centered selection background.
 - Keep the 100 pt grid-cell width so columns and caption bounds do not move.
 - Reduce the tile height from 115 pt to 111 pt and move the recovered 4 pt to the panel bottom inset.
+- Scale the bottom inset with the overlay size setting, matching the surrounding geometry.
 - Keep the existing 8 pt panel top inset, 1 pt icon-to-caption spacing, and 14 pt caption row.
 
 At default scale the total remains 123 pt: `8 top + 111 tile height + 4 bottom`.

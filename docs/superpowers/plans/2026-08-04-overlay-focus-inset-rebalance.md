@@ -97,6 +97,7 @@ let tileSize = CGSize(
 ```
 
 Set application `tileVerticalContentPadding` to zero and window mode to the scaled value. Base the application tile height on the 96 pt icon extent rather than the 94 pt visual selection extent.
+Scale the application panel bottom inset by the same overlay size factor as the other panel geometry.
 
 - [ ] **Step 2: Render the new window inset**
 

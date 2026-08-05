@@ -27,7 +27,7 @@ enum SwitcherOverlayPresentationTests {
         try testMinimumScaleTileContentFitsWithinTile()
         try testApplicationModeUsesCompactLayoutMetrics()
         try testApplicationCaptionKeepsPanelHeightStable()
-        try testSwitcherContentInsetsAreVisiblySeparatedFromSelectionBorders()
+        try testApplicationBottomInsetScalesWithOverlaySize()
         try testApplicationCaptionFitsInsidePanelBounds()
         try testApplicationCaptionsStayCenteredWithinPanelBounds()
         try testApplicationTileSeparatesSelectionContainerFromCaption()
@@ -416,24 +416,21 @@ enum SwitcherOverlayPresentationTests {
         )
     }
 
-    static func testSwitcherContentInsetsAreVisiblySeparatedFromSelectionBorders() throws {
-        let windowMetrics = SwitcherOverlayLayoutMetrics.metrics(
-            for: .default,
-            mode: .currentAppWindowSwitching
-        )
-        let applicationMetrics = SwitcherOverlayLayoutMetrics.metrics(
-            for: .default,
-            mode: .applicationSwitching
-        )
+    static func testApplicationBottomInsetScalesWithOverlaySize() throws {
+        let cases: [(OverlaySizeScale, CGFloat)] = [
+            (OverlaySizeScale(OverlaySizeScale.minimum), 3),
+            (.default, 4),
+            (OverlaySizeScale(OverlaySizeScale.maximum), 6)
+        ]
 
-        try expectEqual(windowMetrics.tileContentPadding, 6)
-        try expectEqual(windowMetrics.tileVerticalContentPadding, 6)
-        try expectEqual(
-            applicationMetrics.thumbnailSize.height
-                - applicationMetrics.selectionContainerSize.height,
-            2
-        )
-        try expectEqual(applicationMetrics.panelBottomPadding, 4)
+        for (scale, expectedBottomInset) in cases {
+            let metrics = SwitcherOverlayLayoutMetrics.metrics(
+                for: scale,
+                mode: .applicationSwitching
+            )
+
+            try expectEqual(metrics.panelBottomPadding, expectedBottomInset)
+        }
     }
 
     static func testApplicationCaptionFitsInsidePanelBounds() throws {
@@ -512,6 +509,26 @@ enum SwitcherOverlayPresentationTests {
         try expectTrue(source.contains("ApplicationSwitcherMetadataPolicy.presentation("))
         try expectTrue(source.contains(".frame(height: layoutMetrics.captionHeight)"))
         try expectTrue(source.contains("cornerRadius: layoutMetrics.selectionCornerRadius"))
+
+        guard let functionStart = source.range(
+            of: "private func applicationIconSelection(for item: SwitcherListItem)"
+        ), let functionEnd = source.range(
+            of: "private func applicationMetadata(",
+            range: functionStart.upperBound..<source.endIndex
+        ) else {
+            throw TestFailure.failed("Application selection function could not be inspected.")
+        }
+
+        let functionSource = String(source[functionStart.lowerBound..<functionEnd.lowerBound])
+        guard let selectionFrame = functionSource.range(
+            of: "width: layoutMetrics.selectionContainerSize.width"
+        ), let iconLayoutFrame = functionSource.range(
+            of: "width: layoutMetrics.thumbnailSize.width"
+        ) else {
+            throw TestFailure.failed("Application selection and icon layout frames must both exist.")
+        }
+
+        try expectTrue(selectionFrame.upperBound < iconLayoutFrame.lowerBound)
     }
 
     static func testApplicationModeFitsMoreColumnsThanWindowMode() throws {
