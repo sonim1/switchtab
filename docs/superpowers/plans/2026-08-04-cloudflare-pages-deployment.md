@@ -4,7 +4,7 @@
 
 **Goal:** Publish the existing static SwitchTab landing page from `docs/` through Cloudflare Pages with a custom-domain-ready security baseline and privacy-conscious traffic analytics.
 
-**Architecture:** Keep GitHub `main` as the source of truth. Connect the repository to one Cloudflare Pages project whose production branch is `main` and whose output directory is `docs`; no build command or runtime dependency is needed. Add a static `_headers` file beside the landing assets for browser security headers, then enable Cloudflare Web Analytics on the production page only.
+**Architecture:** Keep GitHub `main` as the source of truth. Use a Cloudflare Pages project with `docs` as its static output and a least-privilege GitHub Actions workflow that deploys only when `docs/**` changes on `main`; no build command or runtime dependency is needed beyond the repository's pinned Wrangler tool. Add a static `_headers` file beside the landing assets for browser security headers, then enable Cloudflare Web Analytics on the production page only.
 
 **Tech Stack:** Cloudflare Pages, GitHub integration, static HTML/CSS, Cloudflare Web Analytics, `_headers` response rules.
 
@@ -24,6 +24,8 @@
 - Create: `docs/AppIcon-256.png` and `docs/AppIcon-32.png` — copies of the app icons at the Pages output root so static asset paths resolve on the deployed site.
 - Modify: `docs/index.html` — add the Cloudflare Web Analytics beacon only after the production site token is available; keep it absent from local previews and non-production branches.
 - Create: `.github/workflows/landing-contract.yml` — validate landing assets, forbidden dependencies, and `_headers` syntax on pull requests.
+- Create: `.github/workflows/landing-deploy.yml` — deploy `docs/` to the production Cloudflare Pages project on `main` pushes that change landing files.
+- Create: `scripts/tests/landing-deploy-workflow-test.sh` — enforce deployment path filters, pinned actions, secret usage, and clean Wrangler arguments.
 - Modify: `README.md:76` — replace the repository-relative landing link with the public URL only after the domain is live; keep the source link in the same entry.
 - Verify: Cloudflare Pages project settings, deployment URL, custom DNS, HTTPS, analytics dashboard, and security headers.
 
@@ -147,23 +149,31 @@ rtk git add .github/workflows/landing-contract.yml scripts/tests/landing-contrac
 rtk git commit -m "test: protect landing page deployment contract"
 ```
 
-### Task 3: Create and configure the Cloudflare Pages project
+### Task 3: Create and configure the Cloudflare Pages project and automatic deployment
 
 **Files:**
 - No repository file changes.
 - Configure: Cloudflare dashboard, Workers & Pages.
 
-- [ ] **Step 1: Create the project from the GitHub repository**
+- [x] **Step 1: Create the project with Wrangler**
 
-Connect `sonim1/switchtab`, select the `main` production branch, set the framework preset to none, leave the build command empty, and set the build/output directory to `docs`. Do not add environment variables or secrets.
+Create the `switchtab-landing` project with `main` as its production branch. The project uses direct Wrangler uploads; GitHub Actions provides the repository connection and deployment trigger, so no Cloudflare Git provider connection is required. Do not add environment variables or secrets to the repository.
 
-- [ ] **Step 2: Verify the first production deployment**
+- [x] **Step 2: Verify the first production deployment**
 
 Open the production URL displayed in the Cloudflare Pages project and confirm `/`, `/landing.css`, the local app icon, README links, and documentation links load successfully. Confirm a pull-request preview is generated for a harmless docs change, then close/delete the preview without changing production.
 
-- [ ] **Step 3: Confirm headers at the edge**
+- [x] **Step 3: Confirm headers at the edge**
 
 Use the browser network panel on the production URL and verify `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, and the CSP are present.
+
+- [ ] **Step 4: Configure the GitHub deployment secret**
+
+Create a Cloudflare API token with Pages edit access for the account that owns `switchtab-landing`, then save it in the repository’s GitHub Actions secrets as `CLOUDFLARE_API_TOKEN`. Never put the token in the repository, workflow YAML, or a public log.
+
+- [ ] **Step 5: Verify automatic deployment**
+
+The workflow `.github/workflows/landing-deploy.yml` must run only for pushes to `main` with changes under `docs/**`, install the pinned Wrangler dependency with `npm ci --ignore-scripts`, and deploy `docs/` with the triggering commit SHA. Run `bash scripts/tests/landing-deploy-workflow-test.sh` before enabling the workflow.
 
 ### Task 4: Enable privacy-conscious analytics
 
