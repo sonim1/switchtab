@@ -1,0 +1,39 @@
+name: Deploy landing page
+
+"on":
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: switchtab-landing-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: https://switchtab-landing.pages.dev/
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v4
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install release tooling
+        run: npm ci --ignore-scripts
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          npx wrangler pages deploy docs
+          --project-name switchtab-landing
+          --branch main
+          --commit-hash "$GITHUB_SHA"
+          --commit-message "$GITHUB_SHA $GITHUB_REF_NAME"
