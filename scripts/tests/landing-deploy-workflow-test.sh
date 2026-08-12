@@ -25,7 +25,8 @@ assert(workflow.fetch("on") == {
     "branches" => ["main"],
     "paths" => ["docs/**"],
   },
-}, "deployment must run only for docs changes pushed to main")
+  "workflow_dispatch" => nil,
+}, "deployment must run only for docs changes pushed to main, plus an explicit manual redeploy")
 assert(workflow["permissions"] == {"contents" => "read"}, "workflow permissions must be read-only")
 assert(workflow.fetch("concurrency") == {
   "group" => "switchtab-landing-${{ github.ref }}",

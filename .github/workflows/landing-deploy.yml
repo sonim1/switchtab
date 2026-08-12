@@ -5,6 +5,7 @@ name: Deploy landing page
     branches: [main]
     paths:
       - 'docs/**'
+  workflow_dispatch:
 
 permissions:
   contents: read
