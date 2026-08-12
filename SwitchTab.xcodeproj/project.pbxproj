@@ -15,6 +15,9 @@
 		A00000000000000000000093 /* ShortcutKeyCodeResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000097 /* ShortcutKeyCodeResolver.swift */; };
 		A00000000000000000000008 /* WindowItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000008 /* WindowItem.swift */; };
 		A00000000000000000000009 /* SwitcherSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000009 /* SwitcherSession.swift */; };
+		A00000000000000000000112 /* SwitcherModeSwitchMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000112 /* SwitcherModeSwitchMemory.swift */; };
+		A00000000000000000000113 /* SwitcherModeSwitchMemoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000113 /* SwitcherModeSwitchMemoryTests.swift */; };
+		A00000000000000000000114 /* SwitcherModeSwitchPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000114 /* SwitcherModeSwitchPolicyTests.swift */; };
 		A00000000000000000000011 /* PermissionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000011 /* PermissionService.swift */; };
 		A00000000000000000000012 /* ShortcutValidationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000012 /* ShortcutValidationService.swift */; };
 		A00000000000000000000013 /* ShortcutSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000013 /* ShortcutSettingsStore.swift */; };
@@ -113,6 +116,9 @@
 		B00000000000000000000097 /* ShortcutKeyCodeResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutKeyCodeResolver.swift; sourceTree = "<group>"; };
 		B00000000000000000000008 /* WindowItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowItem.swift; sourceTree = "<group>"; };
 		B00000000000000000000009 /* SwitcherSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherSession.swift; sourceTree = "<group>"; };
+		B00000000000000000000112 /* SwitcherModeSwitchMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherModeSwitchMemory.swift; sourceTree = "<group>"; };
+		B00000000000000000000113 /* SwitcherModeSwitchMemoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherModeSwitchMemoryTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000114 /* SwitcherModeSwitchPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherModeSwitchPolicyTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000011 /* PermissionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionService.swift; sourceTree = "<group>"; };
 		B00000000000000000000012 /* ShortcutValidationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutValidationService.swift; sourceTree = "<group>"; };
 		B00000000000000000000013 /* ShortcutSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutSettingsStore.swift; sourceTree = "<group>"; };
@@ -246,6 +252,7 @@
 				B00000000000000000000097 /* ShortcutKeyCodeResolver.swift */,
 					B00000000000000000000008 /* WindowItem.swift */,
 					B00000000000000000000009 /* SwitcherSession.swift */,
+					B00000000000000000000112 /* SwitcherModeSwitchMemory.swift */,
 					B00000000000000000000092 /* SwitcherReadableText.swift */,
 					B00000000000000000000093 /* OverlaySizePreference.swift */,
 				B00000000000000000000102 /* OverlaySizeScale.swift */,
@@ -343,6 +350,7 @@
 			children = (
 				B00000000000000000000018 /* CoreModelsTests.swift */,
 				B00000000000000000000019 /* SwitcherItemTests.swift */,
+				B00000000000000000000113 /* SwitcherModeSwitchMemoryTests.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -369,6 +377,7 @@
 				B00000000000000000000059 /* SwitcherOverlayConfirmationTests.swift */,
 				B00000000000000000000062 /* ShortcutSettingsViewModelPermissionTests.swift */,
 				B00000000000000000000067 /* SwitcherOverlayPresentationPolicyTests.swift */,
+				B00000000000000000000114 /* SwitcherModeSwitchPolicyTests.swift */,
 				B00000000000000000000075 /* UsageMetricsStoreTests.swift */,
 				B00000000000000000000076 /* AboutSwitchTabContentTests.swift */,
 				B00000000000000000000078 /* ApplicationIconStoreTests.swift */,
@@ -537,6 +546,7 @@
 				A00000000000000000000093 /* ShortcutKeyCodeResolver.swift in Sources */,
 					A00000000000000000000008 /* WindowItem.swift in Sources */,
 					A00000000000000000000009 /* SwitcherSession.swift in Sources */,
+					A00000000000000000000112 /* SwitcherModeSwitchMemory.swift in Sources */,
 					A00000000000000000000088 /* SwitcherReadableText.swift in Sources */,
 					A00000000000000000000089 /* OverlaySizePreference.swift in Sources */,
 					A00000000000000000000011 /* PermissionService.swift in Sources */,
@@ -590,6 +600,8 @@
 				A00000000000000000000018 /* CoreModelsTests.swift in Sources */,
 				A00000000000000000000105 /* ApplicationSwitchingTests.swift in Sources */,
 				A00000000000000000000019 /* SwitcherItemTests.swift in Sources */,
+				A00000000000000000000113 /* SwitcherModeSwitchMemoryTests.swift in Sources */,
+				A00000000000000000000114 /* SwitcherModeSwitchPolicyTests.swift in Sources */,
 				A00000000000000000000021 /* PermissionServiceTests.swift in Sources */,
 				A00000000000000000000022 /* ShortcutValidationTests.swift in Sources */,
 				A00000000000000000000023 /* TestSupport.swift in Sources */,
@@ -723,7 +735,7 @@
 				CODE_SIGN_ENTITLEMENTS = SwitchTab/Resources/SwitchTab.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 22;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -732,7 +744,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.10;
+				MARKETING_VERSION = 1.1.11;
 				PRODUCT_BUNDLE_IDENTIFIER = com.royjen.switchtab;
 				PRODUCT_NAME = SwitchTab;
 				SWIFT_VERSION = 5.0;
@@ -747,7 +759,7 @@
 				CODE_SIGN_ENTITLEMENTS = SwitchTab/Resources/SwitchTab.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 22;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -756,7 +768,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.10;
+				MARKETING_VERSION = 1.1.11;
 				PRODUCT_BUNDLE_IDENTIFIER = com.royjen.switchtab;
 				PRODUCT_NAME = SwitchTab;
 				SWIFT_VERSION = 5.0;

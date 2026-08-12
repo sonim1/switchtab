@@ -245,6 +245,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var applicationDidBecomeActiveObserver: NSObjectProtocol?
     private var workspaceApplicationActivationObserver: NSObjectProtocol?
     private var workspaceApplicationTerminationObserver: NSObjectProtocol?
+    private var modeSwitchMemory = SwitcherModeSwitchMemory()
     private var settingsRequestObserver: NSObjectProtocol?
     private var aboutRequestObserver: NSObjectProtocol?
     private var updateCheckRequestObserver: NSObjectProtocol?
@@ -256,6 +257,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayController.onDismiss = { [weak self] in
             self?.cancelThumbnailLoadingIfNeeded()
             self?.windowCloseService.cancelAll()
+            // Resuming is scoped to one held-modifier session.
+            self?.modeSwitchMemory.reset()
         }
         self.overlayController = overlayController
         menuBarStatusItemController = MenuBarStatusItemController(
@@ -309,16 +312,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        cancelThumbnailLoadingIfNeeded()
-        let accessibilityState = permissionService.currentAccessibilityState()
-        debugLog("accessibility state=\(accessibilityState)")
-        guard !accessibilityState.blocksCapability else {
-            debugLog("accessibility missing; showing settings")
-            showSettingsWindow()
-            return
-        }
-
-        let permissionState = permissionService.currentState(accessibility: accessibilityState)
         if let frontmostApplication = NSWorkspace.shared.frontmostApplication {
             debugLog(
                 "frontmost app pid=\(frontmostApplication.processIdentifier) name=\(frontmostApplication.localizedName ?? "unknown")"
@@ -326,11 +319,114 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             debugLog("frontmost app missing")
         }
-        let recentlyOrderedWindows = recencyStore.order(
-            windowProvider.currentApplicationWindows(
+        presentWindowSwitcher(
+            target: .frontmostApplication,
+            reverse: reverse,
+            retainingSession: false
+        )
+    }
+
+    public func showApplicationSwitcher(reverse: Bool = false) {
+        guard let overlayController else {
+            return
+        }
+
+        if advancePresentedOverlayIfNeeded(
+            overlayController: overlayController,
+            mode: .applicationSwitching,
+            reverse: reverse
+        ) {
+            return
+        }
+
+        presentApplicationSwitcher(reverse: reverse, retainingSession: false)
+    }
+
+    /// Hands the live overlay to the other mode while the trigger modifier is
+    /// still held. Nothing is committed and the previous highlight is kept so
+    /// coming back resumes instead of restarting.
+    private func switchOverlayMode(reverse: Bool) {
+        guard let overlayController,
+              let activeMode = overlayController.activeMode,
+              let selectedItem = overlayController.selectedItem else {
+            return
+        }
+
+        switch activeMode {
+        case .applicationSwitching:
+            guard hotkeyService.registeredSetting(for: .currentAppWindowSwitching) != nil,
+                  let ownerProcessIdentifier = selectedItem.appIconProcessIdentifier else {
+                return
+            }
+
+            modeSwitchMemory.rememberApplication(id: selectedItem.id)
+            presentWindowSwitcher(
+                target: .application(
+                    processIdentifier: ownerProcessIdentifier,
+                    name: selectedItem.title
+                ),
+                reverse: reverse,
+                retainingSession: true
+            )
+        case .currentAppWindowSwitching:
+            guard applicationHotkeyController.isRegistered else {
+                return
+            }
+
+            if let ownerProcessIdentifier = selectedItem.appIconProcessIdentifier {
+                modeSwitchMemory.rememberWindow(
+                    id: selectedItem.id,
+                    ownerProcessIdentifier: ownerProcessIdentifier
+                )
+            }
+            presentApplicationSwitcher(reverse: reverse, retainingSession: true)
+        }
+    }
+
+    private enum WindowSwitcherTarget: Equatable {
+        case frontmostApplication
+        case application(processIdentifier: Int, name: String)
+    }
+
+    @discardableResult
+    private func presentWindowSwitcher(
+        target: WindowSwitcherTarget,
+        reverse: Bool,
+        retainingSession: Bool
+    ) -> Bool {
+        guard let overlayController else {
+            return false
+        }
+
+        cancelThumbnailLoadingIfNeeded()
+        let accessibilityState = permissionService.currentAccessibilityState()
+        debugLog("accessibility state=\(accessibilityState)")
+        guard !accessibilityState.blocksCapability else {
+            debugLog("accessibility missing; showing settings")
+            // A refused mode switch leaves the held session where it is.
+            guard !retainingSession else {
+                return false
+            }
+
+            showSettingsWindow()
+            return false
+        }
+
+        let permissionState = permissionService.currentState(accessibility: accessibilityState)
+        let discoveredWindows: [WindowItem]
+        switch target {
+        case .frontmostApplication:
+            discoveredWindows = windowProvider.currentApplicationWindows(
                 includeScreenCaptureIdentifiers: !permissionState.blocksWindowPreviews
             )
-        ) { window in
+        case .application(let processIdentifier, let name):
+            discoveredWindows = windowProvider.applicationWindows(
+                ownerProcessIdentifier: processIdentifier,
+                ownerName: name,
+                includeScreenCaptureIdentifiers: !permissionState.blocksWindowPreviews
+            )
+        }
+        let recentlyOrderedWindows = recencyStore.order(discoveredWindows) { window in
             window.id
         }
         let windows = SwitcherWindowOrderPolicy.pinningFocusedWindowFirst(recentlyOrderedWindows) { window in
@@ -338,9 +434,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         debugLog("window count=\(windows.count)")
         guard !windows.isEmpty else {
-            debugLog("no windows; dismissing overlay")
+            debugLog("no windows; leaving overlay unchanged=\(retainingSession)")
+            guard !retainingSession else {
+                return false
+            }
+
             overlayController.dismiss()
-            return
+            return false
         }
 
         let snapshot = SwitcherPresentationSnapshot(
@@ -352,8 +452,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayController.present(
             mode: .currentAppWindowSwitching,
             items: snapshot.listItems,
-            selectedIndex: snapshot.selectedIndex,
+            selectedIndex: windowSelectedIndex(
+                windows: windows,
+                freshIndex: snapshot.selectedIndex,
+                retainingSession: retainingSession
+            ),
             triggerShortcut: windowTriggerShortcut(),
+            alternateModeKeyCode: alternateModeKeyCode(activeMode: .currentAppWindowSwitching),
+            retainingSession: retainingSession,
             onClose: { [weak self, weak overlayController] item, presentationID in
                 guard let self,
                       let window = snapshot.element(withID: item.id) else {
@@ -383,6 +489,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
                 selectionCoordinator.confirm(selectedWindow, permissionState: permissionState)
                 self.usageMetricsStore.flush()
+            },
+            onModeSwitch: { [weak self] reverse in
+                self?.switchOverlayMode(reverse: reverse)
             }
         )
         let thumbnailPointSize = SwitcherOverlayLayoutMetrics.metrics(
@@ -394,19 +503,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             permissionState: permissionState,
             viewportPixelSize: viewportPixelSize
         )
+        return true
     }
 
-    public func showApplicationSwitcher(reverse: Bool = false) {
+    @discardableResult
+    private func presentApplicationSwitcher(
+        reverse: Bool,
+        retainingSession: Bool
+    ) -> Bool {
         guard let overlayController else {
-            return
-        }
-
-        if advancePresentedOverlayIfNeeded(
-            overlayController: overlayController,
-            mode: .applicationSwitching,
-            reverse: reverse
-        ) {
-            return
+            return false
         }
 
         cancelThumbnailLoadingIfNeeded()
@@ -421,8 +527,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             application.isActive
         }
         guard !applications.isEmpty else {
+            guard !retainingSession else {
+                return false
+            }
+
             overlayController.dismiss()
-            return
+            return false
         }
 
         let snapshot = SwitcherPresentationSnapshot(
@@ -434,11 +544,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let presentationID = overlayController.present(
             mode: .applicationSwitching,
             items: snapshot.listItems,
-            selectedIndex: ApplicationSwitcherSelectionPolicy.initialSelectedIndex(
+            selectedIndex: applicationSelectedIndex(
                 applications: applications,
-                reverse: reverse
+                reverse: reverse,
+                retainingSession: retainingSession
             ),
             triggerShortcut: applicationTriggerShortcut(),
+            alternateModeKeyCode: alternateModeKeyCode(activeMode: .applicationSwitching),
+            retainingSession: retainingSession,
             onQuit: { [weak self] item, _ in
                 guard let self,
                       let selectedApplication = snapshot.element(withID: item.id) else {
@@ -458,9 +571,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     recencyStore: self.applicationRecencyStore
                 )
                 selectionCoordinator.confirm(selectedApplication)
+            },
+            onModeSwitch: { [weak self] reverse in
+                self?.switchOverlayMode(reverse: reverse)
             }
         ) else {
-            return
+            return false
         }
 
         applicationWindowCountLoader.load(applications: applications) { [weak self] countedApplications in
@@ -471,6 +587,86 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
             }
         }
+        return true
+    }
+
+    /// A mode switch arrives on the window this application was last left on,
+    /// or on its frontmost window; it never skips ahead, because the highlight
+    /// is the choice that a release would commit.
+    private func windowSelectedIndex(
+        windows: [WindowItem],
+        freshIndex: Int,
+        retainingSession: Bool
+    ) -> Int {
+        guard retainingSession,
+              let ownerProcessIdentifier = windows.first?.ownerProcessIdentifier else {
+            return freshIndex
+        }
+
+        let rememberedIndex = modeSwitchMemory
+            .windowID(ownerProcessIdentifier: ownerProcessIdentifier)
+            .flatMap { rememberedID in
+                windows.firstIndex { $0.id == rememberedID }
+            }
+        return SwitcherModeSwitchMemory.resumedIndex(
+            itemCount: windows.count,
+            rememberedIndex: rememberedIndex,
+            advance: 0,
+            fallback: 0
+        )
+    }
+
+    /// Returning to application mode resumes the application that was left and
+    /// then advances one step, so the key that switched modes still moves the
+    /// selection the way it does inside a mode.
+    private func applicationSelectedIndex(
+        applications: [ApplicationItem],
+        reverse: Bool,
+        retainingSession: Bool
+    ) -> Int {
+        let freshIndex = ApplicationSwitcherSelectionPolicy.initialSelectedIndex(
+            applications: applications,
+            reverse: reverse
+        )
+        guard retainingSession else {
+            return freshIndex
+        }
+
+        let rememberedIndex = modeSwitchMemory.applicationID.flatMap { rememberedID in
+            applications.firstIndex { $0.id == rememberedID }
+        }
+        return SwitcherModeSwitchMemory.resumedIndex(
+            itemCount: applications.count,
+            rememberedIndex: rememberedIndex,
+            advance: reverse ? -1 : 1,
+            fallback: freshIndex
+        )
+    }
+
+    /// The key that hands the overlay to the other mode, or `nil` while that
+    /// mode is disabled or unregistered — the overlay must not swallow a key
+    /// macOS still owns.
+    private func alternateModeKeyCode(activeMode: SwitcherMode) -> UInt16? {
+        switch activeMode {
+        case .currentAppWindowSwitching:
+            guard applicationHotkeyController.isRegistered else {
+                return nil
+            }
+
+            return resolvedKeyCode(for: configuredShortcut(for: .applicationSwitching))
+        case .applicationSwitching:
+            guard let windowSetting = hotkeyService.registeredSetting(
+                for: .currentAppWindowSwitching
+            ) else {
+                return nil
+            }
+
+            return resolvedKeyCode(for: windowSetting)
+        }
+    }
+
+    private func resolvedKeyCode(for setting: ShortcutSetting) -> UInt16? {
+        setting.keyCode ?? ShortcutKeyCodeResolver.keyCode(for: setting.keyEquivalent)
     }
 
     private func thumbnailLoaderForRefresh() -> WindowThumbnailLoader {
@@ -585,6 +781,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             MainActor.assumeIsolated {
+                // A recycled process identifier must not resume a dead app's window.
+                self?.modeSwitchMemory.forgetWindows(
+                    ownerProcessIdentifier: snapshot.processIdentifier
+                )
                 self?.overlayController?.confirmApplicationTerminated(
                     id: id,
                     processIdentifier: snapshot.processIdentifier

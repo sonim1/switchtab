@@ -18,9 +18,11 @@ final class SwitcherOverlayController {
     private var onConfirm: ((SwitcherListItem, Int) -> Void)?
     private var onClose: ((SwitcherListItem, UInt64) -> Void)?
     private var onQuit: ((SwitcherListItem, Int) -> Void)?
+    private var onModeSwitch: ((Bool) -> Void)?
     private var presentationID: UInt64 = 0
     private var triggerShortcut: ShortcutSetting?
     private var triggerReleaseModifiers: SwitcherShortcutModifiers?
+    private var alternateModeKeyCode: UInt16?
     var onDismiss: (() -> Void)?
     private var presentationLayoutSize = SwitcherOverlayLayoutPolicy.defaultSize
     private var presentationLayoutMetrics = SwitcherOverlayLayoutMetrics.metrics(
@@ -58,6 +60,10 @@ final class SwitcherOverlayController {
         state.session?.mode
     }
 
+    var selectedItem: SwitcherListItem? {
+        state.session?.selectedItem
+    }
+
     var presentationScrollToken: Int {
         presentationModel.scrollToken
     }
@@ -68,15 +74,26 @@ final class SwitcherOverlayController {
         items: [SwitcherListItem],
         selectedIndex: Int = 0,
         triggerShortcut: ShortcutSetting? = nil,
+        alternateModeKeyCode: UInt16? = nil,
+        retainingSession: Bool = false,
         onClose: ((SwitcherListItem, UInt64) -> Void)? = nil,
         onQuit: ((SwitcherListItem, Int) -> Void)? = nil,
-        onConfirm: ((SwitcherListItem, Int) -> Void)? = nil
+        onConfirm: ((SwitcherListItem, Int) -> Void)? = nil,
+        onModeSwitch: ((Bool) -> Void)? = nil
     ) -> UInt64? {
         guard !items.isEmpty else {
-            dismiss()
+            // A mode switch that finds nothing to show leaves the live session
+            // alone instead of tearing it down under the held modifier.
+            if !retainingSession {
+                dismiss()
+            }
             return nil
         }
 
+        // Retaining keeps the panel, the event tap and the modifiers that
+        // started the session, so switching modes cannot drop the hold that
+        // still has to commit the choice.
+        let retainsSession = retainingSession && state.isPresented
         presentationID &+= 1
         applicationIconStore.retainOnlyCachedIcons(for: items)
         // The overlay often opens under a resting pointer; hovering only takes
@@ -94,13 +111,26 @@ final class SwitcherOverlayController {
         self.onConfirm = onConfirm
         self.onClose = onClose
         self.onQuit = onQuit
+        self.onModeSwitch = onModeSwitch
         self.triggerShortcut = triggerShortcut
-        if let triggerShortcut {
-            self.triggerReleaseModifiers = SwitcherShortcutModifiers.releaseRelevantModifiers(triggerShortcut)
-        } else {
-            self.triggerReleaseModifiers = nil
+        self.alternateModeKeyCode = alternateModeKeyCode
+        if !retainsSession {
+            if let triggerShortcut {
+                self.triggerReleaseModifiers = SwitcherShortcutModifiers.releaseRelevantModifiers(triggerShortcut)
+            } else {
+                self.triggerReleaseModifiers = nil
+            }
         }
-        showPanel()
+
+        if retainsSession, let panel, let session = state.session {
+            eventTapOwner?.updateTrigger(
+                shortcut: triggerShortcut,
+                alternateModeKeyCode: alternateModeKeyCode
+            )
+            updatePresentationLayout(session: session, panel: panel)
+        } else {
+            showPanel()
+        }
         return presentationID
     }
 
@@ -143,6 +173,8 @@ final class SwitcherOverlayController {
             closeItem(item, at: index)
         case .quitRequested(let item, let index):
             quitItem(item, at: index)
+        case .modeSwitchRequested(let reverse):
+            onModeSwitch?(reverse)
         case .none:
             break
         }
@@ -212,7 +244,7 @@ final class SwitcherOverlayController {
             updatePresentationLayout(session: session, panel: panel)
         case .cancelled:
             apply(.cancelled)
-        case .none, .confirmed, .closeRequested, .quitRequested:
+        case .none, .confirmed, .closeRequested, .quitRequested, .modeSwitchRequested:
             break
         }
     }
@@ -239,7 +271,7 @@ final class SwitcherOverlayController {
             updatePresentationLayout(session: session, panel: panel)
         case .cancelled:
             apply(.cancelled)
-        case .none, .confirmed, .closeRequested, .quitRequested:
+        case .none, .confirmed, .closeRequested, .quitRequested, .modeSwitchRequested:
             break
         }
     }
@@ -263,7 +295,8 @@ final class SwitcherOverlayController {
             backend: eventTapBackend,
             eventSink: eventSink,
             triggerReleaseModifiers: triggerReleaseModifiers,
-            triggerShortcut: triggerShortcut
+            triggerShortcut: triggerShortcut,
+            alternateModeKeyCode: alternateModeKeyCode
         ) { @MainActor [weak self] command in
             guard let self else {
                 return
@@ -493,6 +526,15 @@ final class SwitcherOverlayController {
                 return true
             }
 
+            if let modeSwitchCommand = SwitcherOverlayModeSwitchPolicy.command(
+                keyCode: event.keyCode,
+                modifiers: event.shortcutModifiers,
+                alternateModeKeyCode: alternateModeKeyCode
+            ) {
+                _ = handle(modeSwitchCommand)
+                return true
+            }
+
             if let command = SwitcherCommand(keyCode: event.keyCode, modifiers: event.shortcutModifiers) {
                 guard !(event.isARepeat && command.repeatsAreDestructive) else {
                     return true
@@ -606,7 +648,7 @@ final class SwitcherOverlayController {
         case .cancelled:
             endPresentation()
             clearPresentationCallbacks()
-        case .none, .updated, .closeRequested, .quitRequested:
+        case .none, .updated, .closeRequested, .quitRequested, .modeSwitchRequested:
             break
         }
     }
@@ -615,8 +657,10 @@ final class SwitcherOverlayController {
         onConfirm = nil
         onClose = nil
         onQuit = nil
+        onModeSwitch = nil
         triggerShortcut = nil
         triggerReleaseModifiers = nil
+        alternateModeKeyCode = nil
     }
 
     private func endPresentation() {
@@ -686,7 +730,8 @@ final class SwitcherOverlayEventTapOwner {
     private let backend: any SwitcherOverlayEventTapBackend
     private let eventSink: any SwitcherOverlayEventRecording
     private let triggerReleaseModifiers: SwitcherShortcutModifiers?
-    private let triggerShortcut: ShortcutSetting?
+    private var triggerShortcut: ShortcutSetting?
+    private var alternateModeKeyCode: UInt16?
     private let commandHandler: @MainActor (SwitcherCommand) -> Void
     private var connection: (any SwitcherOverlayEventTapConnection)?
     private var session: Session?
@@ -696,13 +741,26 @@ final class SwitcherOverlayEventTapOwner {
         eventSink: any SwitcherOverlayEventRecording,
         triggerReleaseModifiers: SwitcherShortcutModifiers? = nil,
         triggerShortcut: ShortcutSetting? = nil,
+        alternateModeKeyCode: UInt16? = nil,
         commandHandler: @escaping @MainActor (SwitcherCommand) -> Void
     ) {
         self.backend = backend
         self.eventSink = eventSink
         self.triggerReleaseModifiers = triggerReleaseModifiers
         self.triggerShortcut = triggerShortcut
+        self.alternateModeKeyCode = alternateModeKeyCode
         self.commandHandler = commandHandler
+    }
+
+    /// Swaps which shortcuts the live tap answers to. The tap itself is left
+    /// installed: a mode switch is handled from inside the tap callback, so
+    /// tearing it down there would invalidate the port mid-dispatch.
+    func updateTrigger(
+        shortcut: ShortcutSetting?,
+        alternateModeKeyCode: UInt16?
+    ) {
+        triggerShortcut = shortcut
+        self.alternateModeKeyCode = alternateModeKeyCode
     }
 
     @discardableResult
@@ -743,7 +801,8 @@ final class SwitcherOverlayEventTapOwner {
             isAutorepeat: input.isAutorepeat,
             modifiers: input.modifiers,
             triggerReleaseModifiers: triggerReleaseModifiers,
-            triggerShortcut: triggerShortcut
+            triggerShortcut: triggerShortcut,
+            alternateModeKeyCode: alternateModeKeyCode
         ) {
         case .passThrough:
             return false
@@ -924,6 +983,7 @@ private extension SwitcherCommand {
         case .cancel: 5
         case .closeSelected: 6
         case .quitSelectedApplication: 7
+        case .switchMode: 8
         }
     }
 }
@@ -937,6 +997,7 @@ private extension SwitcherInteractionResult {
         case .cancelled: 3
         case .closeRequested: 4
         case .quitRequested: 5
+        case .modeSwitchRequested: 6
         }
     }
 }

@@ -4,6 +4,10 @@ public final class ApplicationSwitchingHotkeyController {
 
     private let hotkeyService: HotkeyService
     private var registrationMessages: [ShortcutRegistrationMessage] = []
+    /// Whether application switching currently owns its shortcut. Mode
+    /// switching reads this so the overlay never consumes the application key
+    /// while macOS still owns it.
+    public private(set) var isRegistered = false
 
     public init() {
         hotkeyService = HotkeyService(
@@ -25,6 +29,7 @@ public final class ApplicationSwitchingHotkeyController {
     ) -> Bool {
         hotkeyService.unregisterAll()
         registrationMessages.removeAll(keepingCapacity: true)
+        isRegistered = false
 
         guard enabled else {
             return true
@@ -51,12 +56,14 @@ public final class ApplicationSwitchingHotkeyController {
             return handleRegistrationFailure()
         }
 
+        isRegistered = true
         return true
     }
 
     public func unregisterAll() {
         hotkeyService.unregisterAll()
         registrationMessages.removeAll(keepingCapacity: true)
+        isRegistered = false
     }
 
     public func registrationMessageSnapshot() -> [ShortcutRegistrationMessage] {
@@ -64,6 +71,7 @@ public final class ApplicationSwitchingHotkeyController {
     }
 
     private func handleRegistrationFailure() -> Bool {
+        isRegistered = false
         let serviceMessages = hotkeyService.registrationMessageSnapshot()
         let failureMode = serviceMessages.first(where: { $0.mode == .applicationSwitching })?.mode
             ?? .applicationSwitching
