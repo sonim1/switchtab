@@ -25,7 +25,8 @@ assert(workflow.fetch("on") == {
     "branches" => ["main"],
     "paths" => ["docs/**"],
   },
-}, "deployment must run only for docs changes pushed to main")
+  "workflow_dispatch" => nil,
+}, "deployment must run only for docs changes pushed to main, plus an explicit manual redeploy")
 assert(workflow["permissions"] == {"contents" => "read"}, "workflow permissions must be read-only")
 assert(workflow.fetch("concurrency") == {
   "group" => "switchtab-landing-${{ github.ref }}",
@@ -44,6 +45,7 @@ assert(node && node["uses"] == "actions/setup-node@820762786026740c76f36085b0efc
 assert(node.fetch("with")["node-version"] == "24.18.0", "Node version must be pinned")
 assert(deploy, "deployment step must exist")
 assert(deploy.fetch("env")["CLOUDFLARE_API_TOKEN"] == "${{ secrets.CLOUDFLARE_API_TOKEN }}", "Cloudflare token must come from a GitHub secret")
+assert(deploy.fetch("env")["CLOUDFLARE_ACCOUNT_ID"] == "${{ vars.CLOUDFLARE_ACCOUNT_ID }}", "Cloudflare account must be passed explicitly: a Pages-scoped token cannot enumerate accounts")
 command = deploy.fetch("run")
 assert(command.include?("npx wrangler pages deploy docs"), "deployment must publish docs")
 assert(command.include?("--project-name switchtab-landing"), "deployment must target switchtab-landing")
