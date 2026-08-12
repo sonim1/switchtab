@@ -13,6 +13,7 @@
 - Application switching defaults to Command-Tab. Fresh installs enable both switchers; upgrades preserve an explicit legacy application-switcher choice and otherwise leave application switching off.
 - Each mode can be enabled or disabled independently and assigned its own shortcut in Settings > Shortcuts. Shift reverses traversal for the active shortcut.
 - Holding the shortcut modifier opens the overlay and repeated presses advance selection. Releasing the modifier confirms the selected window or application; clicking an item confirms it immediately.
+- While the modifier stays held, the other mode's key hands the same session to that mode. From application mode it lists the windows of the highlighted application; from window mode it returns to the application list, resumes the application that was left, and advances one step (Shift reverses). The alternate mode is matched on key code alone and only while that mode is enabled and registered.
 - Window mode shows standard, visible windows for the current application. Application mode shows eligible running applications in a compact icon strip.
 - In application mode, only the selected app shows its centered name below the icon. Its blue selection outline covers the icon tile, not the caption. A window count appears only for apps with at least two standard windows.
 - Arrow keys follow the overlay's visual grid. Escape cancels. Command-Q in application mode asks the selected app to quit normally; its tile remains until the process exits.
@@ -28,7 +29,7 @@
 - `WindowFocusService.swift` focuses windows; `ApplicationActivationService.swift` activates applications without making SwitchTab the lasting frontmost app.
 - `WindowThumbnailService.swift` uses ScreenCaptureKit for previews. `ApplicationIconStore.swift` loads application icons without Screen Recording permission.
 - `SwitcherSession.swift`, `SwitcherPresentationSnapshot.swift`, and the overlay state/presentation types hold stable selection while asynchronous content changes.
-- `SwitcherRecencyStore.swift` persists separate most-recently-used orderings for window and application modes.
+- `SwitcherRecencyStore.swift` persists separate most-recently-used orderings for window and application modes. `SwitcherModeSwitchMemory.swift` holds one session's per-mode highlight so a mode switch resumes instead of restarting.
 - `SwitchTab/UI/Overlay/`, `UI/Settings/`, `UI/MenuBar/`, `UI/Permissions/`, and `UI/About/` own presentation only; reusable behavior should remain SwiftPM-visible in Models or Services.
 
 ## Durable Invariants
@@ -38,6 +39,7 @@
 - Opening the overlay does not commit a choice. Commit happens on modifier release or direct click; cancellation must not change focus or MRU order.
 - A confirmed window choice focuses that exact window. A confirmed application choice activates the selected application and hands focus away from SwitchTab.
 - Window and application MRU histories remain independent. Failed or cancelled activations do not promote an item.
+- A mode switch commits nothing: it keeps the panel, the event tap, and the modifiers that opened the session, so releasing them still confirms. A switch that finds no windows, no permission, or an unregistered target mode leaves the live session untouched. Resume memory lives for one held-modifier session and is cleared on dismissal.
 - Selection identity is stable across thumbnail/icon updates and candidate refreshes. Presentation updates must not cause panel-height or tile-position jumps.
 - In application mode, unselected tiles do not reserve caption space beyond the stable shared layout; the selected caption is centered below its icon.
 - Only standard user-facing windows count toward application badges. Hide the badge for zero or one window.

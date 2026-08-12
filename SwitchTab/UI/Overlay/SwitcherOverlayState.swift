@@ -135,6 +135,14 @@ public struct SwitcherOverlayState: Equatable, Sendable {
             }
 
             return confirm(selectedItem, index: activeSession.selectedIndex)
+        case .switchMode(let reverse):
+            // The composition root owns mode availability and item discovery, so
+            // the session stays untouched until it actually swaps modes.
+            guard session != nil else {
+                return .none
+            }
+
+            return .modeSwitchRequested(reverse: reverse)
         case .cancel:
             guard session != nil else {
                 return .none
@@ -220,12 +228,23 @@ public enum SwitcherCommand: Equatable, Sendable {
     case cancel
     case closeSelected
     case quitSelectedApplication
+    /// Hands the live session to the other switching mode. `reverse` carries the
+    /// Shift state so the arriving mode knows which way to advance.
+    case switchMode(reverse: Bool)
 }
 
 public extension SwitcherCommand {
     /// Holding the key must not fire this command repeatedly.
     var repeatsAreDestructive: Bool {
         self == .closeSelected || self == .quitSelectedApplication
+    }
+
+    var isModeSwitch: Bool {
+        if case .switchMode = self {
+            return true
+        }
+
+        return false
     }
 
     /// Key code 13 is `W`; it only closes while a modifier is held so the
@@ -261,6 +280,7 @@ public enum SwitcherInteractionResult: Equatable, Sendable {
     case cancelled
     case closeRequested(item: SwitcherListItem, index: Int)
     case quitRequested(item: SwitcherListItem, index: Int)
+    case modeSwitchRequested(reverse: Bool)
 }
 
 public struct SwitcherShortcutModifiers: OptionSet, Equatable, Sendable {

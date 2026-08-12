@@ -143,6 +143,21 @@ public struct AccessibilityWindowProvider {
         ) ?? []
     }
 
+    /// Lists the windows of any running application, not only the frontmost
+    /// one, so window switching can follow the application highlighted in the
+    /// application overlay.
+    public func applicationWindows(
+        ownerProcessIdentifier: Int,
+        ownerName: String?,
+        includeScreenCaptureIdentifiers: Bool = true
+    ) -> [WindowItem] {
+        windows(
+            ownerProcessIdentifier: ownerProcessIdentifier,
+            ownerName: ownerName,
+            includeScreenCaptureIdentifiers: includeScreenCaptureIdentifiers
+        ) ?? []
+    }
+
     public func applicationWindowCount(ownerProcessIdentifier: Int) -> Int? {
         windowSnapshotProvider.windowCount(ownerProcessIdentifier: ownerProcessIdentifier)
     }

@@ -95,6 +95,24 @@ enum SwitcherOverlayTriggerPolicy {
     }
 }
 
+enum SwitcherOverlayModeSwitchPolicy {
+    /// The alternate mode is matched on key code alone: the user is already
+    /// holding the active mode's modifiers, so requiring the alternate
+    /// shortcut's own modifiers would make the toggle unreachable whenever the
+    /// two modes use different ones. Shift only chooses the arrival direction.
+    static func command(
+        keyCode: UInt16,
+        modifiers: SwitcherShortcutModifiers,
+        alternateModeKeyCode: UInt16?
+    ) -> SwitcherCommand? {
+        guard let alternateModeKeyCode, keyCode == alternateModeKeyCode else {
+            return nil
+        }
+
+        return .switchMode(reverse: modifiers.contains(.shift))
+    }
+}
+
 enum SwitcherOverlayEventTapPolicy {
     static let eventMask = CGEventMask(1 << CGEventType.keyDown.rawValue)
         | CGEventMask(1 << CGEventType.flagsChanged.rawValue)
@@ -105,7 +123,8 @@ enum SwitcherOverlayEventTapPolicy {
         isAutorepeat: Bool,
         modifiers: SwitcherShortcutModifiers = [],
         triggerReleaseModifiers: SwitcherShortcutModifiers? = nil,
-        triggerShortcut: ShortcutSetting? = nil
+        triggerShortcut: ShortcutSetting? = nil,
+        alternateModeKeyCode: UInt16? = nil
     ) -> SwitcherOverlayEventTapDecision {
         switch eventType {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
@@ -125,6 +144,15 @@ enum SwitcherOverlayEventTapPolicy {
                 triggerShortcut: triggerShortcut
             ) {
                 return .consume(triggerCommand)
+            }
+            // Checked after the active trigger so a key code shared by both
+            // modes keeps its in-mode meaning.
+            if let modeSwitchCommand = SwitcherOverlayModeSwitchPolicy.command(
+                keyCode: keyCode,
+                modifiers: modifiers,
+                alternateModeKeyCode: alternateModeKeyCode
+            ) {
+                return .consume(modeSwitchCommand)
             }
             guard let command = SwitcherCommand(keyCode: keyCode, modifiers: modifiers) else {
                 return .passThrough
