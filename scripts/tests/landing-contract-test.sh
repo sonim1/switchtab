@@ -10,13 +10,16 @@ for path in "$page" "$style" "$headers" "$icon"; do
   test -s "$path" || { echo "missing landing asset: $path" >&2; exit 1; }
 done
 
-test "$(rg -o '<h1\b' "$page" | wc -l | tr -d ' ')" = 1
-rg -q '<main\b' "$page"
-rg -q '<footer\b' "$page"
-rg -q 'id="how-it-works"' "$page"
-rg -q 'brew install --cask sonim1/tap/switchtab' "$page"
-! rg -qi '<script\b|tracker|analytics|http://' "$page" "$style"
-rg -q 'X-Content-Type-Options: nosniff' "$headers"
-rg -q 'X-Frame-Options: DENY' "$headers"
-rg -q 'Content-Security-Policy:' "$headers"
+test "$(grep -oE '<h1[[:space:]>]' "$page" | wc -l | tr -d ' ')" = 1
+grep -qE '<main[[:space:]>]' "$page"
+grep -qE '<footer[[:space:]>]' "$page"
+grep -q 'id="how-it-works"' "$page"
+grep -q 'brew install --cask sonim1/tap/switchtab' "$page"
+if grep -qiE '<script[[:space:]>]|tracker|analytics|http://' "$page" "$style"; then
+  echo 'landing page must stay free of scripts, trackers, and insecure URLs' >&2
+  exit 1
+fi
+grep -q 'X-Content-Type-Options: nosniff' "$headers"
+grep -q 'X-Frame-Options: DENY' "$headers"
+grep -q 'Content-Security-Policy:' "$headers"
 echo 'landing contract passed'
