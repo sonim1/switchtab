@@ -6,7 +6,7 @@ This is an operating manual. Follow it literally; when instinct and manual confl
 
 ## Ground Truth (verified)
 
-- **Package.swift:** library `SwitchTab` (path `SwitchTab/`, excludes Resources) + XCTest target `SwitchTabTests` (path `SwitchTabTests/`). **`swift test` is the supported SwiftPM test gate and currently runs 19 tests.**
+- **Package.swift:** library `SwitchTab` (path `SwitchTab/`, excludes Resources) + XCTest target `SwitchTabTests` (path `SwitchTabTests/`). **`swift test` is the supported SwiftPM test gate and currently runs 38 tests.**
 - **App source (`SwitchTab/`):** `AppDelegate.swift` (~15K — core wiring), `SwitchTabApp.swift`, `Models/`, `Services/` (window/shortcut logic), `UI/`, `Resources/` (Info.plist, entitlements, MenuBarIcon, Assets).
 - **Tests (`SwitchTabTests/`):** one XCTest target with two test styles. Most model/service/support suites are legacy enums or structs exposing static `run()` methods; root `SwitchTabTests/TestRunner.swift` invokes them from one `XCTestCase`. `PermissionRecoveryActivationWaiterTests` and `PermissionRecoveryAsyncTests` are native `XCTestCase` classes and are discovered directly by XCTest.
 - **App builds via Xcode:** `SwitchTab.xcodeproj`, scheme `SwitchTab` (app), `SwitchTabTests` scheme for Xcode-side tests. Full verification = `swift test` + unsigned arm64 Xcode Debug app build when Xcode is available.
@@ -19,7 +19,7 @@ This is an operating manual. Follow it literally; when instinct and manual confl
 
 ```bash
 swift build                        # SwiftPM library build
-swift test                         # SwiftPM test gate (19 tests at last verification)
+swift test                         # SwiftPM test gate (38 tests at last verification)
 # Xcode (when available): build SwitchTab scheme (Debug), test SwitchTabTests scheme
 SPARKLE_PUBLIC_ED_KEY=dummy scripts/build-direct-distribution.sh --prepare-only
 ```
