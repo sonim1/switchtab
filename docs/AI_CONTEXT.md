@@ -17,7 +17,7 @@
 - Window mode shows standard, visible windows for the current application. Application mode shows eligible running applications in a compact icon strip.
 - In application mode, only the selected app shows its centered name below the icon. Its blue selection outline covers the icon tile, not the caption. A window count appears only for apps with at least two standard windows.
 - Arrow keys follow the overlay's visual grid. Escape cancels. Command-Q in application mode asks the selected app to quit normally; its tile remains until the process exits.
-- Overlay size is user-adjustable. Window thumbnails load asynchronously and improve adaptively without moving selection.
+- Overlay size is user-adjustable. Window thumbnails load on demand for selected and visible tiles without moving selection; unavailable previews keep the existing icon placeholder.
 
 ## Architecture
 
@@ -27,7 +27,7 @@
 - `SwitchTab/Services/HotkeyService.swift` handles the current-app window shortcut. `ApplicationSwitchingHotkeyController.swift` handles application shortcut interception and restores native behavior when it is inactive.
 - `AccessibilityWindowProvider.swift` and `RunningApplicationProvider.swift` discover window and application candidates. Filtering policy belongs with discovery/presentation logic, not in SwiftUI views.
 - `WindowFocusService.swift` focuses windows; `ApplicationActivationService.swift` activates applications without making SwitchTab the lasting frontmost app.
-- `WindowThumbnailService.swift` uses ScreenCaptureKit for previews. `ApplicationIconStore.swift` loads application icons without Screen Recording permission.
+- `WindowThumbnailService.swift` uses ScreenCaptureKit for previews with one capture in flight, bounded request batches, and an LRU memory cache. `ApplicationIconStore.swift` loads application icons without Screen Recording permission.
 - `SwitcherSession.swift`, `SwitcherPresentationSnapshot.swift`, and the overlay state/presentation types hold stable selection while asynchronous content changes.
 - `SwitcherRecencyStore.swift` persists separate most-recently-used orderings for window and application modes. `SwitcherModeSwitchMemory.swift` holds one session's per-mode highlight so a mode switch resumes instead of restarting.
 - `SwitchTab/UI/Overlay/`, `UI/Settings/`, `UI/MenuBar/`, `UI/Permissions/`, and `UI/About/` own presentation only; reusable behavior should remain SwiftPM-visible in Models or Services.
@@ -41,6 +41,7 @@
 - Window and application MRU histories remain independent. Failed or cancelled activations do not promote an item.
 - A mode switch commits nothing: it keeps the panel, the event tap, and the modifiers that opened the session, so releasing them still confirms. A switch that finds no windows, no permission, or an unregistered target mode leaves the live session untouched. Resume memory lives for one held-modifier session and is cleared on dismissal.
 - Selection identity is stable across thumbnail/icon updates and candidate refreshes. Presentation updates must not cause panel-height or tile-position jumps.
+- Thumbnail work is demand-driven and bounded: selected items precede visible items, capture stays serial, pending work is capped, and cached encoded/decoded image cost is evicted by LRU. Dismissal, generation changes, and critical memory pressure discard stale work; warning pressure trims the cache.
 - In application mode, unselected tiles do not reserve caption space beyond the stable shared layout; the selected caption is centered below its icon.
 - Only standard user-facing windows count toward application badges. Hide the badge for zero or one window.
 - Accessibility denial must degrade safely; never consume a replacement shortcut when SwitchTab cannot complete its switching action.
@@ -61,6 +62,7 @@
 - Defaults are Command-Backtick for current-app windows and Command-Tab for applications. Their reverse variants add Shift.
 - `ApplicationSettingsStore.swift` persists launch-at-login, menu-bar visibility, overlay size, update-check preferences, and migration state.
 - Registration errors are persisted per mode so Settings can explain why a saved shortcut is not active.
+- Settings hides the permission status pill while both permissions are healthy and shows it only when user action is required.
 
 ## Updates and Releases
 
