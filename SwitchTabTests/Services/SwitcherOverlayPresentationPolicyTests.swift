@@ -22,6 +22,7 @@ enum SwitcherOverlayPresentationPolicyTests {
         try testEventTapOwnerLifecycleAndExactOnceDispatch()
         try testEventTapOwnerInstallFailureAndReplacementAreSafe()
         try testControllerWiresDiagnosticsReplacementAndInstallFailure()
+        try testControllerRequestsSelectedThumbnailOnPresentationAndNavigation()
         try testOverlayControllerBuildsApplicationIconStoreInsideMainActorInitializer()
         try testCommandWClosesSelectedWindowAndKeepsOverlayUp()
         try testClosingTheLastWindowDismissesOverlay()
@@ -480,6 +481,33 @@ enum SwitcherOverlayPresentationPolicyTests {
             [.presented(itemCount: 1, selectedIndex: 0, tapInstalled: false)]
         )
         fallbackController.dismiss()
+    }
+
+    static func testControllerRequestsSelectedThumbnailOnPresentationAndNavigation() throws {
+        let backend = RecordingSwitcherOverlayEventTapBackend()
+        let controller = SwitcherOverlayController(
+            thumbnailStore: WindowThumbnailStore(),
+            eventTapBackend: backend,
+            eventSink: RecordingSwitcherOverlayEventSink()
+        )
+        let items = closeTestItems(count: 3)
+        var requestedIDs: [String] = []
+
+        controller.present(
+            mode: .currentAppWindowSwitching,
+            items: items,
+            selectedIndex: 1,
+            onThumbnailDemand: { item, priority in
+                guard priority == .selected else {
+                    return
+                }
+                requestedIDs.append(item.id)
+            }
+        )
+        _ = controller.handle(.moveDown)
+
+        try expectEqual(requestedIDs, [items[1].id, items[2].id])
+        controller.dismiss()
     }
 
     static func testCommandWClosesSelectedWindowAndKeepsOverlayUp() throws {

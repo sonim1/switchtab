@@ -10,6 +10,7 @@ struct SwitcherIconStripView: View {
     private let onConfirm: (SwitcherListItem, Int) -> Void
     private let onClose: (SwitcherListItem, Int) -> Void
     private let onHover: (Int) -> Void
+    private let onThumbnailDemand: (SwitcherListItem) -> Void
     private let hoverEnabled: Bool
     private let scrollToken: Int
     private let requiresSelectionScrolling: Bool
@@ -33,7 +34,8 @@ struct SwitcherIconStripView: View {
         applicationIconStore: ApplicationIconStore,
         onConfirm: @escaping (SwitcherListItem, Int) -> Void,
         onClose: @escaping (SwitcherListItem, Int) -> Void,
-        onHover: @escaping (Int) -> Void
+        onHover: @escaping (Int) -> Void,
+        onThumbnailDemand: @escaping (SwitcherListItem) -> Void = { _ in }
     ) {
         self.items = items
         self.selectedIndex = selectedIndex
@@ -50,6 +52,7 @@ struct SwitcherIconStripView: View {
         self.onConfirm = onConfirm
         self.onClose = onClose
         self.onHover = onHover
+        self.onThumbnailDemand = onThumbnailDemand
     }
 
     var body: some View {
@@ -77,6 +80,9 @@ struct SwitcherIconStripView: View {
                                 onHover: onHover
                             )
                             .id(item.id)
+                            .onAppear {
+                                onThumbnailDemand(item)
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity)

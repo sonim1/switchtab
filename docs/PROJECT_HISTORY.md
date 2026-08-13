@@ -181,6 +181,22 @@ Forcing new SwiftUI identities/root-view layout, a fixed larger capture, progres
 ### Verification Evidence
 Presentation-model observation, target sizing/aspect ratios, cancellation/cache, close-first/middle/last, delayed destruction, hover gating, scroll-token, and About formatting are covered in `SwitchTabTests/`. Released v1.0.6 and v1.0.9 provide distribution evidence; visual clarity remains a manual comparison.
 
+## Demand-Driven Bounded Window Previews
+
+**Status:** Implemented on 2026-08-13. **Evidence:** thumbnail queue/cache/loader tests and overlay demand tests.
+
+### Context
+Eagerly capturing and retaining every discovered window made total CPU and memory work grow with the window count. The healthy Settings permission card also spent space explaining that no action was needed.
+
+### Decision
+Request thumbnails only for the selected and currently materialized tiles. Prioritize selection, prepare at most eight windows per batch, execute one capture at a time, cap pending work at 64 requests, and retain at most 32 thumbnails or 64 MiB of estimated encoded-plus-decoded image cost with LRU eviction. Warning memory pressure trims the cache to 16 entries or 32 MiB; critical pressure cancels work and clears it. Settings renders the permission pill only when a permission needs attention.
+
+### Invariants
+Window metadata and placeholders appear immediately; missing Screen Recording permission still permits switching; stale generations cannot publish; dismissal releases queued and cached preview work; selection behavior and capture sizing are unchanged.
+
+### Verification Evidence
+Tests cover queue bounds and priority, duplicate coalescing, serial capture, eight-item batches, stale-generation discard, count/cost eviction, pressure trimming, and selected-item demand. Permission-summary tests cover healthy and action-required visibility.
+
 ## Cmd-Tab Application Switching
 
 **Status:** Shipped in v1.1.0 and evolved. **Evidence:** `85e1213`/PR #11, `ApplicationItem.swift`, `RunningApplicationProvider.swift`, `ApplicationActivationService.swift`, `ApplicationSwitchingHotkeyController.swift`, and related tests.
