@@ -14,12 +14,12 @@ const wranglerLock = packageLock.packages?.['node_modules/wrangler'];
 const sharpLock = packageLock.packages?.['node_modules/sharp'];
 
 assert.equal(packageJson.private, true, 'package.json must be private');
-assert.equal(packageJson.devDependencies?.wrangler, '4.112.0', 'package.json must pin Wrangler to 4.112.0');
+assert.equal(packageJson.devDependencies?.wrangler, '4.122.0', 'package.json must pin Wrangler to 4.122.0');
 assert.equal(packageJson.overrides?.sharp, '0.35.3', 'package.json must override sharp to patched 0.35.3');
-assert.equal(packageLock.packages?.['']?.devDependencies?.wrangler, '4.112.0', 'package-lock root must pin Wrangler to 4.112.0');
+assert.equal(packageLock.packages?.['']?.devDependencies?.wrangler, '4.122.0', 'package-lock root must pin Wrangler to 4.122.0');
 assert.ok(wranglerLock, 'package-lock must contain node_modules/wrangler');
-assert.equal(wranglerLock.version, '4.112.0', 'locked Wrangler version must be 4.112.0');
-assert.equal(wranglerLock.resolved, 'https://registry.npmjs.org/wrangler/-/wrangler-4.112.0.tgz', 'locked Wrangler resolved URL is incorrect');
+assert.equal(wranglerLock.version, '4.122.0', 'locked Wrangler version must be 4.122.0');
+assert.equal(wranglerLock.resolved, 'https://registry.npmjs.org/wrangler/-/wrangler-4.122.0.tgz', 'locked Wrangler resolved URL is incorrect');
 assert.equal(typeof wranglerLock.integrity, 'string', 'locked Wrangler integrity must be a string');
 assert.ok(wranglerLock.integrity.length > 0, 'locked Wrangler integrity must be non-empty');
 assert.match(wranglerLock.integrity, /^sha512-/, 'locked Wrangler integrity must begin with sha512-');
