@@ -8,6 +8,7 @@ enum ShortcutSettingsViewModelPermissionTests {
         try testViewModelDoesNotPublishUnchangedPermissionState()
         try testPermissionSummaryReportsReadyWhenAllPermissionsGranted()
         try testPermissionSummaryCountsMissingPermissions()
+        try testPermissionSummaryOnlyShowsStatusPillWhenActionIsNeeded()
     }
 
     static func testViewModelRefreshesPermissionState() throws {
@@ -65,6 +66,18 @@ enum ShortcutSettingsViewModelPermissionTests {
         try expectEqual(summary.detail, "Focus and previews need access.")
         try expectEqual(summary.symbolName, "exclamationmark.triangle.fill")
         try expectEqual(summary.isReady, false)
+    }
+
+    static func testPermissionSummaryOnlyShowsStatusPillWhenActionIsNeeded() throws {
+        let ready = SettingsPermissionSummary(
+            permissionState: PermissionState(accessibility: .granted, screenRecording: .granted)
+        )
+        let missingPreview = SettingsPermissionSummary(
+            permissionState: PermissionState(accessibility: .granted, screenRecording: .missing)
+        )
+
+        try expectEqual(ready.showsStatusPill, false)
+        try expectEqual(missingPreview.showsStatusPill, true)
     }
 
     private static func makeDefaults() -> UserDefaults {

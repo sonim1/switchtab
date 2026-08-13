@@ -115,6 +115,10 @@ public struct SettingsPermissionSummary: Equatable, Sendable {
     public let symbolName: String
     public let isReady: Bool
 
+    public var showsStatusPill: Bool {
+        !isReady
+    }
+
     public init(permissionState: PermissionState) {
         let missingCount = [
             permissionState.blocksFocusChanges,

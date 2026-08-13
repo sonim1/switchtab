@@ -144,8 +144,10 @@ private struct SettingsHeader: View {
 
             Spacer(minLength: 20)
 
-            SettingsStatusPill(summary: summary)
-                .layoutPriority(1)
+            if summary.showsStatusPill {
+                SettingsStatusPill(summary: summary)
+                    .layoutPriority(1)
+            }
         }
         .padding(.horizontal, 24)
         .padding(.top, 22)
