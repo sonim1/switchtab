@@ -8,9 +8,17 @@ import UniformTypeIdentifiers
 
 public struct WindowThumbnail: Equatable, Sendable {
     public let pngData: Data
+    public let pixelWidth: Int
+    public let pixelHeight: Int
 
-    public init(pngData: Data) {
+    public init(pngData: Data, pixelWidth: Int = 0, pixelHeight: Int = 0) {
         self.pngData = pngData
+        self.pixelWidth = max(0, pixelWidth)
+        self.pixelHeight = max(0, pixelHeight)
+    }
+
+    var estimatedCost: Int {
+        pngData.count + (pixelWidth * pixelHeight * 4)
     }
 }
 
@@ -75,10 +83,42 @@ public final class WindowThumbnailStore: ObservableObject {
 
     private var thumbnails: [String: WindowThumbnail] = [:]
     private var decodedImages: [String: CachedThumbnailImage] = [:]
+    private var accessOrder: [String] = []
+    private let maximumEntryCount: Int
+    private let maximumEstimatedCost: Int
+    private let memoryPressureEntryCount: Int
+    private let memoryPressureEstimatedCost: Int
 
-    public init() {}
+    public init(
+        maximumEntryCount: Int = 32,
+        maximumEstimatedCost: Int = 64 * 1_024 * 1_024,
+        memoryPressureEntryCount: Int = 16,
+        memoryPressureEstimatedCost: Int = 32 * 1_024 * 1_024
+    ) {
+        self.maximumEntryCount = max(1, maximumEntryCount)
+        self.maximumEstimatedCost = max(1, maximumEstimatedCost)
+        self.memoryPressureEntryCount = max(0, min(memoryPressureEntryCount, maximumEntryCount))
+        self.memoryPressureEstimatedCost = max(0, min(memoryPressureEstimatedCost, maximumEstimatedCost))
+    }
+
+    var cachedKeys: [String] {
+        thumbnails.keys.sorted()
+    }
+
+    var cachedEntryCount: Int {
+        thumbnails.count
+    }
+
+    var estimatedCost: Int {
+        thumbnails.values.reduce(0) { $0 + $1.estimatedCost }
+    }
+
+    func containsThumbnail(for key: String) -> Bool {
+        thumbnails[key] != nil
+    }
 
     public func image(for key: String) -> NSImage? {
+        touch(key)
         if let cachedImage = decodedImages[key] {
             switch cachedImage {
             case .decoded(let image):
@@ -101,6 +141,22 @@ public final class WindowThumbnailStore: ObservableObject {
         return image
     }
 
+    public func setThumbnail(_ thumbnail: WindowThumbnail, for key: String) {
+        if thumbnails[key] == thumbnail {
+            touch(key)
+            return
+        }
+
+        objectWillChange.send()
+        thumbnails[key] = thumbnail
+        decodedImages.removeValue(forKey: key)
+        touch(key)
+        evictIfNeeded(
+            maximumEntryCount: maximumEntryCount,
+            maximumEstimatedCost: maximumEstimatedCost
+        )
+    }
+
     public func setThumbnails(_ thumbnailsByKey: [String: WindowThumbnail]) {
         guard !thumbnailsByKey.isEmpty else {
             clear()
@@ -119,6 +175,27 @@ public final class WindowThumbnailStore: ObservableObject {
             }
         }
         thumbnails = thumbnailsByKey
+        accessOrder = accessOrder.filter { thumbnailsByKey[$0] != nil }
+        for key in thumbnailsByKey.keys.sorted() where !accessOrder.contains(key) {
+            accessOrder.append(key)
+        }
+        evictIfNeeded(
+            maximumEntryCount: maximumEntryCount,
+            maximumEstimatedCost: maximumEstimatedCost
+        )
+    }
+
+    public func trimForMemoryPressure() {
+        guard thumbnails.count > memoryPressureEntryCount
+                || estimatedCost > memoryPressureEstimatedCost else {
+            return
+        }
+
+        objectWillChange.send()
+        evictIfNeeded(
+            maximumEntryCount: memoryPressureEntryCount,
+            maximumEstimatedCost: memoryPressureEstimatedCost
+        )
     }
 
     public func clear() {
@@ -129,6 +206,103 @@ public final class WindowThumbnailStore: ObservableObject {
         objectWillChange.send()
         thumbnails.removeAll(keepingCapacity: true)
         decodedImages.removeAll(keepingCapacity: true)
+        accessOrder.removeAll(keepingCapacity: true)
+    }
+
+    private func touch(_ key: String) {
+        guard thumbnails[key] != nil else {
+            return
+        }
+
+        accessOrder.removeAll { $0 == key }
+        accessOrder.append(key)
+    }
+
+    private func evictIfNeeded(maximumEntryCount: Int, maximumEstimatedCost: Int) {
+        while thumbnails.count > maximumEntryCount || estimatedCost > maximumEstimatedCost {
+            guard let key = accessOrder.first else {
+                thumbnails.removeAll(keepingCapacity: true)
+                decodedImages.removeAll(keepingCapacity: true)
+                return
+            }
+
+            accessOrder.removeFirst()
+            thumbnails.removeValue(forKey: key)
+            decodedImages.removeValue(forKey: key)
+        }
+    }
+}
+
+enum WindowThumbnailRequestPriority: Equatable, Sendable {
+    case visible
+    case selected
+}
+
+struct WindowThumbnailRequestQueue: Sendable {
+    private let maximumCount: Int
+    private let batchSize: Int
+    private var selected: [WindowItem] = []
+    private var visible: [WindowItem] = []
+
+    init(maximumCount: Int = 64, batchSize: Int = 8) {
+        self.maximumCount = max(1, maximumCount)
+        self.batchSize = max(1, min(batchSize, maximumCount))
+    }
+
+    var count: Int {
+        selected.count + visible.count
+    }
+
+    mutating func enqueue(_ window: WindowItem, priority: WindowThumbnailRequestPriority) {
+        let wasSelected = remove(windowID: window.id, from: &selected)
+        let wasVisible = remove(windowID: window.id, from: &visible)
+
+        switch priority {
+        case .selected:
+            if count >= maximumCount {
+                if !visible.isEmpty {
+                    visible.removeFirst()
+                } else if !selected.isEmpty {
+                    selected.removeLast()
+                }
+            }
+            selected.insert(window, at: 0)
+        case .visible:
+            if wasSelected {
+                selected.insert(window, at: 0)
+                return
+            }
+            guard wasVisible || count < maximumCount else {
+                return
+            }
+            visible.append(window)
+        }
+    }
+
+    mutating func dequeueBatch() -> [WindowItem] {
+        var batch: [WindowItem] = []
+        batch.reserveCapacity(min(batchSize, count))
+
+        while batch.count < batchSize, !selected.isEmpty {
+            batch.append(selected.removeFirst())
+        }
+        while batch.count < batchSize, !visible.isEmpty {
+            batch.append(visible.removeFirst())
+        }
+        return batch
+    }
+
+    mutating func clear() {
+        selected.removeAll(keepingCapacity: true)
+        visible.removeAll(keepingCapacity: true)
+    }
+
+    private func remove(windowID: String, from windows: inout [WindowItem]) -> Bool {
+        guard let index = windows.firstIndex(where: { $0.id == windowID }) else {
+            return false
+        }
+        windows.remove(at: index)
+        return true
     }
 }
 
@@ -136,6 +310,10 @@ public final class WindowThumbnailStore: ObservableObject {
 public final class WindowThumbnailLoader {
     private let store: WindowThumbnailStore
     private let capturer: any WindowThumbnailCapturing
+    private var requestQueue = WindowThumbnailRequestQueue()
+    private var activeWindowIDs: Set<String> = []
+    private var previewsAllowed = false
+    private var viewportPixelSize = CGSize(width: 240, height: 165)
     private var refreshTask: Task<Void, Never>?
     private var refreshGeneration = 0
 
@@ -152,197 +330,113 @@ public final class WindowThumbnailLoader {
         permissionState: PermissionState,
         viewportPixelSize: CGSize = CGSize(width: 240, height: 165)
     ) {
-        cancel()
-
-        guard !permissionState.blocksWindowPreviews else {
-            store.clear()
-            return
-        }
-
-        guard let firstCapturableWindow = Self.firstCapturableWindow(in: windows) else {
-            store.clear()
-            return
-        }
-
-        guard let secondCapturableWindow = Self.nextCapturableWindow(in: windows, after: firstCapturableWindow.index) else {
-            refreshSingleCapturableWindow(
-                windows[firstCapturableWindow.index],
-                screenCaptureIdentifier: firstCapturableWindow.screenCaptureIdentifier,
-                viewportPixelSize: viewportPixelSize
-            )
-            return
-        }
-
-        let capturer = capturer
-        let store = store
-        let refreshGeneration = nextRefreshGeneration()
-        refreshTask = Task.detached { [weak self, windows, capturer, store, viewportPixelSize, refreshGeneration] in
-            guard !Task.isCancelled else {
-                return
-            }
-
-            var screenCaptureIdentifiers: [CGWindowID] = []
-            screenCaptureIdentifiers.reserveCapacity(windows.count - firstCapturableWindow.index)
-            screenCaptureIdentifiers.append(firstCapturableWindow.screenCaptureIdentifier)
-            screenCaptureIdentifiers.append(secondCapturableWindow.screenCaptureIdentifier)
-
-            let nextWindowIndex = windows.index(after: secondCapturableWindow.index)
-            for index in nextWindowIndex..<windows.count {
-                guard !Task.isCancelled else {
-                    return
-                }
-
-                if let screenCaptureIdentifier = Self.screenCaptureIdentifier(for: windows[index]) {
-                    screenCaptureIdentifiers.append(screenCaptureIdentifier)
-                }
-            }
-
-            guard !Task.isCancelled else {
-                return
-            }
-
-            await capturer.prepareForRefresh(windowIdentifiers: screenCaptureIdentifiers)
-            var thumbnailsByKey: [String: WindowThumbnail] = [:]
-            thumbnailsByKey.reserveCapacity(screenCaptureIdentifiers.count)
-
-            let firstWindowIndex = firstCapturableWindow.index
-            for index in firstWindowIndex..<windows.count {
-                guard !Task.isCancelled else {
-                    return
-                }
-
-                let window = windows[index]
-                guard Self.screenCaptureIdentifier(for: window) != nil else {
-                    continue
-                }
-
-                guard let thumbnail = await capturer.captureThumbnail(for: window, viewportPixelSize: viewportPixelSize) else {
-                    continue
-                }
-
-                guard !Task.isCancelled else {
-                    return
-                }
-
-                thumbnailsByKey[window.id] = thumbnail
-            }
-
-            guard !Task.isCancelled else {
-                return
-            }
-
-            let completedThumbnails = thumbnailsByKey
-            await MainActor.run { [weak self, completedThumbnails, store, refreshGeneration] in
-                guard !Task.isCancelled else {
-                    return
-                }
-
-                store.setThumbnails(completedThumbnails)
-                self?.clearRefreshTask(ifCurrent: refreshGeneration)
-            }
+        beginRefresh(permissionState: permissionState, viewportPixelSize: viewportPixelSize)
+        for window in windows {
+            requestThumbnail(for: window, priority: .visible)
         }
     }
 
-    private func refreshSingleCapturableWindow(
-        _ window: WindowItem,
-        screenCaptureIdentifier: CGWindowID,
-        viewportPixelSize: CGSize
+    public func beginRefresh(
+        permissionState: PermissionState,
+        viewportPixelSize: CGSize = CGSize(width: 240, height: 165)
     ) {
-        let capturer = capturer
-        let store = store
-        let refreshGeneration = nextRefreshGeneration()
-        refreshTask = Task.detached { [weak self, capturer, store, viewportPixelSize, window, screenCaptureIdentifier, refreshGeneration] in
-            guard !Task.isCancelled else {
-                return
-            }
+        refreshGeneration += 1
+        requestQueue.clear()
+        activeWindowIDs.removeAll(keepingCapacity: true)
+        previewsAllowed = !permissionState.blocksWindowPreviews
+        self.viewportPixelSize = viewportPixelSize
+        refreshTask?.cancel()
+        store.clear()
+    }
 
-            await capturer.prepareForRefresh(windowIdentifier: screenCaptureIdentifier)
-            guard !Task.isCancelled else {
-                return
-            }
-
-            guard let thumbnail = await capturer.captureThumbnail(for: window, viewportPixelSize: viewportPixelSize) else {
-                await MainActor.run { [weak self, store, refreshGeneration] in
-                    guard !Task.isCancelled else {
-                        return
-                    }
-
-                    store.clear()
-                    self?.clearRefreshTask(ifCurrent: refreshGeneration)
-                }
-                return
-            }
-
-            guard !Task.isCancelled else {
-                return
-            }
-
-            await MainActor.run { [weak self, store, window, thumbnail, refreshGeneration] in
-                guard !Task.isCancelled else {
-                    return
-                }
-
-                store.setThumbnails([window.id: thumbnail])
-                self?.clearRefreshTask(ifCurrent: refreshGeneration)
-            }
+    func requestThumbnail(
+        for window: WindowItem,
+        priority: WindowThumbnailRequestPriority
+    ) {
+        guard previewsAllowed,
+              Self.screenCaptureIdentifier(for: window) != nil,
+              !store.containsThumbnail(for: window.id),
+              !activeWindowIDs.contains(window.id) else {
+            return
         }
+
+        requestQueue.enqueue(window, priority: priority)
+        startWorkerIfNeeded()
     }
 
     public func waitForCurrentRefresh() async {
-        await refreshTask?.value
+        while let refreshTask {
+            await refreshTask.value
+        }
     }
 
     public func cancel() {
-        guard let refreshTask else {
+        refreshGeneration += 1
+        previewsAllowed = false
+        requestQueue.clear()
+        activeWindowIDs.removeAll(keepingCapacity: true)
+        refreshTask?.cancel()
+        store.clear()
+    }
+
+    private func startWorkerIfNeeded() {
+        guard refreshTask == nil, previewsAllowed, requestQueue.count > 0 else {
             return
         }
 
-        refreshTask.cancel()
-        self.refreshTask = nil
-        refreshGeneration += 1
-    }
-
-    private func nextRefreshGeneration() -> Int {
-        refreshGeneration += 1
-        return refreshGeneration
-    }
-
-    private func clearRefreshTask(ifCurrent refreshGeneration: Int) {
-        guard self.refreshGeneration == refreshGeneration else {
-            return
+        let generation = refreshGeneration
+        refreshTask = Task { [weak self] in
+            await self?.drainRequests(generation: generation)
+            self?.finishWorker()
         }
+    }
 
+    private func drainRequests(generation: Int) async {
+        while !Task.isCancelled, generation == refreshGeneration {
+            let batch = requestQueue.dequeueBatch()
+            guard !batch.isEmpty else {
+                return
+            }
+
+            for window in batch {
+                activeWindowIDs.insert(window.id)
+            }
+
+            let identifiers = batch.compactMap(Self.screenCaptureIdentifier)
+            if identifiers.count == 1, let identifier = identifiers.first {
+                await capturer.prepareForRefresh(windowIdentifier: identifier)
+            } else {
+                await capturer.prepareForRefresh(windowIdentifiers: identifiers)
+            }
+
+            guard !Task.isCancelled, generation == refreshGeneration else {
+                return
+            }
+
+            for window in batch {
+                guard !Task.isCancelled, generation == refreshGeneration else {
+                    return
+                }
+
+                let thumbnail = await capturer.captureThumbnail(
+                    for: window,
+                    viewportPixelSize: viewportPixelSize
+                )
+                guard !Task.isCancelled, generation == refreshGeneration else {
+                    return
+                }
+
+                activeWindowIDs.remove(window.id)
+                if let thumbnail {
+                    store.setThumbnail(thumbnail, for: window.id)
+                }
+            }
+        }
+    }
+
+    private func finishWorker() {
         refreshTask = nil
-    }
-
-    nonisolated private static func firstCapturableWindow(
-        in windows: [WindowItem]
-    ) -> (index: Int, screenCaptureIdentifier: CGWindowID)? {
-        for index in windows.indices {
-            if let screenCaptureIdentifier = screenCaptureIdentifier(for: windows[index]) {
-                return (index, screenCaptureIdentifier)
-            }
-        }
-
-        return nil
-    }
-
-    nonisolated private static func nextCapturableWindow(
-        in windows: [WindowItem],
-        after index: Int
-    ) -> (index: Int, screenCaptureIdentifier: CGWindowID)? {
-        let nextIndex = windows.index(after: index)
-        guard nextIndex < windows.endIndex else {
-            return nil
-        }
-
-        for index in nextIndex..<windows.count {
-            if let screenCaptureIdentifier = screenCaptureIdentifier(for: windows[index]) {
-                return (index, screenCaptureIdentifier)
-            }
-        }
-
-        return nil
+        startWorkerIfNeeded()
     }
 
     nonisolated private static func screenCaptureIdentifier(for window: WindowItem) -> CGWindowID? {
@@ -448,7 +542,11 @@ public actor ScreenCaptureKitWindowThumbnailCapturer: WindowThumbnailCapturing {
                 return nil
             }
 
-            return WindowThumbnail(pngData: pngData)
+            return WindowThumbnail(
+                pngData: pngData,
+                pixelWidth: image.width,
+                pixelHeight: image.height
+            )
         } catch {
             return nil
         }

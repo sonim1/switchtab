@@ -9,6 +9,7 @@ struct SwitcherOverlayRootView: View {
     private let onItemClicked: (SwitcherListItem, Int) -> Void
     private let onItemCloseClicked: (SwitcherListItem, Int) -> Void
     private let onItemHovered: (Int) -> Void
+    private let onThumbnailDemand: (SwitcherListItem) -> Void
     private let gridColumns: [GridItem]
     private let thumbnailStore: WindowThumbnailStore
     private let applicationIconStore: ApplicationIconStore
@@ -23,7 +24,8 @@ struct SwitcherOverlayRootView: View {
         applicationIconStore: ApplicationIconStore,
         onItemClicked: @escaping (SwitcherListItem, Int) -> Void,
         onItemCloseClicked: @escaping (SwitcherListItem, Int) -> Void,
-        onItemHovered: @escaping (Int) -> Void
+        onItemHovered: @escaping (Int) -> Void,
+        onThumbnailDemand: @escaping (SwitcherListItem) -> Void
     ) {
         self.presentationModel = presentationModel
         self.layoutSize = layoutSize
@@ -33,6 +35,7 @@ struct SwitcherOverlayRootView: View {
         self.onItemClicked = onItemClicked
         self.onItemCloseClicked = onItemCloseClicked
         self.onItemHovered = onItemHovered
+        self.onThumbnailDemand = onThumbnailDemand
         self.thumbnailStore = thumbnailStore
         self.applicationIconStore = applicationIconStore
     }
@@ -73,7 +76,8 @@ struct SwitcherOverlayRootView: View {
                 applicationIconStore: applicationIconStore,
                 onConfirm: onItemClicked,
                 onClose: onItemCloseClicked,
-                onHover: onItemHovered
+                onHover: onItemHovered,
+                onThumbnailDemand: onThumbnailDemand
             )
         }
     }

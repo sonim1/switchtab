@@ -19,6 +19,7 @@ final class SwitcherOverlayController {
     private var onClose: ((SwitcherListItem, UInt64) -> Void)?
     private var onQuit: ((SwitcherListItem, Int) -> Void)?
     private var onModeSwitch: ((Bool) -> Void)?
+    private var onThumbnailDemand: ((SwitcherListItem, WindowThumbnailRequestPriority) -> Void)?
     private var presentationID: UInt64 = 0
     private var triggerShortcut: ShortcutSetting?
     private var triggerReleaseModifiers: SwitcherShortcutModifiers?
@@ -79,7 +80,8 @@ final class SwitcherOverlayController {
         onClose: ((SwitcherListItem, UInt64) -> Void)? = nil,
         onQuit: ((SwitcherListItem, Int) -> Void)? = nil,
         onConfirm: ((SwitcherListItem, Int) -> Void)? = nil,
-        onModeSwitch: ((Bool) -> Void)? = nil
+        onModeSwitch: ((Bool) -> Void)? = nil,
+        onThumbnailDemand: ((SwitcherListItem, WindowThumbnailRequestPriority) -> Void)? = nil
     ) -> UInt64? {
         guard !items.isEmpty else {
             // A mode switch that finds nothing to show leaves the live session
@@ -112,6 +114,8 @@ final class SwitcherOverlayController {
         self.onClose = onClose
         self.onQuit = onQuit
         self.onModeSwitch = onModeSwitch
+        self.onThumbnailDemand = onThumbnailDemand
+        requestSelectedThumbnail()
         self.triggerShortcut = triggerShortcut
         self.alternateModeKeyCode = alternateModeKeyCode
         if !retainsSession {
@@ -167,6 +171,7 @@ final class SwitcherOverlayController {
         case .updated:
             presentationModel.advanceScrollToken()
             presentationModel.update(state)
+            requestSelectedThumbnail()
         case .confirmed, .cancelled:
             apply(result)
         case .closeRequested(let item, let index):
@@ -363,7 +368,10 @@ final class SwitcherOverlayController {
             applicationIconStore: applicationIconStore,
             onItemClicked: confirmClickedItem,
             onItemCloseClicked: closeItem,
-            onItemHovered: hoverItem
+            onItemHovered: hoverItem,
+            onThumbnailDemand: { [weak self] item in
+                self?.onThumbnailDemand?(item, .visible)
+            }
         )
 
         if let hostingController {
@@ -658,9 +666,17 @@ final class SwitcherOverlayController {
         onClose = nil
         onQuit = nil
         onModeSwitch = nil
+        onThumbnailDemand = nil
         triggerShortcut = nil
         triggerReleaseModifiers = nil
         alternateModeKeyCode = nil
+    }
+
+    private func requestSelectedThumbnail() {
+        guard let item = state.session?.selectedItem else {
+            return
+        }
+        onThumbnailDemand?(item, .selected)
     }
 
     private func endPresentation() {

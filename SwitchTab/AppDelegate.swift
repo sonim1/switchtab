@@ -1,4 +1,5 @@
 import AppKit
+import Dispatch
 
 enum AppDelegateShortcutConflictPolicy {
     static func enabledApplicationShortcuts(
@@ -237,6 +238,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     )
     private let thumbnailStore = WindowThumbnailStore()
     private var thumbnailLoader: WindowThumbnailLoader?
+    private var thumbnailMemoryPressureSource: DispatchSourceMemoryPressure?
     private var menuBarStatusItemController: MenuBarStatusItemController?
     private var settingsWindowController: SettingsWindowController?
     private var aboutWindowController: AboutWindowController?
@@ -272,6 +274,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         observeSettingsRequests()
         observeAboutRequests()
         observeUpdateCheckRequests()
+        observeThumbnailMemoryPressure()
         registerConfiguredHotkeys(shortcutStore.loadConfigurations())
         showSettingsWindowIfNeededOnLaunch()
     }
@@ -286,6 +289,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     public func applicationWillTerminate(_ _: Notification) {
         cancelThumbnailLoadingIfNeeded()
+        thumbnailMemoryPressureSource?.cancel()
+        thumbnailMemoryPressureSource = nil
         menuBarStatusItemController?.invalidate()
         menuBarStatusItemController = nil
         hotkeyService.unregisterAll()
@@ -449,6 +454,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { window in
             window.switcherListItem
         }
+        let thumbnailPointSize = SwitcherOverlayLayoutMetrics.metrics(
+            for: applicationSettingsStore.overlaySizeScale
+        ).thumbnailSize
+        let viewportPixelSize = WindowThumbnailCaptureSizing.viewportPixelSize(for: thumbnailPointSize)
+        let thumbnailLoader = thumbnailLoaderForRefresh()
+        thumbnailLoader.beginRefresh(
+            permissionState: permissionState,
+            viewportPixelSize: viewportPixelSize
+        )
         overlayController.present(
             mode: .currentAppWindowSwitching,
             items: snapshot.listItems,
@@ -492,16 +506,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onModeSwitch: { [weak self] reverse in
                 self?.switchOverlayMode(reverse: reverse)
+            },
+            onThumbnailDemand: { item, priority in
+                guard let window = snapshot.element(withID: item.id) else {
+                    return
+                }
+                thumbnailLoader.requestThumbnail(for: window, priority: priority)
             }
-        )
-        let thumbnailPointSize = SwitcherOverlayLayoutMetrics.metrics(
-            for: applicationSettingsStore.overlaySizeScale
-        ).thumbnailSize
-        let viewportPixelSize = WindowThumbnailCaptureSizing.viewportPixelSize(for: thumbnailPointSize)
-        thumbnailLoaderForRefresh().refresh(
-            windows: windows,
-            permissionState: permissionState,
-            viewportPixelSize: viewportPixelSize
         )
         return true
     }
@@ -684,6 +695,27 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func cancelThumbnailLoadingIfNeeded() {
         thumbnailLoader?.cancel()
+    }
+
+    private func observeThumbnailMemoryPressure() {
+        let source = DispatchSource.makeMemoryPressureSource(
+            eventMask: [.warning, .critical],
+            queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            guard let self,
+                  let event = self.thumbnailMemoryPressureSource?.data else {
+                return
+            }
+
+            if event.contains(.critical) {
+                self.cancelThumbnailLoadingIfNeeded()
+            } else if event.contains(.warning) {
+                self.thumbnailStore.trimForMemoryPressure()
+            }
+        }
+        thumbnailMemoryPressureSource = source
+        source.resume()
     }
 
     private func advancePresentedOverlayIfNeeded(
