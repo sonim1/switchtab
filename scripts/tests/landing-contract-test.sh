@@ -17,8 +17,10 @@ grep -q 'id="how-it-works"' "$page"
 grep -q 'class="demo-reel"' "$page"
 grep -q 'id="demo-motion-toggle"' "$page"
 grep -q 'for="demo-motion-toggle"' "$page"
-if grep -qE 'demo-motion-toggle[^>]*aria-label|demo-motion-control__(pause|play)[^>]*aria-hidden' "$page"; then
-  echo 'demo motion control must expose its current Pause or Play label' >&2
+grep -q '<span class="demo-motion-control__name">Pause demo animation</span>' "$page"
+test "$(grep -oE 'demo-motion-control__(pause|play)" aria-hidden="true"' "$page" | wc -l | tr -d ' ')" = 2
+if grep -qE 'demo-motion-toggle[^>]*aria-label' "$page"; then
+  echo 'demo motion checkbox must get its stable state label from the visible control' >&2
   exit 1
 fi
 test "$(grep -o 'class="demo-scene"' "$page" | wc -l | tr -d ' ')" = 1
