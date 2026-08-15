@@ -96,6 +96,11 @@ test "$total_bytes" -le 4194304 || {
 }
 
 grep -q -- '--demo-cycle: 9s' "$style"
+grep -q '.hero .eyebrow { justify-content: center; }' "$style"
+if grep -qE '^\.eyebrow \{[^}]*justify-content: center' "$style"; then
+  echo 'hero eyebrow centering must not affect section labels' >&2
+  exit 1
+fi
 grep -q '.demo-motion-toggle:checked ~ .demo-window' "$style"
 grep -q 'animation-play-state: paused' "$style"
 grep -q '.demo-scene { position: absolute; inset: 0; }' "$style"
