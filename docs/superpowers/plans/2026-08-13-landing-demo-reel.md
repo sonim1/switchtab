@@ -319,7 +319,7 @@ Replace `docs/index.html:27-76` with this structure. Keep all sections after the
         <div class="hero-copy">
           <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span> No swiping. No Mission Control. Just the window.</p>
           <h1 id="hero-title">Your apps,<br><em>one keystroke away.</em></h1>
-          <p class="hero-lede">SwitchTab gives your apps and windows a calm, focused shortcut. Use <kbd>⌘</kbd><kbd>Tab</kbd> for apps and <kbd>⌘</kbd><kbd>′</kbd> for windows in the app you are using.</p>
+          <p class="hero-lede">SwitchTab gives your apps and windows a calm, focused shortcut. Use <kbd>⌘</kbd><kbd>Tab</kbd> for apps and <kbd>⌘</kbd><kbd>`</kbd> for windows in the app you are using.</p>
           <div class="hero-actions">
             <a class="button button--primary" href="#install">Install SwitchTab <span aria-hidden="true">→</span></a>
             <a class="text-link" href="#how-it-works">See how it works <span aria-hidden="true">↓</span></a>
@@ -350,7 +350,7 @@ Replace `docs/index.html:27-76` with this structure. Keep all sections after the
                 <img class="demo-frame" src="demo/everyday-05-window-overlay.webp" alt="" width="1440" height="900" loading="lazy" decoding="async">
                 <img class="demo-frame" src="demo/everyday-06-github-focused.webp" alt="" width="1440" height="900" loading="lazy" decoding="async">
                 <span class="demo-hud demo-hud--apps"><kbd>⌘</kbd><kbd>Tab</kbd></span>
-                <span class="demo-hud demo-hud--windows"><small>keep holding</small><kbd>⌘</kbd><kbd>′</kbd></span>
+                <span class="demo-hud demo-hud--windows"><small>keep holding</small><kbd>⌘</kbd><kbd>`</kbd></span>
                 <span class="demo-hud demo-hud--release"><small>release</small><kbd>⌘</kbd></span>
               </div>
               <div class="demo-scene demo-scene--developer">
@@ -362,7 +362,7 @@ Replace `docs/index.html:27-76` with this structure. Keep all sections after the
                 <img class="demo-frame" src="demo/developer-05-window-overlay.webp" alt="" width="1440" height="900" loading="lazy" decoding="async">
                 <img class="demo-frame" src="demo/developer-06-code-focused.webp" alt="" width="1440" height="900" loading="lazy" decoding="async">
                 <span class="demo-hud demo-hud--apps"><kbd>⌘</kbd><kbd>Tab</kbd></span>
-                <span class="demo-hud demo-hud--windows"><small>keep holding</small><kbd>⌘</kbd><kbd>′</kbd></span>
+                <span class="demo-hud demo-hud--windows"><small>keep holding</small><kbd>⌘</kbd><kbd>`</kbd></span>
                 <span class="demo-hud demo-hud--release"><small>release</small><kbd>⌘</kbd></span>
               </div>
               <div class="demo-scene demo-scene--creative">
@@ -374,7 +374,7 @@ Replace `docs/index.html:27-76` with this structure. Keep all sections after the
                 <img class="demo-frame" src="demo/creative-05-window-overlay.webp" alt="" width="1440" height="900" loading="lazy" decoding="async">
                 <img class="demo-frame" src="demo/creative-06-design-focused.webp" alt="" width="1440" height="900" loading="lazy" decoding="async">
                 <span class="demo-hud demo-hud--apps"><kbd>⌘</kbd><kbd>Tab</kbd></span>
-                <span class="demo-hud demo-hud--windows"><small>keep holding</small><kbd>⌘</kbd><kbd>′</kbd></span>
+                <span class="demo-hud demo-hud--windows"><small>keep holding</small><kbd>⌘</kbd><kbd>`</kbd></span>
                 <span class="demo-hud demo-hud--release"><small>release</small><kbd>⌘</kbd></span>
               </div>
             </div>

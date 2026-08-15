@@ -136,7 +136,7 @@ Use one scene without a persona label:
     <img class="demo-layer demo-layer--window-switcher" src="demo/layer-window-switcher.webp" alt="" loading="lazy" decoding="async">
   </div>
   <span class="demo-hud demo-hud--apps"><small>Hold</small><kbd>⌘</kbd><kbd class="demo-key demo-key--tab">Tab</kbd></span>
-  <span class="demo-hud demo-hud--windows"><small>keep holding</small><kbd>⌘</kbd><kbd class="demo-key demo-key--window">′</kbd></span>
+  <span class="demo-hud demo-hud--windows"><small>keep holding</small><kbd>⌘</kbd><kbd class="demo-key demo-key--window">`</kbd></span>
   <span class="demo-hud demo-hud--release"><small>release</small><kbd class="demo-key demo-key--release">⌘</kbd></span>
 </div>
 ```

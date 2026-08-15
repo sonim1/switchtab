@@ -15,8 +15,8 @@ Make application and window switching immediately understandable by preserving o
 - Use six 1.5-second beats, producing a 9-second loop: base stack, app selection, app selection hold, window selection, window selection hold, selected window in front.
 - Preserve hard cuts between overlay states; do not use full-frame fades.
 - Use the same hard-cut boundaries for the keyboard HUD and window states.
-- Show no HUD from 0–1.5 seconds, `⌘ Tab` from 1.5–4.5 seconds, `⌘ ′` from 4.5–7.5 seconds, and `release ⌘` from 7.5–9 seconds.
-- At the first frame of each keyboard phase, animate only the changed key for 0.2 seconds: `Tab` and `′` compress slightly and flash blue, while the final Command key uses the inverse motion to communicate release.
+- Show no HUD from 0–1.5 seconds, `⌘ Tab` from 1.5–4.5 seconds, Command–backtick from 4.5–7.5 seconds, and `release ⌘` from 7.5–9 seconds.
+- At the first frame of each keyboard phase, animate only the changed key for 0.2 seconds: `Tab` and the backtick key compress slightly and flash blue, while the final Command key uses the inverse motion to communicate release.
 
 ## Scope
 

@@ -15,10 +15,21 @@ grep -qE '<main[[:space:]>]' "$page"
 grep -qE '<footer[[:space:]>]' "$page"
 grep -q 'id="how-it-works"' "$page"
 grep -q 'class="demo-reel"' "$page"
+grep -q 'id="demo-motion-toggle"' "$page"
+grep -q 'for="demo-motion-toggle"' "$page"
+if grep -qE 'demo-motion-toggle[^>]*aria-label|demo-motion-control__(pause|play)[^>]*aria-hidden' "$page"; then
+  echo 'demo motion control must expose its current Pause or Play label' >&2
+  exit 1
+fi
 test "$(grep -o 'class="demo-scene"' "$page" | wc -l | tr -d ' ')" = 1
 test "$(grep -oE 'src="demo/layer-[^"]+\.webp"' "$page" | sort -u | wc -l | tr -d ' ')" = 6
 test "$(grep -o 'class="demo-layer' "$page" | wc -l | tr -d ' ')" = 7
 test "$(grep -o '<small>Hold</small>' "$page" | wc -l | tr -d ' ')" = 1
+grep -q '<kbd class="demo-key demo-key--window">`</kbd>' "$page"
+if grep -q '′' "$page"; then
+  echo 'landing page must show the real backtick window shortcut' >&2
+  exit 1
+fi
 if grep -qE 'Everyday|Developer|Creative|demo-scene__label|demo-scene--' "$page"; then
   echo 'persona scenes remain on landing page' >&2
   exit 1
@@ -83,6 +94,8 @@ test "$total_bytes" -le 4194304 || {
 }
 
 grep -q -- '--demo-cycle: 9s' "$style"
+grep -q '.demo-motion-toggle:checked ~ .demo-window' "$style"
+grep -q 'animation-play-state: paused' "$style"
 grep -q '.demo-scene { position: absolute; inset: 0; }' "$style"
 grep -q '.demo-desktop { position: absolute; inset: 0; z-index: 0;' "$style"
 grep -q '.demo-layer { position: absolute; display: block; height: auto; max-width: none;' "$style"
@@ -118,6 +131,7 @@ grep -q 'box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34)' "$style"
 grep -q 'left: 50%; right: auto; bottom: 24px' "$style"
 grep -q 'min-width: 220px' "$style"
 grep -q 'font-size: 18px' "$style"
+grep -q '.demo-layer--window-switcher { width: 68%; }' "$style"
 grep -q '83.333%, 100% { opacity: 1; }' "$style"
 grep -q '83.333%, 100% { opacity: 0; }' "$style"
 grep -q 'prefers-reduced-motion: reduce' "$style"

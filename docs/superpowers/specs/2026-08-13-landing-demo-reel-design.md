@@ -1,7 +1,7 @@
 # SwitchTab Landing Demo Reel Design
 
-**Date:** 2026-08-13  
-**Status:** Approved direction; implementation plan pending  
+**Date:** 2026-08-13<br>
+**Status:** Approved direction; implementation plan pending<br>
 **Primary goal:** Show SwitchTab's app-to-window handoff with real product imagery so a visitor understands the product without reading the feature list.
 
 ## Scope
