@@ -41,38 +41,33 @@
           </ul>
         </div>
 
-        <div class="hero-visual">
-          <div class="visual-orbit visual-orbit--one" aria-hidden="true"></div>
-          <div class="visual-orbit visual-orbit--two" aria-hidden="true"></div>
-          <figure class="switcher-window" aria-labelledby="switcher-caption">
-            <div class="switcher-window__bar" aria-hidden="true">
+        <figure class="demo-reel" aria-labelledby="demo-caption">
+          <div class="demo-window" aria-hidden="true">
+            <div class="demo-window__bar">
               <span class="window-dot window-dot--red"></span>
               <span class="window-dot window-dot--yellow"></span>
               <span class="window-dot window-dot--green"></span>
-              <span class="window-bar-label">Application Switching</span>
+              <span class="demo-window__title">SwitchTab in motion</span>
             </div>
-            <div class="switcher-window__content">
-              <p class="switcher-hint"><span class="hint-key">⌘</span> Hold to switch apps</p>
-              <div class="app-strip" aria-label="Application switcher preview">
-                <div class="app-tile" aria-label="Finder">
-                  <div class="app-icon"><img src="AppIcon-256.png" alt=""></div>
+            <div class="demo-stage">
+              <div class="demo-scene">
+                <div class="demo-desktop demo-frame--poster">
+                  <img class="demo-layer demo-layer--finder" src="demo/layer-finder-staged.webp" alt="" width="1840" height="872" decoding="async" fetchpriority="high">
+                  <img class="demo-layer demo-layer--preview-primary" src="demo/layer-preview-primary.webp" alt="" width="1600" height="1241" decoding="async">
+                  <img class="demo-layer demo-layer--preview-secondary" src="demo/layer-preview-artwork.webp" alt="" width="1800" height="1400" loading="lazy" decoding="async">
+                  <img class="demo-layer demo-layer--notes" src="demo/layer-notes.webp" alt="" width="1500" height="1200" loading="lazy" decoding="async">
+                  <img class="demo-layer demo-layer--preview-final" src="demo/layer-preview-primary.webp" alt="" width="1600" height="1241" loading="lazy" decoding="async">
+                  <img class="demo-layer demo-layer--app-switcher" src="demo/layer-app-switcher-curated.webp" alt="" width="1320" height="376" loading="lazy" decoding="async">
+                  <img class="demo-layer demo-layer--window-switcher" src="demo/layer-window-switcher-curated.webp" alt="" width="1610" height="708" loading="lazy" decoding="async">
                 </div>
-                <div class="app-tile" aria-label="Safari">
-                  <div class="app-icon app-icon--safari"><span class="safari-compass" aria-hidden="true">✧</span></div>
-                </div>
-                <div class="app-tile app-tile--selected" aria-label="Notes, selected, 2 windows">
-                  <div class="app-icon app-icon--notes"><span class="notes-lines" aria-hidden="true"></span></div>
-                  <div class="app-caption">Notes <span class="window-count"><span aria-hidden="true">▣</span> 2</span></div>
-                </div>
-                <div class="app-tile" aria-label="Messages">
-                  <div class="app-icon app-icon--messages"><span aria-hidden="true">•••</span></div>
-                </div>
+                <span class="demo-hud demo-hud--apps"><small>Hold</small><kbd>⌘</kbd><kbd class="demo-key demo-key--tab">Tab</kbd></span>
+                <span class="demo-hud demo-hud--windows"><small>keep holding</small><kbd>⌘</kbd><kbd class="demo-key demo-key--window">′</kbd></span>
+                <span class="demo-hud demo-hud--release"><small>release</small><kbd class="demo-key demo-key--release">⌘</kbd></span>
               </div>
-              <p class="switcher-release"><span>Tab</span> to cycle <i aria-hidden="true">·</i> release <span>⌘</span> to open</p>
             </div>
-            <figcaption id="switcher-caption">A quiet overlay that keeps your hands on the keyboard.</figcaption>
-          </figure>
-        </div>
+          </div>
+          <figcaption id="demo-caption">Jump from an app to the exact window you want without releasing Command.</figcaption>
+        </figure>
       </section>
 
       <section class="source-cta shell" id="install" aria-labelledby="install-title">
@@ -95,7 +90,7 @@
               <span class="install-option__label">Download the app</span>
               <a class="button button--light install-download" href="https://github.com/sonim1/switchtab/releases/latest">Get the latest DMG <span aria-hidden="true">↗</span></a>
             </div>
-            <p class="install-note">Rather compile it yourself? <a href="../README.md#quick-start">Build from source</a>.</p>
+            <p class="install-note">Rather compile it yourself? <a href="https://github.com/sonim1/switchtab#quick-start">Build from source</a>.</p>
           </div>
         </div>
       </section>
@@ -171,13 +166,6 @@
         <img src="AppIcon-256.png" alt="">
         <span>SwitchTab</span>
       </a>
-      <nav class="footer-nav" aria-label="Documentation navigation">
-        <a href="../README.md">README</a>
-        <a href="development.md">Development</a>
-        <a href="direct-distribution.md">Distribution</a>
-        <a href="release-workflow.md">Releases</a>
-        <a href="PROJECT_HISTORY.md">History</a>
-      </nav>
       <p class="footer-note">A native macOS switcher for the moment between tasks.</p>
     </footer>
   </body>
