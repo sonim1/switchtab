@@ -16,7 +16,12 @@ grep -qE '<footer[[:space:]>]' "$page"
 grep -q 'id="how-it-works"' "$page"
 grep -q 'class="demo-reel"' "$page"
 grep -q 'class="demo-menubar"' "$page"
-grep -q 'class="demo-menubar__app">SwitchTab' "$page"
+grep -q 'class="demo-menubar__app demo-menubar__app--notes">Notes' "$page"
+grep -q 'class="demo-menubar__app demo-menubar__app--preview">Preview' "$page"
+if grep -q '' "$page"; then
+  echo 'macOS menu bar must not depend on an Apple-only private-use glyph' >&2
+  exit 1
+fi
 if grep -qE 'SwitchTab in motion|demo-window__bar|window-dot' "$page"; then
   echo 'outer demo frame still reads as an application window' >&2
   exit 1
@@ -103,6 +108,7 @@ test "$total_bytes" -le 4194304 || {
 
 grep -q -- '--demo-cycle: 9s' "$style"
 grep -q '.hero .eyebrow { justify-content: center; }' "$style"
+grep -q '.demo-motion-control::after { position: absolute; top: 50%; left: 50%; width: max(100%, 44px); height: 44px; content: ""; transform: translate(-50%, -50%); }' "$style"
 if grep -qE '^\.eyebrow \{[^}]*justify-content: center' "$style"; then
   echo 'hero eyebrow centering must not affect section labels' >&2
   exit 1
@@ -126,7 +132,9 @@ fi
 grep -q '@keyframes demo-app-overlay' "$style"
 grep -q '@keyframes demo-window-overlay' "$style"
 grep -q '@keyframes demo-preview-final' "$style"
-test "$(grep -o 'steps(1, end)' "$style" | wc -l | tr -d ' ')" = 6
+grep -q '@keyframes demo-menubar-notes' "$style"
+grep -q '@keyframes demo-menubar-preview' "$style"
+test "$(grep -o 'steps(1, end)' "$style" | wc -l | tr -d ' ')" = 8
 grep -q '@keyframes demo-hud-apps' "$style"
 grep -q '@keyframes demo-hud-windows' "$style"
 grep -q '@keyframes demo-hud-release' "$style"
@@ -145,7 +153,7 @@ grep -q 'left: 50%; right: auto; bottom: 24px' "$style"
 grep -q 'min-width: 220px' "$style"
 grep -q 'font-size: 18px' "$style"
 grep -q '.demo-layer--window-switcher { width: 68%; }' "$style"
-grep -q '.demo-layer--app-switcher { width: 56%; }' "$style"
+grep -q '.demo-layer--app-switcher { width: 48%; }' "$style"
 grep -q '83.333%, 100% { opacity: 1; }' "$style"
 grep -q '83.333%, 100% { opacity: 0; }' "$style"
 grep -q 'prefers-reduced-motion: reduce' "$style"

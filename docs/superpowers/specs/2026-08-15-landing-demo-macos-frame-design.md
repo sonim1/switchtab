@@ -20,7 +20,7 @@ A calm, current macOS desktop surface with minimal system chrome, real SwitchTab
 
 - Preserve the existing app switch, window switch, and modifier-release timing.
 - Preserve the pause/play control and reduced-motion behavior.
-- Shrink only the app-switcher overlay: 48% of the desktop scene on desktop and 56% on narrow screens.
+- Shrink only the app-switcher overlay to 48% on both desktop and narrow screens. The narrow scene's 120% desktop crop still gives the overlay a slightly larger effective share without an oversized jump.
 - Do not change the window-switcher overlay size or the keyboard HUD timing.
 
 ## Structure
@@ -40,6 +40,6 @@ A calm, current macOS desktop surface with minimal system chrome, real SwitchTab
 
 - No traffic-light controls or centered `SwitchTab in motion` title remain in the outer frame.
 - The outer frame visibly reads as a macOS desktop/menu bar rather than an application window.
-- App-switcher capture renders at 48% width on desktop and 56% on narrow screens without stretching.
+- App-switcher capture renders at 48% width on desktop and narrow screens without stretching.
 - Existing pause/play, reduced-motion, keyboard timing, privacy scans, and landing contract tests pass.
 - Desktop and 320px browser screenshots show no clipping or console errors.

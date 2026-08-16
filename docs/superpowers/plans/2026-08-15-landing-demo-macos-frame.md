@@ -18,7 +18,7 @@
 
 - [x] **Step 1: Write the failing contract assertions**
 
-Add assertions that require `class="demo-menubar"`, `class="demo-menubar__app">SwitchTab`, desktop width `48%`, and mobile width `56%`. Add negative assertions rejecting `SwitchTab in motion`, `demo-window__bar`, and `window-dot`.
+Add assertions that require `class="demo-menubar"`, a scene-synchronized active app label, and app-switcher width `48%` at both breakpoints. Add negative assertions rejecting `SwitchTab in motion`, `demo-window__bar`, and `window-dot`.
 
 - [x] **Step 2: Run the contract test and confirm RED**
 
@@ -58,7 +58,7 @@ Keep the menu bar 32px high, use translucent dark material, small system typogra
 
 - [x] **Step 3: Reduce the app-switcher width**
 
-Change desktop `.demo-layer--app-switcher` from `width: 64%` to `width: 48%`. Add the mobile override `.demo-layer--app-switcher { width: 56%; }`. Do not set a height so the image's 1320×376 ratio remains intrinsic.
+Change desktop `.demo-layer--app-switcher` from `width: 64%` to `width: 48%`. Keep the mobile override at `48%`; the cropped mobile desktop still makes it slightly larger relative to the visible stage without the former breakpoint jump. Do not set a height so the image's 1320×376 ratio remains intrinsic.
 
 - [x] **Step 4: Run the contract test and confirm GREEN**
 
