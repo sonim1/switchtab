@@ -72,7 +72,8 @@ if grep -q 'class="footer-nav"' "$page"; then
   echo 'developer documentation navigation remains in the public footer' >&2
   exit 1
 fi
-if grep -R -qE '/Users/|file:///' docs; then
+macos_user_root='/'"Users/"
+if grep -R -qE "${macos_user_root}|file:///" docs; then
   echo 'public documentation contains a local filesystem identifier' >&2
   exit 1
 fi
