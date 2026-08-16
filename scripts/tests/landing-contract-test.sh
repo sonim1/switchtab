@@ -28,7 +28,7 @@ if grep -qE 'SwitchTab in motion|demo-window__bar|window-dot' "$page"; then
 fi
 grep -q 'id="demo-motion-toggle"' "$page"
 grep -q 'for="demo-motion-toggle"' "$page"
-grep -q '<span class="demo-motion-control__name">Pause demo animation</span>' "$page"
+grep -q '<span class="demo-motion-control__name">Pause or play demo animation</span>' "$page"
 test "$(grep -oE 'demo-motion-control__(pause|play)" aria-hidden="true"' "$page" | wc -l | tr -d ' ')" = 2
 if grep -qE 'demo-motion-toggle[^>]*aria-label' "$page"; then
   echo 'demo motion checkbox must get its stable state label from the visible control' >&2
@@ -70,6 +70,10 @@ if grep -qE 'href="[^"]*\.md' "$page"; then
 fi
 if grep -q 'class="footer-nav"' "$page"; then
   echo 'developer documentation navigation remains in the public footer' >&2
+  exit 1
+fi
+if grep -R -qE '/Users/|file:///' docs; then
+  echo 'public documentation contains a local filesystem identifier' >&2
   exit 1
 fi
 

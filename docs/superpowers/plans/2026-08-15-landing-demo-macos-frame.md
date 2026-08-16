@@ -75,7 +75,7 @@ Expected: `landing contract passed`.
 
 - [x] **Step 1: Run repository checks**
 
-Run `rtk proxy swift test`, every `scripts/tests/*.sh` file with Bash, `rtk git diff --check`, and the privacy scan for `/Users/`, `kendrick`, and `file:///`.
+Run `rtk proxy swift test`, every `scripts/tests/*.sh` file with Bash, `rtk git diff --check`, and a privacy scan for local filesystem paths, the current local account name, and file-scheme URLs.
 
 Expected: all checks pass and the privacy scan returns no matches.
 
