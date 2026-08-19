@@ -24,6 +24,25 @@ enum AppDelegateShortcutConflictPolicy {
     }
 }
 
+enum SwitcherInvocationRoutingDecision: Equatable {
+    case present
+    case advance
+    case switchMode
+}
+
+enum SwitcherInvocationRoutingPolicy {
+    static func decision(
+        activeMode: SwitcherMode?,
+        requestedMode: SwitcherMode
+    ) -> SwitcherInvocationRoutingDecision {
+        guard let activeMode else {
+            return .present
+        }
+
+        return activeMode == requestedMode ? .advance : .switchMode
+    }
+}
+
 struct ApplicationShortcutLifecycleTransaction {
     let previousWindowSnapshot: HotkeyRegistrationSnapshot
     let suspendWindow: () -> Void
@@ -309,12 +328,18 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        if advancePresentedOverlayIfNeeded(
-            overlayController: overlayController,
-            mode: .currentAppWindowSwitching,
-            reverse: reverse
+        switch SwitcherInvocationRoutingPolicy.decision(
+            activeMode: overlayController.activeMode,
+            requestedMode: .currentAppWindowSwitching
         ) {
+        case .advance:
+            _ = overlayController.handle(reverse ? .moveUp : .moveDown)
             return
+        case .switchMode:
+            switchOverlayMode(reverse: reverse)
+            return
+        case .present:
+            break
         }
 
         if let frontmostApplication = NSWorkspace.shared.frontmostApplication {
@@ -336,12 +361,18 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        if advancePresentedOverlayIfNeeded(
-            overlayController: overlayController,
-            mode: .applicationSwitching,
-            reverse: reverse
+        switch SwitcherInvocationRoutingPolicy.decision(
+            activeMode: overlayController.activeMode,
+            requestedMode: .applicationSwitching
         ) {
+        case .advance:
+            _ = overlayController.handle(reverse ? .moveUp : .moveDown)
             return
+        case .switchMode:
+            switchOverlayMode(reverse: reverse)
+            return
+        case .present:
+            break
         }
 
         presentApplicationSwitcher(reverse: reverse, retainingSession: false)
@@ -716,20 +747,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         thumbnailMemoryPressureSource = source
         source.resume()
-    }
-
-    private func advancePresentedOverlayIfNeeded(
-        overlayController: SwitcherOverlayController,
-        mode: SwitcherMode,
-        reverse: Bool
-    ) -> Bool {
-        guard overlayController.isPresented,
-              overlayController.activeMode == mode else {
-            return false
-        }
-
-        _ = overlayController.handle(reverse ? .moveUp : .moveDown)
-        return true
     }
 
     private func observeShortcutRecording() {
