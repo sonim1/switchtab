@@ -27,6 +27,13 @@ final class SwitcherInvocationRoutingPolicyTests: XCTestCase {
             ),
             .advance
         )
+        XCTAssertEqual(
+            SwitcherInvocationRoutingPolicy.decision(
+                activeMode: .currentAppWindowSwitching,
+                requestedMode: .currentAppWindowSwitching
+            ),
+            .advance
+        )
     }
 
     func testRoutesMissingOverlayToFreshPresentation() {
@@ -34,6 +41,13 @@ final class SwitcherInvocationRoutingPolicyTests: XCTestCase {
             SwitcherInvocationRoutingPolicy.decision(
                 activeMode: nil,
                 requestedMode: .currentAppWindowSwitching
+            ),
+            .present
+        )
+        XCTAssertEqual(
+            SwitcherInvocationRoutingPolicy.decision(
+                activeMode: nil,
+                requestedMode: .applicationSwitching
             ),
             .present
         )
