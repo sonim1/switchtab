@@ -82,3 +82,7 @@ swift test
 - [Update hosting](docs/update-hosting.md) — Cloudflare R2, Sparkle publishing, and local fallback operations
 - [Release workflow](docs/release-workflow.md) — versioning, GitHub releases, Homebrew integration, and recovery
 - [Repository maintenance](docs/repository-maintenance.md) — dependency, security, and verification state
+
+## License
+
+SwitchTab is available under the [MIT License](LICENSE.md).
