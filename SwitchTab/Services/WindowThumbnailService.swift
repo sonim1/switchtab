@@ -316,6 +316,7 @@ public final class WindowThumbnailLoader {
     private var viewportPixelSize = CGSize(width: 240, height: 165)
     private var refreshTask: Task<Void, Never>?
     private var refreshGeneration = 0
+    private var didEmitFirstThumbnailForGeneration = false
 
     public init(
         store: WindowThumbnailStore,
@@ -341,6 +342,7 @@ public final class WindowThumbnailLoader {
         viewportPixelSize: CGSize = CGSize(width: 240, height: 165)
     ) {
         refreshGeneration += 1
+        didEmitFirstThumbnailForGeneration = false
         requestQueue.clear()
         activeWindowIDs.removeAll(keepingCapacity: true)
         previewsAllowed = !permissionState.blocksWindowPreviews
@@ -372,6 +374,7 @@ public final class WindowThumbnailLoader {
 
     public func cancel() {
         refreshGeneration += 1
+        didEmitFirstThumbnailForGeneration = false
         previewsAllowed = false
         requestQueue.clear()
         activeWindowIDs.removeAll(keepingCapacity: true)
@@ -429,6 +432,10 @@ public final class WindowThumbnailLoader {
                 activeWindowIDs.remove(window.id)
                 if let thumbnail {
                     store.setThumbnail(thumbnail, for: window.id)
+                    if !didEmitFirstThumbnailForGeneration {
+                        didEmitFirstThumbnailForGeneration = true
+                        SwitcherPerformanceTrace.firstThumbnail()
+                    }
                 }
             }
         }
