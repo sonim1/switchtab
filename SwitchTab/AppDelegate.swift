@@ -336,12 +336,21 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             _ = overlayController.handle(reverse ? .moveUp : .moveDown)
             return
         case .switchMode:
-            switchOverlayMode(reverse: reverse)
+            let performanceInterval = SwitcherPerformanceTrace.beginInvocation(
+                mode: .currentAppWindowSwitching
+            )
+            switchOverlayMode(
+                reverse: reverse,
+                performanceInterval: performanceInterval
+            )
             return
         case .present:
             break
         }
 
+        let performanceInterval = SwitcherPerformanceTrace.beginInvocation(
+            mode: .currentAppWindowSwitching
+        )
         if let frontmostApplication = NSWorkspace.shared.frontmostApplication {
             debugLog(
                 "frontmost app pid=\(frontmostApplication.processIdentifier) name=\(frontmostApplication.localizedName ?? "unknown")"
@@ -352,7 +361,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         presentWindowSwitcher(
             target: .frontmostApplication,
             reverse: reverse,
-            retainingSession: false
+            retainingSession: false,
+            performanceInterval: performanceInterval
         )
     }
 
@@ -369,29 +379,57 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             _ = overlayController.handle(reverse ? .moveUp : .moveDown)
             return
         case .switchMode:
-            switchOverlayMode(reverse: reverse)
+            let performanceInterval = SwitcherPerformanceTrace.beginInvocation(
+                mode: .applicationSwitching
+            )
+            switchOverlayMode(
+                reverse: reverse,
+                performanceInterval: performanceInterval
+            )
             return
         case .present:
             break
         }
 
-        presentApplicationSwitcher(reverse: reverse, retainingSession: false)
+        let performanceInterval = SwitcherPerformanceTrace.beginInvocation(
+            mode: .applicationSwitching
+        )
+        presentApplicationSwitcher(
+            reverse: reverse,
+            retainingSession: false,
+            performanceInterval: performanceInterval
+        )
     }
 
     /// Hands the live overlay to the other mode while the trigger modifier is
     /// still held. Nothing is committed and the previous highlight is kept so
     /// coming back resumes instead of restarting.
-    private func switchOverlayMode(reverse: Bool) {
+    private func switchOverlayMode(
+        reverse: Bool,
+        performanceInterval: SwitcherPerformanceInterval? = nil
+    ) {
         guard let overlayController,
               let activeMode = overlayController.activeMode,
               let selectedItem = overlayController.selectedItem else {
+            if let performanceInterval {
+                SwitcherPerformanceTrace.endInvocation(
+                    performanceInterval,
+                    itemCount: 0
+                )
+            }
             return
         }
 
+        let performanceInterval = performanceInterval ?? SwitcherPerformanceTrace.beginInvocation(
+            mode: activeMode == .applicationSwitching
+                ? .currentAppWindowSwitching
+                : .applicationSwitching
+        )
         switch activeMode {
         case .applicationSwitching:
             guard hotkeyService.registeredSetting(for: .currentAppWindowSwitching) != nil,
                   let ownerProcessIdentifier = selectedItem.appIconProcessIdentifier else {
+                SwitcherPerformanceTrace.endInvocation(performanceInterval, itemCount: 0)
                 return
             }
 
@@ -402,10 +440,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     name: selectedItem.title
                 ),
                 reverse: reverse,
-                retainingSession: true
+                retainingSession: true,
+                performanceInterval: performanceInterval
             )
         case .currentAppWindowSwitching:
             guard applicationHotkeyController.isRegistered else {
+                SwitcherPerformanceTrace.endInvocation(performanceInterval, itemCount: 0)
                 return
             }
 
@@ -415,7 +455,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     ownerProcessIdentifier: ownerProcessIdentifier
                 )
             }
-            presentApplicationSwitcher(reverse: reverse, retainingSession: true)
+            presentApplicationSwitcher(
+                reverse: reverse,
+                retainingSession: true,
+                performanceInterval: performanceInterval
+            )
         }
     }
 
@@ -428,27 +472,34 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private func presentWindowSwitcher(
         target: WindowSwitcherTarget,
         reverse: Bool,
-        retainingSession: Bool
+        retainingSession: Bool,
+        performanceInterval: SwitcherPerformanceInterval
     ) -> Bool {
         guard let overlayController else {
+            SwitcherPerformanceTrace.endInvocation(performanceInterval, itemCount: 0)
             return false
         }
 
-        cancelThumbnailLoadingIfNeeded()
+        cancelThumbnailLoadingIfNeeded(
+            preservingCachedThumbnails: retainingSession
+        )
         let accessibilityState = permissionService.currentAccessibilityState()
         debugLog("accessibility state=\(accessibilityState)")
         guard !accessibilityState.blocksCapability else {
             debugLog("accessibility missing; showing settings")
             // A refused mode switch leaves the held session where it is.
             guard !retainingSession else {
+                SwitcherPerformanceTrace.endInvocation(performanceInterval, itemCount: 0)
                 return false
             }
 
             showSettingsWindow()
+            SwitcherPerformanceTrace.endInvocation(performanceInterval, itemCount: 0)
             return false
         }
 
         let permissionState = permissionService.currentState(accessibility: accessibilityState)
+        let accessibilityInterval = SwitcherPerformanceTrace.beginAccessibilityDiscovery()
         let discoveredWindows: [WindowItem]
         switch target {
         case .frontmostApplication:
@@ -462,6 +513,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 includeScreenCaptureIdentifiers: !permissionState.blocksWindowPreviews
             )
         }
+        SwitcherPerformanceTrace.endAccessibilityDiscovery(
+            accessibilityInterval,
+            itemCount: discoveredWindows.count
+        )
         let recentlyOrderedWindows = recencyStore.order(discoveredWindows) { window in
             window.id
         }
@@ -472,10 +527,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !windows.isEmpty else {
             debugLog("no windows; leaving overlay unchanged=\(retainingSession)")
             guard !retainingSession else {
+                SwitcherPerformanceTrace.endInvocation(performanceInterval, itemCount: 0)
                 return false
             }
 
             overlayController.dismiss()
+            SwitcherPerformanceTrace.endInvocation(performanceInterval, itemCount: 0)
             return false
         }
 
@@ -492,7 +549,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         let thumbnailLoader = thumbnailLoaderForRefresh()
         thumbnailLoader.beginRefresh(
             permissionState: permissionState,
-            viewportPixelSize: viewportPixelSize
+            viewportPixelSize: viewportPixelSize,
+            preservingCachedThumbnails: retainingSession
         )
         overlayController.present(
             mode: .currentAppWindowSwitching,
@@ -545,19 +603,27 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 thumbnailLoader.requestThumbnail(for: window, priority: priority)
             }
         )
+        SwitcherPerformanceTrace.endInvocation(
+            performanceInterval,
+            itemCount: windows.count
+        )
         return true
     }
 
     @discardableResult
     private func presentApplicationSwitcher(
         reverse: Bool,
-        retainingSession: Bool
+        retainingSession: Bool,
+        performanceInterval: SwitcherPerformanceInterval
     ) -> Bool {
         guard let overlayController else {
+            SwitcherPerformanceTrace.endInvocation(performanceInterval, itemCount: 0)
             return false
         }
 
-        cancelThumbnailLoadingIfNeeded()
+        cancelThumbnailLoadingIfNeeded(
+            preservingCachedThumbnails: retainingSession
+        )
         let recentlyOrderedApplications = applicationRecencyStore.order(
             applicationProvider.runningApplications()
         ) { application in
@@ -570,10 +636,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         guard !applications.isEmpty else {
             guard !retainingSession else {
+                SwitcherPerformanceTrace.endInvocation(performanceInterval, itemCount: 0)
                 return false
             }
 
             overlayController.dismiss()
+            SwitcherPerformanceTrace.endInvocation(performanceInterval, itemCount: 0)
             return false
         }
 
@@ -618,9 +686,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.switchOverlayMode(reverse: reverse)
             }
         ) else {
+            SwitcherPerformanceTrace.endInvocation(performanceInterval, itemCount: 0)
             return false
         }
 
+        SwitcherPerformanceTrace.endInvocation(
+            performanceInterval,
+            itemCount: applications.count
+        )
         applicationWindowCountLoader.load(applications: applications) { [weak self] countedApplications in
             Task { @MainActor [weak self] in
                 self?.overlayController?.updateApplicationItems(
@@ -724,8 +797,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         return thumbnailLoader
     }
 
-    private func cancelThumbnailLoadingIfNeeded() {
-        thumbnailLoader?.cancel()
+    private func cancelThumbnailLoadingIfNeeded(
+        preservingCachedThumbnails: Bool = false
+    ) {
+        thumbnailLoader?.cancel(
+            preservingCachedThumbnails: preservingCachedThumbnails
+        )
     }
 
     private func observeThumbnailMemoryPressure() {
@@ -1409,8 +1486,18 @@ enum ApplicationSwitcherWindowCountPolicy {
 final class ApplicationWindowCountLoader: @unchecked Sendable {
     typealias LoadCounts = @Sendable ([ApplicationItem]) -> [ApplicationItem]
 
+    private struct Request: Sendable {
+        let generation: UInt64
+        let applications: [ApplicationItem]
+        let completion: @Sendable ([ApplicationItem]) -> Void
+    }
+
     private let queue: DispatchQueue
     private let loadCounts: LoadCounts
+    private let lock = NSLock()
+    private var generation: UInt64 = 0
+    private var pendingRequest: Request?
+    private var workerIsRunning = false
 
     init(
         queue: DispatchQueue = DispatchQueue(
@@ -1436,9 +1523,57 @@ final class ApplicationWindowCountLoader: @unchecked Sendable {
         applications: [ApplicationItem],
         completion: @escaping @Sendable ([ApplicationItem]) -> Void
     ) {
-        let loadCounts = self.loadCounts
-        queue.async {
-            completion(loadCounts(applications))
+        let shouldStartWorker: Bool
+
+        lock.lock()
+        generation &+= 1
+        pendingRequest = Request(
+            generation: generation,
+            applications: applications,
+            completion: completion
+        )
+        shouldStartWorker = !workerIsRunning
+        workerIsRunning = true
+        lock.unlock()
+
+        guard shouldStartWorker else {
+            return
+        }
+
+        queue.async { [self] in
+            processPendingRequests()
+        }
+    }
+
+    private func processPendingRequests() {
+        while true {
+            let request: Request
+
+            lock.lock()
+            guard let nextRequest = pendingRequest else {
+                workerIsRunning = false
+                lock.unlock()
+                return
+            }
+            request = nextRequest
+            pendingRequest = nil
+            lock.unlock()
+
+            let performanceInterval = SwitcherPerformanceTrace.beginApplicationWindowCounts()
+            let countedApplications = loadCounts(request.applications)
+
+            lock.lock()
+            let isNewest = request.generation == generation
+            lock.unlock()
+
+            SwitcherPerformanceTrace.endApplicationWindowCounts(
+                performanceInterval,
+                superseded: !isNewest
+            )
+
+            if isNewest {
+                request.completion(countedApplications)
+            }
         }
     }
 }

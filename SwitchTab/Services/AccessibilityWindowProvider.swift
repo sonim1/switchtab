@@ -269,9 +269,20 @@ public final class PrivateAXWindowNumberResolver: AXWindowNumberResolving {
     }
 }
 
+struct AXWindowAttributeSnapshot: Equatable {
+    let role: String?
+    let subrole: String?
+    let title: String?
+    let isMinimized: Bool
+}
+
 protocol AXWindowAttributeReading: AnyObject {
     func windowElements(of applicationElement: AXUIElement) -> [AXUIElement]?
     func focusedWindowElement(of applicationElement: AXUIElement) -> AXUIElement?
+    func batchedWindowAttributes(
+        _ element: AXUIElement,
+        includeDetails: Bool
+    ) -> AXWindowAttributeSnapshot?
     func stringAttribute(_ element: AXUIElement, _ attribute: CFString) -> String?
     func boolAttribute(_ element: AXUIElement, _ attribute: CFString) -> Bool
 }
@@ -304,6 +315,63 @@ private final class SystemAXWindowAttributeReader: AXWindowAttributeReading {
         return unsafeDowncast(focusedValue as AnyObject, to: AXUIElement.self)
     }
 
+    func batchedWindowAttributes(
+        _ element: AXUIElement,
+        includeDetails: Bool
+    ) -> AXWindowAttributeSnapshot? {
+        let attributes: [CFString] = includeDetails
+            ? [
+                kAXRoleAttribute as CFString,
+                kAXSubroleAttribute as CFString,
+                kAXTitleAttribute as CFString,
+                kAXMinimizedAttribute as CFString
+            ]
+            : [
+                kAXRoleAttribute as CFString,
+                kAXSubroleAttribute as CFString
+            ]
+
+        var values: CFArray?
+        guard AXUIElementCopyMultipleAttributeValues(
+            element,
+            attributes as CFArray,
+            AXCopyMultipleAttributeOptions(rawValue: 0),
+            &values
+        ) == .success,
+              let values,
+              let values = values as? [Any],
+              values.count == attributes.count,
+              !values.contains(where: Self.isAXErrorPlaceholder) else {
+            return nil
+        }
+
+        guard let role = values[0] as? String,
+              let subrole = values[1] as? String else {
+            return nil
+        }
+
+        guard includeDetails else {
+            return AXWindowAttributeSnapshot(
+                role: role,
+                subrole: subrole,
+                title: nil,
+                isMinimized: false
+            )
+        }
+
+        guard let title = values[2] as? String,
+              let isMinimized = values[3] as? Bool else {
+            return nil
+        }
+
+        return AXWindowAttributeSnapshot(
+            role: role,
+            subrole: subrole,
+            title: title,
+            isMinimized: isMinimized
+        )
+    }
+
     func stringAttribute(_ element: AXUIElement, _ attribute: CFString) -> String? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success else {
@@ -318,6 +386,16 @@ private final class SystemAXWindowAttributeReader: AXWindowAttributeReading {
             return false
         }
         return (value as? Bool) ?? false
+    }
+
+    private static func isAXErrorPlaceholder(_ value: Any) -> Bool {
+        let value = value as CFTypeRef
+        guard CFGetTypeID(value) == AXValueGetTypeID() else {
+            return false
+        }
+
+        let axValue = unsafeDowncast(value as AnyObject, to: AXValue.self)
+        return AXValueGetType(axValue) == AXValueType(rawValue: kAXValueAXErrorType)
     }
 }
 
@@ -346,15 +424,11 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
 
         var count = 0
         for windowElement in windowElements {
-            let role = attributeReader.stringAttribute(
-                windowElement,
-                kAXRoleAttribute as CFString
-            )
-            let subrole = attributeReader.stringAttribute(
-                windowElement,
-                kAXSubroleAttribute as CFString
-            )
-            if AccessibilityWindowInclusionPolicy.shouldInclude(role: role, subrole: subrole) {
+            let attributes = windowAttributes(windowElement, includeDetails: false)
+            if AccessibilityWindowInclusionPolicy.shouldInclude(
+                role: attributes.role,
+                subrole: attributes.subrole
+            ) {
                 count += 1
             }
         }
@@ -390,11 +464,12 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
         snapshots.reserveCapacity(windowElements.count)
         activeWindowElements.reserveCapacity(windowElements.count)
 
+        let attributes = windowElements.map { windowAttributes($0, includeDetails: true) }
         let candidates = windowElements.indices.map { index in
             AccessibilityWindowInclusionCandidate(
                 originalIndex: index,
-                role: attributeReader.stringAttribute(windowElements[index], kAXRoleAttribute as CFString),
-                subrole: attributeReader.stringAttribute(windowElements[index], kAXSubroleAttribute as CFString),
+                role: attributes[index].role,
+                subrole: attributes[index].subrole,
                 windowNumber: windowNumberResolver.windowNumber(for: windowElements[index])
             )
         }
@@ -421,12 +496,13 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
             activeWindowElements[windowIdentifier] = windowElement
             snapshots.append(
                 windowSnapshot(
-                    windowElement,
                     windowIdentifier: windowIdentifier,
                     ownerProcessIdentifier: ownerProcessIdentifier,
                     ownerName: resolvedOwnerName,
                     resolvedScreenCaptureIdentifier: includeScreenCaptureIdentifiers ? mapping.screenCaptureIdentifier : nil,
                     isFocused: focusedWindowElement.map { CFEqual($0, windowElement) } ?? false,
+                    title: attributes[mapping.originalIndex].title ?? "",
+                    isMinimized: attributes[mapping.originalIndex].isMinimized,
                     screenCaptureWindowIndex: &screenCaptureWindowIndex
                 )
             )
@@ -440,16 +516,15 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
     }
 
     private func windowSnapshot(
-        _ windowElement: AXUIElement,
         windowIdentifier: Int,
         ownerProcessIdentifier: Int,
         ownerName: String,
         resolvedScreenCaptureIdentifier: UInt32?,
         isFocused: Bool,
+        title: String,
+        isMinimized: Bool,
         screenCaptureWindowIndex: inout ScreenCaptureWindowIndex?
     ) -> AccessibilityWindowSnapshot {
-        let isMinimized = attributeReader.boolAttribute(windowElement, kAXMinimizedAttribute as CFString)
-        let title = attributeReader.stringAttribute(windowElement, kAXTitleAttribute as CFString) ?? ""
         return AccessibilityWindowSnapshot(
             windowIdentifier: windowIdentifier,
             ownerProcessIdentifier: ownerProcessIdentifier,
@@ -460,6 +535,29 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
             isMinimized: isMinimized,
             availability: isMinimized ? .minimized : .available,
             isFocused: isFocused
+        )
+    }
+
+    private func windowAttributes(
+        _ element: AXUIElement,
+        includeDetails: Bool
+    ) -> AXWindowAttributeSnapshot {
+        if let attributes = attributeReader.batchedWindowAttributes(
+            element,
+            includeDetails: includeDetails
+        ) {
+            return attributes
+        }
+
+        return AXWindowAttributeSnapshot(
+            role: attributeReader.stringAttribute(element, kAXRoleAttribute as CFString),
+            subrole: attributeReader.stringAttribute(element, kAXSubroleAttribute as CFString),
+            title: includeDetails
+                ? attributeReader.stringAttribute(element, kAXTitleAttribute as CFString)
+                : nil,
+            isMinimized: includeDetails
+                ? attributeReader.boolAttribute(element, kAXMinimizedAttribute as CFString)
+                : false
         )
     }
 

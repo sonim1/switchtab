@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		A00000000000000000000001 /* SwitchTabApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* SwitchTabApp.swift */; };
 		A00000000000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* AppDelegate.swift */; };
+		A00000000000000000000115 /* SwitcherPerformanceTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000115 /* SwitcherPerformanceTrace.swift */; };
 		A00000000000000000000004 /* SwitcherMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000004 /* SwitcherMode.swift */; };
 		A00000000000000000000005 /* PermissionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000005 /* PermissionState.swift */; };
 		A00000000000000000000006 /* ShortcutSetting.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000006 /* ShortcutSetting.swift */; };
@@ -140,6 +141,7 @@
 		B00000000000000000000033 /* SwitcherOverlayStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayStateTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000035 /* AccessibilityWindowProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityWindowProvider.swift; sourceTree = "<group>"; };
 		B00000000000000000000036 /* WindowThumbnailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowThumbnailService.swift; sourceTree = "<group>"; };
+		B00000000000000000000115 /* SwitcherPerformanceTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherPerformanceTrace.swift; sourceTree = "<group>"; };
 		B00000000000000000000037 /* WindowFocusService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFocusService.swift; sourceTree = "<group>"; };
 		B00000000000000000000039 /* AccessibilityWindowProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityWindowProviderTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000040 /* WindowThumbnailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowThumbnailTests.swift; sourceTree = "<group>"; };
@@ -285,6 +287,7 @@
 				B00000000000000000000106 /* ApplicationActivationService.swift */,
 				B00000000000000000000107 /* ApplicationSwitchingHotkeyController.swift */,
 				B00000000000000000000036 /* WindowThumbnailService.swift */,
+				B00000000000000000000115 /* SwitcherPerformanceTrace.swift */,
 				B00000000000000000000037 /* WindowFocusService.swift */,
 				B00000000000000000000099 /* WindowCloseService.swift */,
 			);
@@ -581,6 +584,7 @@
 				A00000000000000000000106 /* ApplicationActivationService.swift in Sources */,
 				A00000000000000000000107 /* ApplicationSwitchingHotkeyController.swift in Sources */,
 				A00000000000000000000032 /* WindowThumbnailService.swift in Sources */,
+				A00000000000000000000115 /* SwitcherPerformanceTrace.swift in Sources */,
 				A00000000000000000000033 /* WindowFocusService.swift in Sources */,
 				A00000000000000000000040 /* ShortcutSettingsViewModel.swift in Sources */,
 				A00000000000000000000086 /* ApplicationSettingsViewModel.swift in Sources */,
@@ -735,7 +739,7 @@
 				CODE_SIGN_ENTITLEMENTS = SwitchTab/Resources/SwitchTab.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -744,7 +748,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.17;
+				MARKETING_VERSION = 1.1.18;
 				PRODUCT_BUNDLE_IDENTIFIER = com.royjen.switchtab;
 				PRODUCT_NAME = SwitchTab;
 				SWIFT_VERSION = 5.0;
@@ -759,7 +763,7 @@
 				CODE_SIGN_ENTITLEMENTS = SwitchTab/Resources/SwitchTab.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -768,7 +772,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.17;
+				MARKETING_VERSION = 1.1.18;
 				PRODUCT_BUNDLE_IDENTIFIER = com.royjen.switchtab;
 				PRODUCT_NAME = SwitchTab;
 				SWIFT_VERSION = 5.0;

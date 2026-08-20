@@ -316,6 +316,7 @@ public final class WindowThumbnailLoader {
     private var viewportPixelSize = CGSize(width: 240, height: 165)
     private var refreshTask: Task<Void, Never>?
     private var refreshGeneration = 0
+    private var didEmitFirstThumbnailForGeneration = false
 
     public init(
         store: WindowThumbnailStore,
@@ -338,15 +339,19 @@ public final class WindowThumbnailLoader {
 
     public func beginRefresh(
         permissionState: PermissionState,
-        viewportPixelSize: CGSize = CGSize(width: 240, height: 165)
+        viewportPixelSize: CGSize = CGSize(width: 240, height: 165),
+        preservingCachedThumbnails: Bool = false
     ) {
         refreshGeneration += 1
+        didEmitFirstThumbnailForGeneration = false
         requestQueue.clear()
         activeWindowIDs.removeAll(keepingCapacity: true)
         previewsAllowed = !permissionState.blocksWindowPreviews
         self.viewportPixelSize = viewportPixelSize
         refreshTask?.cancel()
-        store.clear()
+        if !preservingCachedThumbnails || !previewsAllowed {
+            store.clear()
+        }
     }
 
     func requestThumbnail(
@@ -370,13 +375,16 @@ public final class WindowThumbnailLoader {
         }
     }
 
-    public func cancel() {
+    public func cancel(preservingCachedThumbnails: Bool = false) {
         refreshGeneration += 1
+        didEmitFirstThumbnailForGeneration = false
         previewsAllowed = false
         requestQueue.clear()
         activeWindowIDs.removeAll(keepingCapacity: true)
         refreshTask?.cancel()
-        store.clear()
+        if !preservingCachedThumbnails {
+            store.clear()
+        }
     }
 
     private func startWorkerIfNeeded() {
@@ -429,6 +437,10 @@ public final class WindowThumbnailLoader {
                 activeWindowIDs.remove(window.id)
                 if let thumbnail {
                     store.setThumbnail(thumbnail, for: window.id)
+                    if !didEmitFirstThumbnailForGeneration {
+                        didEmitFirstThumbnailForGeneration = true
+                        SwitcherPerformanceTrace.firstThumbnail()
+                    }
                 }
             }
         }

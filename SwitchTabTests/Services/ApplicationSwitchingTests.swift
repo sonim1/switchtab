@@ -30,6 +30,8 @@ enum ApplicationSwitchingTests {
         try testApplicationUnknownWindowCountPreservesMetadataAndClearsSubtitle()
         try testApplicationPresentationMapsKnownZeroAndUnknownWindowCounts()
         try testWindowCountLoaderDefersWorkFromCaller()
+        try testWindowCountLoaderKeepsOnlyNewestPendingRequest()
+        try testWindowCountLoaderSuppressesSupersededCompletion()
         try testTerminationServiceReportsAcceptedAndRejectedRequests()
         try testTerminationIdentityUsesStableBundleOrProcessIdentifier()
         try testTerminationIdentityRejectsNonRegularOrUnterminatedSnapshots()
@@ -1158,6 +1160,80 @@ enum ApplicationSwitchingTests {
         try expectEqual(completion.wait(timeout: .now() + 1), .success)
     }
 
+    static func testWindowCountLoaderKeepsOnlyNewestPendingRequest() throws {
+        let workerQueue = DispatchQueue(label: "ApplicationSwitchingTests.window-count-loader-coalescing")
+        workerQueue.suspend()
+        let recorder = WindowCountLoaderRecorder()
+        let completion = DispatchSemaphore(value: 0)
+        let loader = ApplicationWindowCountLoader(
+            queue: workerQueue,
+            loadCounts: { applications in
+                recorder.recordExecution(applications.map(\.id))
+                return applications.map { $0.withWindowCount(1) }
+            }
+        )
+
+        for id in ["1", "2", "3"] {
+            loader.load(applications: [
+                makeApplication(id: id, processIdentifier: Int(id)!)
+            ]) { applications in
+                recorder.recordCompletion(applications.map(\.id))
+                completion.signal()
+            }
+        }
+
+        workerQueue.resume()
+
+        try expectEqual(completion.wait(timeout: .now() + 1), .success)
+        try expectEqual(recorder.executions, ["3"])
+        try expectEqual(recorder.completions, ["3"])
+        try expectEqual(completion.wait(timeout: .now() + 0.05), .timedOut)
+    }
+
+    static func testWindowCountLoaderSuppressesSupersededCompletion() throws {
+        let workerQueue = DispatchQueue(label: "ApplicationSwitchingTests.window-count-loader-in-flight")
+        let recorder = WindowCountLoaderRecorder()
+        let firstLoadStarted = DispatchSemaphore(value: 0)
+        let releaseFirstLoad = DispatchSemaphore(value: 0)
+        let completion = DispatchSemaphore(value: 0)
+        let loader = ApplicationWindowCountLoader(
+            queue: workerQueue,
+            loadCounts: { applications in
+                recorder.recordExecution(applications.map(\.id))
+                firstLoadStarted.signal()
+                if applications.first?.id == "1" {
+                    _ = releaseFirstLoad.wait(timeout: .now() + 1)
+                }
+                return applications.map { $0.withWindowCount(1) }
+            }
+        )
+
+        loader.load(applications: [
+            makeApplication(id: "1", processIdentifier: 1)
+        ]) { applications in
+            recorder.recordCompletion(applications.map(\.id))
+            completion.signal()
+        }
+
+        try expectEqual(firstLoadStarted.wait(timeout: .now() + 1), .success)
+
+        for id in ["2", "3"] {
+            loader.load(applications: [
+                makeApplication(id: id, processIdentifier: Int(id)!)
+            ]) { applications in
+                recorder.recordCompletion(applications.map(\.id))
+                completion.signal()
+            }
+        }
+
+        releaseFirstLoad.signal()
+
+        try expectEqual(completion.wait(timeout: .now() + 1), .success)
+        try expectEqual(recorder.executions, ["1", "3"])
+        try expectEqual(recorder.completions, ["3"])
+        try expectEqual(completion.wait(timeout: .now() + 0.05), .timedOut)
+    }
+
     static func testTerminationServiceReportsAcceptedAndRejectedRequests() throws {
         let acceptedDriver = FakeApplicationTerminator(result: true)
         let acceptedService = ApplicationTerminationService(terminator: acceptedDriver)
@@ -1590,5 +1666,35 @@ private final class ApplicationSwitchingRecordingRegistrar: HotkeyRegistering {
 
     func invoke(settingID: String) {
         handlers[settingID]?()
+    }
+}
+
+private final class WindowCountLoaderRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var executionIDs: [String] = []
+    private var completionIDs: [String] = []
+
+    var executions: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return executionIDs
+    }
+
+    var completions: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return completionIDs
+    }
+
+    func recordExecution(_ ids: [String]) {
+        lock.lock()
+        executionIDs.append(contentsOf: ids)
+        lock.unlock()
+    }
+
+    func recordCompletion(_ ids: [String]) {
+        lock.lock()
+        completionIDs.append(contentsOf: ids)
+        lock.unlock()
     }
 }
