@@ -26,8 +26,25 @@ final class WindowThumbnailImageCodecTests: XCTestCase {
     func testJPEGQualityIsClampedToImageIODomain() throws {
         let image = try makeImage(width: 32, height: 20)
 
-        XCTAssertNotNil(WindowThumbnailImageCodec.encode(image, as: .jpeg(quality: -1)))
-        XCTAssertNotNil(WindowThumbnailImageCodec.encode(image, as: .jpeg(quality: 2)))
+        let belowRange = try XCTUnwrap(
+            WindowThumbnailImageCodec.encode(image, as: .jpeg(quality: -1))
+        )
+        let lowerBound = try XCTUnwrap(
+            WindowThumbnailImageCodec.encode(image, as: .jpeg(quality: 0))
+        )
+        let aboveRange = try XCTUnwrap(
+            WindowThumbnailImageCodec.encode(image, as: .jpeg(quality: 2))
+        )
+        let upperBound = try XCTUnwrap(
+            WindowThumbnailImageCodec.encode(image, as: .jpeg(quality: 1))
+        )
+
+        XCTAssertEqual(belowRange, lowerBound)
+        XCTAssertEqual(aboveRange, upperBound)
+    }
+
+    func testDecodeRejectsMalformedData() {
+        XCTAssertNil(WindowThumbnailImageCodec.decode(Data("not-an-image".utf8)))
     }
 
     private func makeImage(width: Int, height: Int) throws -> CGImage {

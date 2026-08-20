@@ -19,7 +19,10 @@ final class WindowThumbnailEncodingBenchmarkTests: XCTestCase {
             "png", "jpeg-0.65", "jpeg-0.70", "jpeg-0.75", "raw-first"
         ])
         XCTAssertTrue(result.candidates.allSatisfy { $0.sampleCount == 2 })
-        XCTAssertTrue(result.candidates.allSatisfy { $0.encodedByteMedian >= 0 })
+        XCTAssertTrue(result.candidates.allSatisfy { $0.encodedByteMedian > 0 })
+        XCTAssertTrue(result.candidates.allSatisfy { $0.firstDisplayMedianNanoseconds > 0 })
+        XCTAssertTrue(result.candidates.allSatisfy { $0.encodeMedianNanoseconds > 0 })
+        XCTAssertTrue(result.candidates.allSatisfy { $0.decodeMedianNanoseconds > 0 })
     }
 
     func testPrivateFixtureBenchmarkWhenConfigured() throws {
