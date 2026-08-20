@@ -30,7 +30,7 @@
 - Modify: `SwitchTab/Services/WindowThumbnailService.swift:309-438`
 - Modify: `SwitchTabTests/Services/SwitcherPerformanceTests.swift`
 
-- [ ] **Step 1: Add a failing trace-vocabulary contract test**
+- [x] **Step 1: Add a failing trace-vocabulary contract test**
 
 Extend `SwitcherPerformanceTests.run()` and add a source contract that requires the four stable Instruments names without testing OSLog internals:
 
@@ -61,13 +61,13 @@ static func testPerformanceTraceDefinesStablePointsOfInterest() throws {
 }
 ```
 
-- [ ] **Step 2: Run the suite and verify RED**
+- [x] **Step 2: Run the suite and verify RED**
 
 Run: `rtk swift test --filter SwitchTabTests/testAllSuites`
 
 Expected: FAIL because `SwitcherPerformanceTrace.swift` does not exist.
 
-- [ ] **Step 3: Implement the minimal signpost helper**
+- [x] **Step 3: Implement the minimal signpost helper**
 
 Create `SwitcherPerformanceTrace.swift` with a fixed points-of-interest log and typed operations:
 
@@ -167,7 +167,7 @@ enum SwitcherPerformanceTrace {
 If Swift 6 rejects the printf-style `String` argument, use the SDK-supported
 `NSString` bridge while preserving the exact four names and public metadata.
 
-- [ ] **Step 4: Wire intervals without changing control flow**
+- [x] **Step 4: Wire intervals without changing control flow**
 
 In both public shortcut entry points, begin an invocation only for `.present` or
 `.switchMode`; same-mode `.advance` remains untraced because it performs no
@@ -180,7 +180,7 @@ Wrap each application count scan in its own interval. In
 `WindowThumbnailLoader`, emit `firstThumbnail()` once per refresh generation,
 immediately after the first successful `store.setThumbnail`.
 
-- [ ] **Step 5: Run focused and full verification**
+- [x] **Step 5: Run focused and full verification**
 
 Run: `rtk swift test --filter SwitchTabTests/testAllSuites`
 
@@ -190,7 +190,14 @@ Run: `rtk swift build`
 
 Expected: build succeeds with no Swift concurrency diagnostics.
 
-- [ ] **Step 6: Capture the baseline**
+- [x] **Step 6: Capture the baseline**
+
+Status: completed in the consolidated Task 5 measurement. The trace-only
+`f1c09b6` baseline has repeated 1-, 10-, and 30-window runs with 18 complete
+intervals each. One deterministic held-mode sequence covers application to
+window presentation and window to application to the same window-list return,
+with five invocation, three discovery, and two count intervals. See the local
+ignored `.omo/evidence/task5/README.md`.
 
 Build a signed local Debug app using the existing developer identity, launch it,
 and record Instruments Points of Interest for:
@@ -203,7 +210,7 @@ and record Instruments Points of Interest for:
 Record interval counts and durations in an ignored `.omo/evidence/` note. Do not
 commit screenshots, application names, window titles, or desktop captures.
 
-- [ ] **Step 7: Commit tracing**
+- [x] **Step 7: Commit tracing**
 
 Run:
 
@@ -221,7 +228,7 @@ rtk git commit -m "perf: instrument switcher hot paths"
 - Modify: `SwitchTab/Services/AccessibilityWindowProvider.swift:213-447`
 - Modify: `SwitchTabTests/Services/AccessibilityWindowProviderTests.swift`
 
-- [ ] **Step 1: Write failing batch and fallback tests**
+- [x] **Step 1: Write failing batch and fallback tests**
 
 Add these tests to `AccessibilityWindowProviderTests.run()`:
 
@@ -253,14 +260,14 @@ Assertions:
 - count mode passes `includeDetails: false`, performs one batch read per element,
   does not resolve window numbers, and returns the same count.
 
-- [ ] **Step 2: Run the suite and verify RED**
+- [x] **Step 2: Run the suite and verify RED**
 
 Run: `rtk swift test --filter SwitchTabTests/testAllSuites`
 
 Expected: compile failure because `AXWindowAttributeSnapshot` and
 `batchedWindowAttributes` do not exist.
 
-- [ ] **Step 3: Add the typed reader boundary**
+- [x] **Step 3: Add the typed reader boundary**
 
 In `AccessibilityWindowProvider.swift`, add:
 
@@ -289,7 +296,7 @@ role/subrole in count mode and role/subrole/title/minimized in detail mode. Trea
 an `AXValue` error placeholder, wrong type, missing role, or missing subrole as an
 unusable batch and return nil.
 
-- [ ] **Step 4: Centralize fallback semantics**
+- [x] **Step 4: Centralize fallback semantics**
 
 Add a provider helper that tries the batch first and otherwise reads exactly the
 attributes the caller needs:
@@ -323,21 +330,21 @@ Use `includeDetails: false` in `windowCount` and `true` in `windows`. Pass the
 already-read title and minimized value into `windowSnapshot` so it makes no
 additional AX calls.
 
-- [ ] **Step 5: Update existing fakes explicitly**
+- [x] **Step 5: Update existing fakes explicitly**
 
 Every existing `AXWindowAttributeReading` fake must implement the new method.
 Fakes not testing batching return nil so their prior individual-read assertions
 remain meaningful. Do not add a protocol default that could hide missing test
 intent.
 
-- [ ] **Step 6: Run tests and verify GREEN**
+- [x] **Step 6: Run tests and verify GREEN**
 
 Run: `rtk swift test --filter SwitchTabTests/testAllSuites`
 
 Expected: PASS; batch tests show one cross-process batch call per window and
 fallback tests preserve all current results.
 
-- [ ] **Step 7: Commit AX batching**
+- [x] **Step 7: Commit AX batching**
 
 Run:
 
@@ -353,7 +360,7 @@ rtk git commit -m "perf: batch accessibility window attributes"
 - Modify: `SwitchTab/AppDelegate.swift:1409-1444`
 - Modify: `SwitchTabTests/Services/ApplicationSwitchingTests.swift`
 
-- [ ] **Step 1: Write failing latest-wins tests**
+- [x] **Step 1: Write failing latest-wins tests**
 
 Replace the single deferral-only test with three behaviors, retaining its
 original assertion:
@@ -371,14 +378,14 @@ For the in-flight test, block ID 1 inside `loadCounts`, submit IDs 2 and 3, then
 release ID 1. Assert execution order `[1, 3]`, completion only for ID 3, and no
 execution for ID 2.
 
-- [ ] **Step 2: Run the suite and verify RED**
+- [x] **Step 2: Run the suite and verify RED**
 
 Run: `rtk swift test --filter SwitchTabTests/testAllSuites`
 
 Expected: FAIL because the current loader executes every queued request and
 publishes the first completion.
 
-- [ ] **Step 3: Implement one-running-plus-one-pending scheduling**
+- [x] **Step 3: Implement one-running-plus-one-pending scheduling**
 
 Inside `ApplicationWindowCountLoader`, add a locked request state:
 
@@ -404,20 +411,20 @@ itself idle under the same lock before returning.
 Never hold the lock during AX work or user completion. Keep the queue serial and
 retain `.userInitiated` QoS.
 
-- [ ] **Step 4: Trace completed and superseded work**
+- [x] **Step 4: Trace completed and superseded work**
 
 Start `Application Window Counts` immediately before `loadCounts`. End it with
 `superseded: true` when a newer generation exists and `false` when publishing.
 Queued requests replaced before execution create no interval.
 
-- [ ] **Step 5: Run tests and verify GREEN**
+- [x] **Step 5: Run tests and verify GREEN**
 
 Run: `rtk swift test --filter SwitchTabTests/testAllSuites`
 
 Expected: PASS; observed executions are `[1, 3]`, only request 3 completes, and
 deferral remains intact.
 
-- [ ] **Step 6: Commit count coalescing**
+- [x] **Step 6: Commit count coalescing**
 
 Run:
 
@@ -434,7 +441,7 @@ rtk git commit -m "perf: coalesce application window counts"
 - Modify: `SwitchTab/AppDelegate.swift:278-279, 427-560, 727-743`
 - Modify: `SwitchTabTests/Services/WindowThumbnailTests.swift`
 
-- [ ] **Step 1: Write failing cache-lifetime tests**
+- [x] **Step 1: Write failing cache-lifetime tests**
 
 Add to `WindowThumbnailTests.run()`:
 
@@ -455,13 +462,13 @@ and asserts only the seeded key remains.
 The permission test seeds the store, begins a preserving refresh with blocked
 Screen Recording, and asserts the store is empty and no demand is accepted.
 
-- [ ] **Step 2: Run the suite and verify RED**
+- [x] **Step 2: Run the suite and verify RED**
 
 Run: `rtk swift test --filter SwitchTabTests/testAllSuites`
 
 Expected: compile failure because preservation parameters do not exist.
 
-- [ ] **Step 3: Add explicit preservation parameters**
+- [x] **Step 3: Add explicit preservation parameters**
 
 Change loader APIs without changing their safe defaults:
 
@@ -497,7 +504,7 @@ public func cancel(preservingCachedThumbnails: Bool = false) {
 Reset the per-generation first-thumbnail flag in `beginRefresh`. A cache hit on
 return requires no new first-thumbnail event because no capture completes.
 
-- [ ] **Step 4: Route session lifetime from AppDelegate**
+- [x] **Step 4: Route session lifetime from AppDelegate**
 
 Replace the helper with:
 
@@ -516,14 +523,14 @@ At the start of both presentation functions, pass
 pass the same value. Keep `overlayController.onDismiss`, app termination, and
 critical memory pressure on the default clearing behavior.
 
-- [ ] **Step 5: Run tests and verify GREEN**
+- [x] **Step 5: Run tests and verify GREEN**
 
 Run: `rtk swift test --filter SwitchTabTests/testAllSuites`
 
 Expected: PASS; retained transitions reuse a completed entry, while dismissal,
 permission loss, ordinary cancel, and critical pressure still clear.
 
-- [ ] **Step 6: Commit held-session reuse**
+- [x] **Step 6: Commit held-session reuse**
 
 Run:
 
@@ -540,7 +547,14 @@ rtk git commit -m "perf: reuse thumbnails within held sessions"
 - Modify: `docs/AI_CONTEXT.md`
 - Modify: `docs/superpowers/specs/2026-08-19-switcher-hot-path-performance-design.md` only if measured results require narrowing or dropping an optimization
 
-- [ ] **Step 1: Repeat the native performance scenarios**
+- [x] **Step 1: Repeat the native performance scenarios**
+
+Status: completed with the same scope in both builds: repeated 1-, 10-, and
+30-window runs with 18 complete intervals per build and one identical
+deterministic held-mode sequence per build. The held sequence produced five
+invocation, three discovery, and two count intervals in both builds; `First
+Thumbnail` events fell from three in the baseline to two in the candidate. See
+the local ignored `.omo/evidence/task5/README.md`.
 
 Record the same four Instruments scenarios used for the baseline. Compare
 Accessibility Discovery median/p95, invocation median/p95, first-thumbnail
@@ -561,7 +575,7 @@ If AX batching does not meet its rule, revert only Task 2 and retain the tracing
 coalescing, and held-session work. Record evidence locally without committing
 private application/window names.
 
-- [ ] **Step 2: Update durable project context**
+- [x] **Step 2: Update durable project context**
 
 Add these invariants to `docs/AI_CONTEXT.md`:
 
@@ -572,11 +586,12 @@ Add these invariants to `docs/AI_CONTEXT.md`:
   work and stale in-flight results do not publish.
 - Thumbnail cache reuse is limited to one held-modifier session; dismissal,
   preview-permission loss, app termination, and critical pressure clear it.
-- Performance traces use local Points of Interest only and never record window
-  titles, application names, or process identifiers.
+- SwitchTab's local Points of Interest signpost payloads exclude window titles,
+  application names, and explicit PID fields; Instruments trace containers may
+  still include system process metadata for the emitter.
 ```
 
-- [ ] **Step 3: Run complete verification**
+- [x] **Step 3: Run complete verification**
 
 Run:
 
@@ -597,7 +612,7 @@ Expected: all Swift tests pass, unsigned app build succeeds, every release
 contract and shell syntax check passes, prepare-only succeeds, and diff check is
 clean.
 
-- [ ] **Step 4: Commit documentation**
+- [x] **Step 4: Commit documentation**
 
 Run:
 
@@ -607,7 +622,7 @@ rtk git add docs/AI_CONTEXT.md \
 rtk git commit -m "docs: record switcher performance invariants"
 ```
 
-- [ ] **Step 5: Review final scope**
+- [x] **Step 5: Review final scope**
 
 Run:
 

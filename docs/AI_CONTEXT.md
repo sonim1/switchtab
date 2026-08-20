@@ -41,7 +41,11 @@
 - Window and application MRU histories remain independent. Failed or cancelled activations do not promote an item.
 - A mode switch commits nothing: it keeps the panel, the event tap, and the modifiers that opened the session, so releasing them still confirms. A switch that finds no windows, no permission, or an unregistered target mode leaves the live session untouched. Resume memory lives for one held-modifier session and is cleared on dismissal.
 - Selection identity is stable across thumbnail/icon updates and candidate refreshes. Presentation updates must not cause panel-height or tile-position jumps.
+- Window discovery batches AX role, subrole, title, and minimized reads when the target supports it, falling back to individual reads without changing inclusion.
+- Application window-count enrichment is latest-wins: stale queued scans do no AX work and stale in-flight results do not publish.
 - Thumbnail work is demand-driven and bounded: selected items precede visible items, capture stays serial, pending work is capped, and cached encoded/decoded image cost is evicted by LRU. Dismissal, generation changes, and critical memory pressure discard stale work; warning pressure trims the cache.
+- Thumbnail cache reuse is limited to one held-modifier session; dismissal, preview-permission loss, app termination, and critical pressure clear it.
+- SwitchTab's local Points of Interest signpost payloads exclude window titles, application names, and explicit PID fields; Instruments trace containers may still include system process metadata for the emitter.
 - In application mode, unselected tiles do not reserve caption space beyond the stable shared layout; the selected caption is centered below its icon.
 - Only standard user-facing windows count toward application badges. Hide the badge for zero or one window.
 - Accessibility denial must degrade safely; never consume a replacement shortcut when SwitchTab cannot complete its switching action.
