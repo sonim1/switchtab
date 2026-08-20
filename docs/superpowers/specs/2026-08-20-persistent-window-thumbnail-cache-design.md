@@ -243,6 +243,6 @@ overlay's outer clip does not remove all of that region.
 The selected pipeline is **captured-image-first display with background PNG cache
 encoding**. It materially lowers display-ready preparation with no observed p95
 preparation regression, preserves alpha and exact UI edges, and moves the approximately
-1.06-1.08 ms median PNG encode cost off the first-display path. JPEG is not used;
+1.06-1.09 ms median PNG encode cost off the first-display path. JPEG is not used;
 its small absolute memory saving does not justify visible alpha loss or an
 appearance-dependent matting policy.
