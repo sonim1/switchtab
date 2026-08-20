@@ -18,6 +18,9 @@ enum AccessibilityWindowProviderTests {
         try testProviderCarriesFocusedWindowFlagThrough()
         try testAXSnapshotProviderReadsAndMarksTheFocusedWindow()
         try testAXWindowCountReadsOnlyWindowsRolesAndSubroles()
+        try testAXSnapshotProviderUsesBatchedWindowAttributes()
+        try testAXSnapshotProviderFallsBackWhenBatchIsUnavailable()
+        try testAXWindowCountUsesRoleSubroleBatch()
         try testAXSnapshotProviderReplacesRegistryOwner()
         try testApplicationWindowCountDoesNotMutateRegistryForSuccessFailureOrEmpty()
         try testRegistryReplacementDropsPreviousOwner()
@@ -296,6 +299,140 @@ enum AccessibilityWindowProviderTests {
         try expectEqual(resolver.callCount, 0)
     }
 
+    static func testAXSnapshotProviderUsesBatchedWindowAttributes() throws {
+        let firstWindow = AXUIElementCreateApplication(501)
+        let secondWindow = AXUIElementCreateApplication(502)
+        let attributes = BatchedAXWindowAttributeReader(
+            windowElements: [firstWindow, secondWindow],
+            individualAttributes: [
+                .init(role: kAXWindowRole as String, subrole: kAXStandardWindowSubrole as String, title: "First", isMinimized: false),
+                .init(role: kAXWindowRole as String, subrole: kAXStandardWindowSubrole as String, title: "Second", isMinimized: true)
+            ],
+            batchedResults: [
+                .init(role: kAXWindowRole as String, subrole: kAXStandardWindowSubrole as String, title: "First", isMinimized: false),
+                .init(role: kAXWindowRole as String, subrole: kAXStandardWindowSubrole as String, title: "Second", isMinimized: true)
+            ]
+        )
+        let provider = AXWindowSnapshotProvider(
+            windowNumberResolver: FixedAXWindowNumberResolver(
+                elements: [firstWindow, secondWindow],
+                identifiers: [50_001, 50_002]
+            ),
+            attributeReader: attributes
+        )
+
+        let snapshots = provider.windows(
+            ownerProcessIdentifier: 50,
+            ownerName: "Notes",
+            includeScreenCaptureIdentifiers: false
+        )
+
+        try expectEqual(attributes.batchedReadCount, 2)
+        try expectEqual(attributes.batchedIncludeDetails, [true, true])
+        try expectEqual(attributes.roleReadCount, 0)
+        try expectEqual(attributes.subroleReadCount, 0)
+        try expectEqual(attributes.titleReadCount, 0)
+        try expectEqual(attributes.boolReadCount, 0)
+        try expectEqual(snapshots?.map(\.title), ["First", "Second"])
+        try expectEqual(snapshots?.map(\.isMinimized), [false, true])
+    }
+
+    static func testAXSnapshotProviderFallsBackWhenBatchIsUnavailable() throws {
+        let firstWindow = AXUIElementCreateApplication(511)
+        let secondWindow = AXUIElementCreateApplication(512)
+        let individualAttributes = [
+            AXWindowAttributeSnapshot(
+                role: kAXWindowRole as String,
+                subrole: kAXStandardWindowSubrole as String,
+                title: "First",
+                isMinimized: false
+            ),
+            AXWindowAttributeSnapshot(
+                role: kAXWindowRole as String,
+                subrole: kAXStandardWindowSubrole as String,
+                title: "Second",
+                isMinimized: true
+            )
+        ]
+        let batchedReader = BatchedAXWindowAttributeReader(
+            windowElements: [firstWindow, secondWindow],
+            individualAttributes: individualAttributes,
+            batchedResults: individualAttributes
+        )
+        let fallbackReader = BatchedAXWindowAttributeReader(
+            windowElements: [firstWindow, secondWindow],
+            individualAttributes: individualAttributes,
+            batchedResults: [nil, nil]
+        )
+        let resolver = FixedAXWindowNumberResolver(
+            elements: [firstWindow, secondWindow],
+            identifiers: [51_001, 51_002]
+        )
+        let batchedProvider = AXWindowSnapshotProvider(
+            windowNumberResolver: resolver,
+            attributeReader: batchedReader
+        )
+        let fallbackProvider = AXWindowSnapshotProvider(
+            windowNumberResolver: resolver,
+            attributeReader: fallbackReader
+        )
+
+        let batchedSnapshots = batchedProvider.windows(
+            ownerProcessIdentifier: 51,
+            ownerName: "Notes",
+            includeScreenCaptureIdentifiers: false
+        )
+        let fallbackSnapshots = fallbackProvider.windows(
+            ownerProcessIdentifier: 51,
+            ownerName: "Notes",
+            includeScreenCaptureIdentifiers: false
+        )
+
+        try expectEqual(fallbackSnapshots, batchedSnapshots)
+        try expectEqual(fallbackReader.batchedReadCount, 2)
+        try expectEqual(fallbackReader.batchedIncludeDetails, [true, true])
+        try expectEqual(fallbackReader.roleReadCount, 2)
+        try expectEqual(fallbackReader.subroleReadCount, 2)
+        try expectEqual(fallbackReader.titleReadCount, 2)
+        try expectEqual(fallbackReader.boolReadCount, 2)
+    }
+
+    static func testAXWindowCountUsesRoleSubroleBatch() throws {
+        let standardWindow = AXUIElementCreateApplication(521)
+        let panelWindow = AXUIElementCreateApplication(522)
+        let buttonElement = AXUIElementCreateApplication(523)
+        let attributes = BatchedAXWindowAttributeReader(
+            windowElements: [standardWindow, panelWindow, buttonElement],
+            individualAttributes: [
+                .init(role: kAXWindowRole as String, subrole: kAXStandardWindowSubrole as String, title: "Standard", isMinimized: false),
+                .init(role: kAXWindowRole as String, subrole: "AXUnknown", title: "Panel", isMinimized: false),
+                .init(role: kAXButtonRole as String, subrole: kAXStandardWindowSubrole as String, title: "Button", isMinimized: false)
+            ],
+            batchedResults: [
+                .init(role: kAXWindowRole as String, subrole: kAXStandardWindowSubrole as String, title: nil, isMinimized: false),
+                .init(role: kAXWindowRole as String, subrole: "AXUnknown", title: nil, isMinimized: false),
+                .init(role: kAXButtonRole as String, subrole: kAXStandardWindowSubrole as String, title: nil, isMinimized: false)
+            ]
+        )
+        let resolver = RecordingAXWindowNumberResolver()
+        let provider = AXWindowSnapshotProvider(
+            windowNumberResolver: resolver,
+            attributeReader: attributes
+        )
+
+        let count = provider.windowCount(ownerProcessIdentifier: 52)
+
+        try expectEqual(count, 1)
+        try expectEqual(attributes.batchedReadCount, 3)
+        try expectEqual(attributes.batchedIncludeDetails, [false, false, false])
+        try expectEqual(attributes.roleReadCount, 0)
+        try expectEqual(attributes.subroleReadCount, 0)
+        try expectEqual(attributes.titleReadCount, 0)
+        try expectEqual(attributes.boolReadCount, 0)
+        try expectEqual(attributes.focusedWindowReadCount, 0)
+        try expectEqual(resolver.callCount, 0)
+    }
+
     static func testAXSnapshotProviderReplacesRegistryOwner() throws {
         let firstProcessWindow = AXUIElementCreateApplication(201)
         let secondProcessOldWindow = AXUIElementCreateApplication(202)
@@ -526,6 +663,13 @@ private final class SequencedAXWindowAttributeReader: AXWindowAttributeReading {
         nil
     }
 
+    func batchedWindowAttributes(
+        _: AXUIElement,
+        includeDetails _: Bool
+    ) -> AXWindowAttributeSnapshot? {
+        nil
+    }
+
     func stringAttribute(_: AXUIElement, _ attribute: CFString) -> String? {
         let attributeName = attribute as String
         if attributeName == kAXRoleAttribute as String {
@@ -570,6 +714,13 @@ private final class CountOnlyAXWindowAttributeReader: AXWindowAttributeReading {
     func focusedWindowElement(of _: AXUIElement) -> AXUIElement? {
         focusedWindowReadCount += 1
         return nil
+    }
+
+    func batchedWindowAttributes(
+        _: AXUIElement,
+        includeDetails _: Bool
+    ) -> AXWindowAttributeSnapshot? {
+        nil
     }
 
     func stringAttribute(_ element: AXUIElement, _ attribute: CFString) -> String? {
@@ -617,6 +768,13 @@ private final class RecordingAXWindowAttributeReader: AXWindowAttributeReading {
         return focusedWindowElement
     }
 
+    func batchedWindowAttributes(
+        _: AXUIElement,
+        includeDetails _: Bool
+    ) -> AXWindowAttributeSnapshot? {
+        nil
+    }
+
     func stringAttribute(_ element: AXUIElement, _ attribute: CFString) -> String? {
         let attributeName = attribute as String
         if attributeName == kAXRoleAttribute as String {
@@ -633,6 +791,83 @@ private final class RecordingAXWindowAttributeReader: AXWindowAttributeReading {
 
     func boolAttribute(_: AXUIElement, _: CFString) -> Bool {
         false
+    }
+}
+
+private final class BatchedAXWindowAttributeReader: AXWindowAttributeReading {
+    let windowElements: [AXUIElement]
+    let individualAttributes: [AXWindowAttributeSnapshot]
+    let batchedResults: [AXWindowAttributeSnapshot?]
+    private(set) var focusedWindowReadCount = 0
+    private(set) var batchedReadCount = 0
+    private(set) var batchedIncludeDetails: [Bool] = []
+    private(set) var roleReadCount = 0
+    private(set) var subroleReadCount = 0
+    private(set) var titleReadCount = 0
+    private(set) var boolReadCount = 0
+
+    init(
+        windowElements: [AXUIElement],
+        individualAttributes: [AXWindowAttributeSnapshot],
+        batchedResults: [AXWindowAttributeSnapshot?]
+    ) {
+        self.windowElements = windowElements
+        self.individualAttributes = individualAttributes
+        self.batchedResults = batchedResults
+    }
+
+    func windowElements(of _: AXUIElement) -> [AXUIElement]? {
+        windowElements
+    }
+
+    func focusedWindowElement(of _: AXUIElement) -> AXUIElement? {
+        focusedWindowReadCount += 1
+        return nil
+    }
+
+    func batchedWindowAttributes(
+        _ element: AXUIElement,
+        includeDetails: Bool
+    ) -> AXWindowAttributeSnapshot? {
+        batchedReadCount += 1
+        batchedIncludeDetails.append(includeDetails)
+        guard let index = index(of: element) else {
+            return nil
+        }
+        return batchedResults[index]
+    }
+
+    func stringAttribute(_ element: AXUIElement, _ attribute: CFString) -> String? {
+        guard let index = index(of: element) else {
+            return nil
+        }
+
+        let snapshot = individualAttributes[index]
+        if CFEqual(attribute, kAXRoleAttribute as CFString) {
+            roleReadCount += 1
+            return snapshot.role
+        }
+        if CFEqual(attribute, kAXSubroleAttribute as CFString) {
+            subroleReadCount += 1
+            return snapshot.subrole
+        }
+        if CFEqual(attribute, kAXTitleAttribute as CFString) {
+            titleReadCount += 1
+            return snapshot.title
+        }
+        return nil
+    }
+
+    func boolAttribute(_ element: AXUIElement, _: CFString) -> Bool {
+        boolReadCount += 1
+        guard let index = index(of: element) else {
+            return false
+        }
+        return individualAttributes[index].isMinimized
+    }
+
+    private func index(of element: AXUIElement) -> Int? {
+        windowElements.firstIndex(where: { CFEqual($0, element) })
     }
 }
 
