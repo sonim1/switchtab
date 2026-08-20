@@ -78,6 +78,11 @@ per fixture and report median and p95 for:
 - encoded byte count;
 - estimated decoded RGBA cost.
 
+Cache-hit decode must pass `kCGImageSourceShouldCacheImmediately: true` when
+creating the `CGImage`. ImageIO otherwise defers pixel decoding until rendering,
+which would measure object creation rather than decode work. The benchmark stops
+at a display-ready `NSImage`; it does not claim to measure AppKit compositing.
+
 Inspect the actual thumbnails at their rendered size and at 2x zoom. The chosen
 JPEG quality is the lowest tested setting before text edges, thin rules, dark
 gradients, or window shadows show objectionable artifacts. `0.70` is the default
@@ -193,22 +198,32 @@ image-heavy UI. Each run used five warmups and 30 measured iterations per fixtur
 and candidate, for 120 samples per candidate. Fixtures and encoded samples remain
 ignored and uncommitted.
 
-Times below are median / p95 milliseconds:
+Times below are median / p95 milliseconds. Encoded candidates include forced
+pixel decode before `NSImage` conversion; raw-first starts from the already
+decoded captured `CGImage`.
 
-| Candidate | Run 1 first display | Run 2 first display | Run 1 encode | Run 2 encode | Encoded median |
-|---|---:|---:|---:|---:|---:|
-| PNG | 1.179 / 1.472 | 1.164 / 1.438 | 1.079 / 1.403 | 1.064 / 1.364 | 33,510 B |
-| JPEG 0.65 | 0.271 / 0.319 | 0.276 / 0.327 | 0.229 / 0.276 | 0.236 / 0.285 | 10,388 B |
-| JPEG 0.70 | 0.296 / 0.347 | 0.287 / 0.346 | 0.255 / 0.306 | 0.247 / 0.303 | 11,537 B |
-| JPEG 0.75 | 0.294 / 0.351 | 0.295 / 0.345 | 0.254 / 0.307 | 0.253 / 0.303 | 12,275 B |
-| Raw-first | 0.00158 / 0.00175 | 0.00154 / 0.00175 | 0.255 / 0.313* | 0.267 / 0.309* | 11,537 B* |
+| Candidate | Run 1 display-ready prep | Run 2 display-ready prep | Encoded median |
+|---|---:|---:|---:|
+| PNG | 1.832 / 2.145 | 1.807 / 2.212 | 33,510 B |
+| JPEG 0.65 | 0.469 / 0.553 | 0.442 / 0.532 | 10,388 B |
+| JPEG 0.70 | 0.496 / 0.551 | 0.479 / 0.560 | 11,537 B |
+| JPEG 0.75 | 0.492 / 0.574 | 0.515 / 0.581 | 12,275 B |
+| Raw-first | 0.00179 / 0.00200 | 0.00179 / 0.00213 | 11,537 B* |
+
+| Candidate | Run 1 encode | Run 2 encode | Run 1 forced decode | Run 2 forced decode |
+|---|---:|---:|---:|---:|
+| PNG | 1.091 / 1.394 | 1.064 / 1.416 | 0.708 / 0.765 | 0.698 / 0.796 |
+| JPEG 0.65 | 0.253 / 0.304 | 0.238 / 0.291 | 0.215 / 0.246 | 0.207 / 0.240 |
+| JPEG 0.70 | 0.267 / 0.298 | 0.263 / 0.311 | 0.230 / 0.252 | 0.227 / 0.252 |
+| JPEG 0.75 | 0.264 / 0.314 | 0.258 / 0.318 | 0.232 / 0.259 | 0.238 / 0.268 |
+| Raw-first | 0.251 / 0.294* | 0.256 / 0.300* | 0.221 / 0.252* | 0.224 / 0.252* |
 
 `*` The raw-first benchmark used JPEG 0.70 for its independent background encode.
 The selected raw-first + PNG design combines raw-first display timing with the
 separately measured PNG background encoding and cache-hit decoding results.
 
-Median decoded RGBA cost was 258,984 bytes per entry. PNG cache-hit decode median
-was 0.068 / 0.066 ms across the two runs. JPEG 0.70 reduced median encoded bytes
+Median decoded RGBA cost was 258,984 bytes per entry. PNG forced cache-hit decode
+median was 0.708 / 0.698 ms across the two runs. JPEG 0.70 reduced median encoded bytes
 by 65.6% and encoded roughly four times faster than PNG, but the planned 16-entry
 cache would save only about 0.35 MiB of encoded storage relative to roughly
 3.95 MiB of decoded RGBA storage.
@@ -226,8 +241,8 @@ overlay's outer clip does not remove all of that region.
 | JPEG 0.75 | pass | pass | pass | fail: transparent window area becomes white | no |
 
 The selected pipeline is **captured-image-first display with background PNG cache
-encoding**. It materially lowers first-display preparation with no observed p95
-regression, preserves alpha and exact UI edges, and moves the approximately
+encoding**. It materially lowers display-ready preparation with no observed p95
+preparation regression, preserves alpha and exact UI edges, and moves the approximately
 1.06-1.08 ms median PNG encode cost off the first-display path. JPEG is not used;
 its small absolute memory saving does not justify visible alpha loss or an
 appearance-dependent matting policy.
