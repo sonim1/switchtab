@@ -34,6 +34,9 @@ enum WindowThumbnailTests {
         try await testThumbnailLoaderLeavesPlaceholderWhenCaptureReturnsNil()
         try await testThumbnailLoaderCancelDiscardsInFlightCapture()
         try await testThumbnailLoaderDiscardsStaleCaptureBeforeStartingNextGeneration()
+        try await testThumbnailLoaderPreservesCacheAcrossRetainedRefresh()
+        try await testThumbnailLoaderPreservingCancelDropsInFlightWorkButKeepsCompletedCache()
+        try await testThumbnailLoaderClearsPreservedCacheWhenPreviewPermissionIsBlocked()
     }
 
     static func testCaptureViewportTracksOverlayScale() throws {
@@ -313,6 +316,79 @@ enum WindowThumbnailTests {
         try expectEqual(capturer.requestedWindowIdentifiers, [1, 2])
         try expectEqual(capturer.maximumConcurrentCaptureCount, 1)
         try expectEqual(store.cachedKeys, [secondWindow.id])
+    }
+
+    @MainActor
+    static func testThumbnailLoaderPreservesCacheAcrossRetainedRefresh() async throws {
+        let window = makeWindow(7)
+        let store = WindowThumbnailStore()
+        let capturer = FakeWindowThumbnailCapturer(thumbnails: [
+            window.windowIdentifier: WindowThumbnail(pngData: Data("preview".utf8))
+        ])
+        let loader = WindowThumbnailLoader(store: store, capturer: capturer)
+        let permissionState = PermissionState(accessibility: .granted, screenRecording: .granted)
+
+        loader.beginRefresh(permissionState: permissionState)
+        loader.requestThumbnail(for: window, priority: .selected)
+        await loader.waitForCurrentRefresh()
+
+        try expectEqual(capturer.requestedWindowIdentifiers, [7])
+        try expectEqual(store.cachedKeys, [window.id])
+
+        loader.beginRefresh(
+            permissionState: permissionState,
+            preservingCachedThumbnails: true
+        )
+        loader.requestThumbnail(for: window, priority: .selected)
+        await loader.waitForCurrentRefresh()
+
+        try expectEqual(capturer.requestedWindowIdentifiers, [7])
+        try expectEqual(store.cachedKeys, [window.id])
+    }
+
+    @MainActor
+    static func testThumbnailLoaderPreservingCancelDropsInFlightWorkButKeepsCompletedCache() async throws {
+        let cachedWindow = makeWindow(7)
+        let inFlightWindow = makeWindow(8)
+        let store = WindowThumbnailStore()
+        store.setThumbnail(WindowThumbnail(pngData: Data("cached".utf8)), for: cachedWindow.id)
+        let capturer = PausingWindowThumbnailCapturer()
+        let loader = WindowThumbnailLoader(store: store, capturer: capturer)
+        let permissionState = PermissionState(accessibility: .granted, screenRecording: .granted)
+
+        loader.beginRefresh(
+            permissionState: permissionState,
+            preservingCachedThumbnails: true
+        )
+        loader.requestThumbnail(for: inFlightWindow, priority: .selected)
+        await capturer.waitUntilCaptureCount(1)
+
+        loader.cancel(preservingCachedThumbnails: true)
+        capturer.resumeFirstCapture(with: WindowThumbnail(pngData: Data("stale".utf8)))
+        await loader.waitForCurrentRefresh()
+
+        try expectEqual(store.cachedKeys, [cachedWindow.id])
+    }
+
+    @MainActor
+    static func testThumbnailLoaderClearsPreservedCacheWhenPreviewPermissionIsBlocked() async throws {
+        let window = makeWindow(7)
+        let store = WindowThumbnailStore()
+        store.setThumbnail(WindowThumbnail(pngData: Data("cached".utf8)), for: window.id)
+        let capturer = FakeWindowThumbnailCapturer(thumbnails: [
+            window.windowIdentifier: WindowThumbnail(pngData: Data("preview".utf8))
+        ])
+        let loader = WindowThumbnailLoader(store: store, capturer: capturer)
+
+        loader.beginRefresh(
+            permissionState: PermissionState(accessibility: .granted, screenRecording: .missing),
+            preservingCachedThumbnails: true
+        )
+        loader.requestThumbnail(for: window, priority: .selected)
+        await loader.waitForCurrentRefresh()
+
+        try expectEqual(store.cachedKeys, [])
+        try expectEqual(capturer.requestedWindowIdentifiers, [])
     }
 
     @MainActor

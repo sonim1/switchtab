@@ -339,7 +339,8 @@ public final class WindowThumbnailLoader {
 
     public func beginRefresh(
         permissionState: PermissionState,
-        viewportPixelSize: CGSize = CGSize(width: 240, height: 165)
+        viewportPixelSize: CGSize = CGSize(width: 240, height: 165),
+        preservingCachedThumbnails: Bool = false
     ) {
         refreshGeneration += 1
         didEmitFirstThumbnailForGeneration = false
@@ -348,7 +349,9 @@ public final class WindowThumbnailLoader {
         previewsAllowed = !permissionState.blocksWindowPreviews
         self.viewportPixelSize = viewportPixelSize
         refreshTask?.cancel()
-        store.clear()
+        if !preservingCachedThumbnails || !previewsAllowed {
+            store.clear()
+        }
     }
 
     func requestThumbnail(
@@ -372,14 +375,16 @@ public final class WindowThumbnailLoader {
         }
     }
 
-    public func cancel() {
+    public func cancel(preservingCachedThumbnails: Bool = false) {
         refreshGeneration += 1
         didEmitFirstThumbnailForGeneration = false
         previewsAllowed = false
         requestQueue.clear()
         activeWindowIDs.removeAll(keepingCapacity: true)
         refreshTask?.cancel()
-        store.clear()
+        if !preservingCachedThumbnails {
+            store.clear()
+        }
     }
 
     private func startWorkerIfNeeded() {

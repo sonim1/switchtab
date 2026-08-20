@@ -480,7 +480,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             return false
         }
 
-        cancelThumbnailLoadingIfNeeded()
+        cancelThumbnailLoadingIfNeeded(
+            preservingCachedThumbnails: retainingSession
+        )
         let accessibilityState = permissionService.currentAccessibilityState()
         debugLog("accessibility state=\(accessibilityState)")
         guard !accessibilityState.blocksCapability else {
@@ -547,7 +549,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         let thumbnailLoader = thumbnailLoaderForRefresh()
         thumbnailLoader.beginRefresh(
             permissionState: permissionState,
-            viewportPixelSize: viewportPixelSize
+            viewportPixelSize: viewportPixelSize,
+            preservingCachedThumbnails: retainingSession
         )
         overlayController.present(
             mode: .currentAppWindowSwitching,
@@ -618,7 +621,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             return false
         }
 
-        cancelThumbnailLoadingIfNeeded()
+        cancelThumbnailLoadingIfNeeded(
+            preservingCachedThumbnails: retainingSession
+        )
         let recentlyOrderedApplications = applicationRecencyStore.order(
             applicationProvider.runningApplications()
         ) { application in
@@ -792,8 +797,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         return thumbnailLoader
     }
 
-    private func cancelThumbnailLoadingIfNeeded() {
-        thumbnailLoader?.cancel()
+    private func cancelThumbnailLoadingIfNeeded(
+        preservingCachedThumbnails: Bool = false
+    ) {
+        thumbnailLoader?.cancel(
+            preservingCachedThumbnails: preservingCachedThumbnails
+        )
     }
 
     private func observeThumbnailMemoryPressure() {
