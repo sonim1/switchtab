@@ -1477,8 +1477,18 @@ enum ApplicationSwitcherWindowCountPolicy {
 final class ApplicationWindowCountLoader: @unchecked Sendable {
     typealias LoadCounts = @Sendable ([ApplicationItem]) -> [ApplicationItem]
 
+    private struct Request: Sendable {
+        let generation: UInt64
+        let applications: [ApplicationItem]
+        let completion: @Sendable ([ApplicationItem]) -> Void
+    }
+
     private let queue: DispatchQueue
     private let loadCounts: LoadCounts
+    private let lock = NSLock()
+    private var generation: UInt64 = 0
+    private var pendingRequest: Request?
+    private var workerIsRunning = false
 
     init(
         queue: DispatchQueue = DispatchQueue(
@@ -1504,15 +1514,57 @@ final class ApplicationWindowCountLoader: @unchecked Sendable {
         applications: [ApplicationItem],
         completion: @escaping @Sendable ([ApplicationItem]) -> Void
     ) {
-        let loadCounts = self.loadCounts
-        queue.async {
+        let shouldStartWorker: Bool
+
+        lock.lock()
+        generation &+= 1
+        pendingRequest = Request(
+            generation: generation,
+            applications: applications,
+            completion: completion
+        )
+        shouldStartWorker = !workerIsRunning
+        workerIsRunning = true
+        lock.unlock()
+
+        guard shouldStartWorker else {
+            return
+        }
+
+        queue.async { [self] in
+            processPendingRequests()
+        }
+    }
+
+    private func processPendingRequests() {
+        while true {
+            let request: Request
+
+            lock.lock()
+            guard let nextRequest = pendingRequest else {
+                workerIsRunning = false
+                lock.unlock()
+                return
+            }
+            request = nextRequest
+            pendingRequest = nil
+            lock.unlock()
+
             let performanceInterval = SwitcherPerformanceTrace.beginApplicationWindowCounts()
-            let countedApplications = loadCounts(applications)
+            let countedApplications = loadCounts(request.applications)
+
+            lock.lock()
+            let isNewest = request.generation == generation
+            lock.unlock()
+
             SwitcherPerformanceTrace.endApplicationWindowCounts(
                 performanceInterval,
-                superseded: false
+                superseded: !isNewest
             )
-            completion(countedApplications)
+
+            if isNewest {
+                request.completion(countedApplications)
+            }
         }
     }
 }
