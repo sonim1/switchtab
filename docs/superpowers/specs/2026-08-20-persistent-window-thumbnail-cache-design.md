@@ -184,3 +184,43 @@ by the larger approved thumbnail, but the panel must remain on-screen.
   unchanged.
 - The final image format and display pipeline are justified by recorded benchmark
   results rather than assumption.
+
+## Benchmark Result
+
+Measured on 2026-08-20 on Apple Silicon (`arm64`). Four private local fixture
+categories covered dark text-heavy UI, mixed system UI, light text-heavy UI, and
+image-heavy UI. Each run used five warmups and 30 measured iterations per fixture
+and candidate, for 120 samples per candidate. Fixtures and encoded samples remain
+ignored and uncommitted.
+
+Times below are median / p95 milliseconds:
+
+| Candidate | Run 1 first display | Run 2 first display | Run 1 encode | Run 2 encode | Encoded median |
+|---|---:|---:|---:|---:|---:|
+| PNG | 1.179 / 1.472 | 1.164 / 1.438 | 1.079 / 1.403 | 1.064 / 1.364 | 33,510 B |
+| JPEG 0.65 | 0.271 / 0.319 | 0.276 / 0.327 | 0.229 / 0.276 | 0.236 / 0.285 | 10,388 B |
+| JPEG 0.70 | 0.296 / 0.347 | 0.287 / 0.346 | 0.255 / 0.306 | 0.247 / 0.303 | 11,537 B |
+| JPEG 0.75 | 0.294 / 0.351 | 0.295 / 0.345 | 0.254 / 0.307 | 0.253 / 0.303 | 12,275 B |
+| Raw-first | 0.00158 / 0.00175 | 0.00154 / 0.00175 | 0.255 / 0.313* | 0.267 / 0.309* | 11,537 B* |
+
+`*` The raw-first benchmark used JPEG 0.70 for its independent background encode.
+The selected raw-first + PNG design combines raw-first display timing with the
+separately measured PNG background encoding and cache-hit decoding results.
+
+Median decoded RGBA cost was 258,984 bytes per entry. PNG cache-hit decode median
+was 0.068 / 0.066 ms across the two runs. JPEG 0.70 reduced median encoded bytes
+by 65.6% and encoded roughly four times faster than PNG, but the planned 16-entry
+cache would save only about 0.35 MiB of encoded storage relative to roughly
+3.95 MiB of decoded RGBA storage.
+
+Visual review found JPEG 0.70 acceptable for opaque text, rules, and gradients.
+All tested JPEG qualities failed the captured-window alpha requirement: transparent
+shadow and rounded-corner regions became white inside the thumbnail bounds. The
+overlay's outer clip does not remove all of that region.
+
+The selected pipeline is **captured-image-first display with background PNG cache
+encoding**. It materially lowers first-display preparation with no observed p95
+regression, preserves alpha and exact UI edges, and moves the approximately
+1.06-1.08 ms median PNG encode cost off the first-display path. JPEG is not used;
+its small absolute memory saving does not justify visible alpha loss or an
+appearance-dependent matting policy.

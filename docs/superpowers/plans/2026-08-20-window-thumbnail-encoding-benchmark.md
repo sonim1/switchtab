@@ -28,7 +28,7 @@ No cache lifetime, loader behavior, overlay layout, or production format changes
 - Create: `SwitchTabTests/Services/WindowThumbnailImageCodecTests.swift`
 - Modify: `SwitchTab.xcodeproj/project.pbxproj`
 
-- [ ] **Step 1: Write failing codec tests**
+- [x] **Step 1: Write failing codec tests**
 
 Create a native XCTest case so SwiftPM discovers it automatically:
 
@@ -82,7 +82,7 @@ final class WindowThumbnailImageCodecTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Run the focused tests to prove RED**
+- [x] **Step 2: Run the focused tests to prove RED**
 
 Run:
 
@@ -92,7 +92,7 @@ rtk swift test --filter WindowThumbnailImageCodecTests
 
 Expected: compile failure because `WindowThumbnailImageCodec` and `WindowThumbnailEncodingFormat` do not exist. Save the output to `.omo/evidence/window-thumbnail-encoding/task1-red.log`.
 
-- [ ] **Step 3: Implement the minimal codec**
+- [x] **Step 3: Implement the minimal codec**
 
 Create `WindowThumbnailImageCodec.swift`:
 
@@ -155,7 +155,7 @@ enum WindowThumbnailImageCodec {
 
 Register this file in the Xcode project's Services group and the app target's Sources phase, following the existing `SwitcherPerformanceTrace.swift` entries exactly.
 
-- [ ] **Step 4: Run focused and full verification**
+- [x] **Step 4: Run focused and full verification**
 
 Run:
 
@@ -172,7 +172,7 @@ rtk git diff --check
 
 Expected: codec tests pass, full suite reports zero failures, both builds succeed, and diff check is clean.
 
-- [ ] **Step 5: Commit the codec**
+- [x] **Step 5: Commit the codec**
 
 ```bash
 rtk git add SwitchTab/Services/WindowThumbnailImageCodec.swift \
@@ -186,7 +186,7 @@ rtk git commit -m "test: add thumbnail image codec benchmark boundary"
 **Files:**
 - Create: `SwitchTabTests/Services/WindowThumbnailEncodingBenchmarkTests.swift`
 
-- [ ] **Step 1: Write the benchmark contract test first**
+- [x] **Step 1: Write the benchmark contract test first**
 
 The default contract uses an in-memory fixture and proves all candidates produce
 decodable output and timing samples. The private-fixture benchmark remains opt-in.
@@ -235,7 +235,7 @@ final class WindowThumbnailEncodingBenchmarkTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Run the focused test to prove RED**
+- [x] **Step 2: Run the focused test to prove RED**
 
 Run:
 
@@ -245,7 +245,7 @@ rtk swift test --filter WindowThumbnailEncodingBenchmarkTests/testRunnerProduces
 
 Expected: compile failure because `BenchmarkFixture` and `ThumbnailEncodingBenchmark` do not exist. Save output to `.omo/evidence/window-thumbnail-encoding/task2-red.log`.
 
-- [ ] **Step 3: Implement test-only benchmark types in the same file**
+- [x] **Step 3: Implement test-only benchmark types in the same file**
 
 Add private types below the XCTest case:
 
@@ -501,7 +501,7 @@ The implementation must preserve these measurement rules:
 Use a local `autoreleasepool` around every iteration so decoded images from prior
 iterations do not contaminate later memory or latency measurements.
 
-- [ ] **Step 4: Run the contract and full suite**
+- [x] **Step 4: Run the contract and full suite**
 
 Run:
 
@@ -513,7 +513,7 @@ rtk git diff --check
 
 Expected: contract passes; the private benchmark reports one intentional skip when environment variables are absent; all other tests pass.
 
-- [ ] **Step 5: Commit the benchmark runner**
+- [x] **Step 5: Commit the benchmark runner**
 
 ```bash
 rtk git add SwitchTabTests/Services/WindowThumbnailEncodingBenchmarkTests.swift
@@ -525,7 +525,7 @@ rtk git commit -m "test: benchmark thumbnail encoding pipelines"
 **Files:**
 - Create ignored evidence only: `.omo/evidence/window-thumbnail-encoding/**`
 
-- [ ] **Step 1: Capture four representative private fixtures**
+- [x] **Step 1: Capture four representative private fixtures**
 
 Create the ignored directories and use macOS interactive window capture so no
 window identifiers or names enter command logs:
@@ -542,7 +542,7 @@ rtk proxy screencapture -i .omo/evidence/window-thumbnail-encoding/fixtures/fixt
 Choose one light text-heavy window, one dark text-heavy window, one image-heavy
 window, and one mixed UI window. Verify `.omo/evidence` is ignored before saving.
 
-- [ ] **Step 2: Run the benchmark twice**
+- [x] **Step 2: Run the benchmark twice**
 
 Run two independent 30-iteration passes:
 
@@ -561,7 +561,7 @@ rtk proxy env \
 Expected: both runs pass, each result has four fixtures and 30 samples per
 candidate, and no fixture path or name appears in stdout.
 
-- [ ] **Step 3: Inspect visual candidates**
+- [x] **Step 3: Inspect visual candidates**
 
 Open the generated PNG and JPEG `0.65/0.70/0.75` samples at `192 x 132 pt`
 equivalent and at 2x zoom. Record only these judgments in
@@ -578,7 +578,7 @@ equivalent and at 2x zoom. Record only these judgments in
 
 Do not embed or commit screenshots.
 
-- [ ] **Step 4: Apply the decision rules**
+- [x] **Step 4: Apply the decision rules**
 
 Write `.omo/evidence/window-thumbnail-encoding/decision.md` with aggregate run-1
 and run-2 median/p95, encoded-byte medians, and the selected pipeline.
@@ -599,7 +599,7 @@ Stop and report the measurements instead of silently relaxing a gate.
 **Files:**
 - Modify: `docs/superpowers/specs/2026-08-20-persistent-window-thumbnail-cache-design.md`
 
-- [ ] **Step 1: Add the aggregate result to the design**
+- [x] **Step 1: Add the aggregate result to the design**
 
 Append a `## Benchmark Result` section containing:
 
@@ -612,7 +612,7 @@ Append a `## Benchmark Result` section containing:
 
 Do not modify the design's cache limits or layout decision in this task.
 
-- [ ] **Step 2: Run complete verification**
+- [x] **Step 2: Run complete verification**
 
 ```bash
 rtk swift test
@@ -628,7 +628,7 @@ rtk git status --short
 Expected: all tests and builds pass, diff check is clean, and only the design
 document remains uncommitted. `.omo/evidence` stays ignored.
 
-- [ ] **Step 3: Commit the aggregate decision**
+- [x] **Step 3: Commit the aggregate decision**
 
 ```bash
 rtk git add docs/superpowers/specs/2026-08-20-persistent-window-thumbnail-cache-design.md
@@ -638,7 +638,7 @@ rtk git status --short
 
 Expected: clean worktree. Do not begin the persistent cache implementation.
 
-- [ ] **Step 4: Present the result gate to the user**
+- [x] **Step 4: Present the result gate to the user**
 
 Report the measured pipeline, median/p95, byte reduction, visual outcome, and any
 regression. Ask for approval before writing the separate persistent-cache and
