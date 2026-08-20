@@ -218,6 +218,13 @@ All tested JPEG qualities failed the captured-window alpha requirement: transpar
 shadow and rounded-corner regions became white inside the thumbnail bounds. The
 overlay's outer clip does not remove all of that region.
 
+| Candidate | Text edges | Thin rules | Dark gradients | Shadows / alpha | Acceptable |
+|---|---|---|---|---|---|
+| PNG | pass | pass | pass | pass | yes |
+| JPEG 0.65 | soft | pass | pass | fail: transparent window area becomes white | no |
+| JPEG 0.70 | pass | pass | pass | fail: transparent window area becomes white | no |
+| JPEG 0.75 | pass | pass | pass | fail: transparent window area becomes white | no |
+
 The selected pipeline is **captured-image-first display with background PNG cache
 encoding**. It materially lowers first-display preparation with no observed p95
 regression, preserves alpha and exact UI edges, and moves the approximately
