@@ -16,7 +16,7 @@
 - Modify: `SwitchTab/Services/WindowThumbnailService.swift`
 - Modify: `SwitchTabTests/Services/WindowThumbnailTests.swift`
 
-- [ ] **Step 1: Write the failing stale-while-revalidate test**
+- [x] **Step 1: Write the failing stale-while-revalidate test**
 
 Add the test to `WindowThumbnailTests.run()` and implement:
 
@@ -44,7 +44,7 @@ static func testThumbnailLoaderRefreshesCachedThumbnailOnceInNewGeneration() asy
 }
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -54,15 +54,15 @@ rtk swift test --filter SwitchTabTests/testAllSuites
 
 Expected: failure because the current `containsThumbnail` guard prevents capture for a cached key.
 
-- [ ] **Step 3: Implement generation-scoped demand tracking**
+- [x] **Step 3: Implement generation-scoped demand tracking**
 
-In `WindowThumbnailLoader`, replace the cache-hit exclusion with a `requestedWindowIDs` set:
+In `WindowThumbnailLoader`, replace the cache-hit exclusion with generation-scoped completed-demand tracking:
 
 ```swift
-private var requestedWindowIDs: Set<String> = []
+private var completedWindowIDs: Set<String> = []
 ```
 
-Clear it in `beginRefresh` and `cancel`. In `requestThumbnail`, guard against `requestedWindowIDs` and `activeWindowIDs`, then insert the ID before enqueueing. Do not guard on `store.containsThumbnail`; the store continues supplying the stale image while capture runs.
+Clear it in `beginRefresh` and `cancel`. Pending requests remain eligible for queue-priority promotion; active and completed requests are suppressed. Mark a request completed only after its current-generation capture attempt returns, including a nil result. Do not guard on `store.containsThumbnail`; the store continues supplying the stale image while capture runs.
 
 Add a test-visible store accessor without changing the public UI API:
 
@@ -72,13 +72,13 @@ func thumbnail(for key: String) -> WindowThumbnail? {
 }
 ```
 
-- [ ] **Step 4: Run the focused suite and verify GREEN**
+- [x] **Step 4: Run the focused suite and verify GREEN**
 
 Run `rtk swift test --filter SwitchTabTests/testAllSuites`.
 
 Expected: all legacy suites pass and the cached thumbnail is replaced after one capture.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 rtk git add SwitchTab/Services/WindowThumbnailService.swift SwitchTabTests/Services/WindowThumbnailTests.swift
@@ -91,7 +91,7 @@ rtk git commit -m "fix: revalidate retained window thumbnails"
 - Modify: `SwitchTab/Services/WindowThumbnailService.swift`
 - Modify: `SwitchTabTests/Services/WindowThumbnailTests.swift`
 
-- [ ] **Step 1: Write failing store policy tests**
+- [x] **Step 1: Write failing store policy tests**
 
 Add tests proving:
 
@@ -120,19 +120,19 @@ static func testThumbnailStoreRemovesWindowAndOwningProcessEntries() throws {
 }
 ```
 
-- [ ] **Step 2: Run the focused suite and verify RED**
+- [x] **Step 2: Run the focused suite and verify RED**
 
 Expected: default-count assertion fails at 17 and removal methods do not compile.
 
-- [ ] **Step 3: Implement the approved limits and removal APIs**
+- [x] **Step 3: Implement the approved limits and removal APIs**
 
 Change defaults to 16 entries / 24 MiB and warning trim to 8 entries / 12 MiB. Add `removeThumbnail(for:)` and `removeThumbnails(ownerProcessIdentifier:)`, removing encoded data, decoded data, and access-order entries while publishing one change notification.
 
-- [ ] **Step 4: Run the focused suite and verify GREEN**
+- [x] **Step 4: Run the focused suite and verify GREEN**
 
 Run `rtk swift test --filter SwitchTabTests/testAllSuites`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 rtk git add SwitchTab/Services/WindowThumbnailService.swift SwitchTabTests/Services/WindowThumbnailTests.swift
@@ -171,7 +171,7 @@ rtk git diff --check
 
 Expected: 0 failures and `** BUILD SUCCEEDED **`.
 
-- [ ] **Step 5: Manual behavior verification**
+- [x] **Step 5: Manual behavior verification**
 
 Run the built app with Accessibility and Screen Recording granted:
 
@@ -180,6 +180,8 @@ Run the built app with Accessibility and Screen Recording granted:
 3. Open window mode directly again.
 4. Confirm the previous thumbnail appears on the first frame, then updates without selection or layout movement.
 5. Confirm application-to-window held-session switching still behaves the same.
+
+Verified with the Developer ID-signed Release build: direct Command-backtick re-entry showed the retained ChatGPT thumbnail on the first captured frame (about 0.3 seconds after invocation), and Command-Tab to Command-backtick still presented the selected KakaoTalk application's three window thumbnails. Once-per-generation replacement and late-result invalidation are covered by paused-capturer regression tests.
 
 - [x] **Step 6: Commit**
 
