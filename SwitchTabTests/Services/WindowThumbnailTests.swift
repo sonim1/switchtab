@@ -21,6 +21,10 @@ enum WindowThumbnailTests {
         try await testThumbnailLoaderSkipsPreparationWhenNoWindowsAreCapturable()
         try await testThumbnailStoreInvalidatesUndecodableMarkerWhenThumbnailChanges()
         try await testThumbnailStoreDoesNotCacheMissingThumbnailAsUndecodable()
+        try await testThumbnailStoreDefaultLimitKeepsSixteenMostRecentEntries()
+        try await testThumbnailStoreDefaultWarningTrimKeepsEightEntriesAndTwelveMiB()
+        try await testThumbnailStoreRemovesWindowAndOwningProcessEntries()
+        try await testThumbnailStorePublishesOnceForActualRemovalChanges()
         try await testThumbnailStoreEvictsLeastRecentlyUsedEntryAtCountLimit()
         try await testThumbnailStoreEvictsEntriesAtByteLimit()
         try await testThumbnailStoreTrimsForMemoryPressureAndAllowsReinsertion()
@@ -170,6 +174,83 @@ enum WindowThumbnailTests {
 
         try expectEqual(publishCount, 0)
         try expectEqual(store.cachedKeys, ["a"])
+    }
+
+    @MainActor
+    static func testThumbnailStoreDefaultLimitKeepsSixteenMostRecentEntries() throws {
+        let store = WindowThumbnailStore()
+        for index in 0..<17 {
+            store.setThumbnail(WindowThumbnail(pngData: Data([UInt8(index)])), for: "42-\(index)")
+        }
+
+        try expectEqual(store.cachedEntryCount, 16)
+        try expectEqual(store.containsThumbnail(for: "42-0"), false)
+        try expectEqual(store.containsThumbnail(for: "42-16"), true)
+    }
+
+    @MainActor
+    static func testThumbnailStoreDefaultWarningTrimKeepsEightEntriesAndTwelveMiB() throws {
+        let store = WindowThumbnailStore()
+        let thumbnailData = Data(repeating: 0, count: 3_200_000)
+        for index in 0..<8 {
+            store.setThumbnail(
+                WindowThumbnail(pngData: thumbnailData),
+                for: "42-\(index)"
+            )
+        }
+
+        try expectTrue(
+            store.estimatedCost <= 24 * 1_024 * 1_024,
+            "Expected default cache to keep estimated cost at or below twenty-four MiB"
+        )
+
+        store.trimForMemoryPressure()
+
+        try expectTrue(store.cachedEntryCount <= 8, "Expected warning trim to keep at most eight entries")
+        try expectTrue(
+            store.estimatedCost <= 12 * 1_024 * 1_024,
+            "Expected warning trim to keep estimated cost at or below twelve MiB"
+        )
+    }
+
+    @MainActor
+    static func testThumbnailStoreRemovesWindowAndOwningProcessEntries() throws {
+        let store = WindowThumbnailStore()
+        store.setThumbnail(WindowThumbnail(pngData: Data("a".utf8)), for: "42-7")
+        store.setThumbnail(WindowThumbnail(pngData: Data("b".utf8)), for: "42-8")
+        store.setThumbnail(WindowThumbnail(pngData: Data("c".utf8)), for: "43-7")
+        store.setThumbnail(WindowThumbnail(pngData: Data("d".utf8)), for: "420-7")
+        _ = store.image(for: "42-7")
+        _ = store.image(for: "42-8")
+        _ = store.image(for: "43-7")
+
+        store.removeThumbnail(for: "42-7")
+        store.removeThumbnails(ownerProcessIdentifier: 42)
+
+        try expectEqual(store.cachedKeys, ["420-7", "43-7"])
+    }
+
+    @MainActor
+    static func testThumbnailStorePublishesOnceForActualRemovalChanges() throws {
+        let store = WindowThumbnailStore()
+        store.setThumbnail(WindowThumbnail(pngData: Data("a".utf8)), for: "42-7")
+        store.setThumbnail(WindowThumbnail(pngData: Data("b".utf8)), for: "42-8")
+        store.setThumbnail(WindowThumbnail(pngData: Data("c".utf8)), for: "43-7")
+        var publishCount = 0
+        let cancellable = store.objectWillChange.sink {
+            publishCount += 1
+        }
+        defer { cancellable.cancel() }
+
+        store.removeThumbnails(ownerProcessIdentifier: 42)
+        try expectEqual(publishCount, 1)
+
+        store.removeThumbnails(ownerProcessIdentifier: 42)
+        store.removeThumbnail(for: "missing")
+        try expectEqual(publishCount, 1)
+
+        store.removeThumbnail(for: "43-7")
+        try expectEqual(publishCount, 2)
     }
 
     static func testThumbnailRequestQueueIsBoundedAndBatched() throws {

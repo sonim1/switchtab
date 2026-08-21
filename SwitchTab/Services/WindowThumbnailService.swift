@@ -90,10 +90,10 @@ public final class WindowThumbnailStore: ObservableObject {
     private let memoryPressureEstimatedCost: Int
 
     public init(
-        maximumEntryCount: Int = 32,
-        maximumEstimatedCost: Int = 64 * 1_024 * 1_024,
-        memoryPressureEntryCount: Int = 16,
-        memoryPressureEstimatedCost: Int = 32 * 1_024 * 1_024
+        maximumEntryCount: Int = 16,
+        maximumEstimatedCost: Int = 24 * 1_024 * 1_024,
+        memoryPressureEntryCount: Int = 8,
+        memoryPressureEstimatedCost: Int = 12 * 1_024 * 1_024
     ) {
         self.maximumEntryCount = max(1, maximumEntryCount)
         self.maximumEstimatedCost = max(1, maximumEstimatedCost)
@@ -200,6 +200,38 @@ public final class WindowThumbnailStore: ObservableObject {
             maximumEntryCount: memoryPressureEntryCount,
             maximumEstimatedCost: memoryPressureEstimatedCost
         )
+    }
+
+    public func removeThumbnail(for key: String) {
+        guard thumbnails[key] != nil
+                || decodedImages[key] != nil
+                || accessOrder.contains(key) else {
+            return
+        }
+
+        objectWillChange.send()
+        thumbnails.removeValue(forKey: key)
+        decodedImages.removeValue(forKey: key)
+        accessOrder.removeAll { $0 == key }
+    }
+
+    public func removeThumbnails(ownerProcessIdentifier: Int) {
+        let processPrefix = "\(ownerProcessIdentifier)-"
+        let keys = Set(
+            thumbnails.keys.filter { $0.hasPrefix(processPrefix) }
+                + decodedImages.keys.filter { $0.hasPrefix(processPrefix) }
+                + accessOrder.filter { $0.hasPrefix(processPrefix) }
+        )
+        guard !keys.isEmpty else {
+            return
+        }
+
+        objectWillChange.send()
+        for key in keys {
+            thumbnails.removeValue(forKey: key)
+            decodedImages.removeValue(forKey: key)
+        }
+        accessOrder.removeAll { keys.contains($0) }
     }
 
     public func clear() {
