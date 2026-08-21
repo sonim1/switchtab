@@ -316,7 +316,7 @@ public final class WindowThumbnailLoader {
     private let capturer: any WindowThumbnailCapturing
     private var requestQueue = WindowThumbnailRequestQueue()
     private var activeWindowIDs: Set<String> = []
-    private var requestedWindowIDs: Set<String> = []
+    private var completedWindowIDs: Set<String> = []
     private var previewsAllowed = false
     private var viewportPixelSize = CGSize(width: 240, height: 165)
     private var refreshTask: Task<Void, Never>?
@@ -351,7 +351,7 @@ public final class WindowThumbnailLoader {
         didEmitFirstThumbnailForGeneration = false
         requestQueue.clear()
         activeWindowIDs.removeAll(keepingCapacity: true)
-        requestedWindowIDs.removeAll(keepingCapacity: true)
+        completedWindowIDs.removeAll(keepingCapacity: true)
         previewsAllowed = !permissionState.blocksWindowPreviews
         self.viewportPixelSize = viewportPixelSize
         refreshTask?.cancel()
@@ -366,12 +366,11 @@ public final class WindowThumbnailLoader {
     ) {
         guard previewsAllowed,
               Self.screenCaptureIdentifier(for: window) != nil,
-              !requestedWindowIDs.contains(window.id),
+              !completedWindowIDs.contains(window.id),
               !activeWindowIDs.contains(window.id) else {
             return
         }
 
-        requestedWindowIDs.insert(window.id)
         requestQueue.enqueue(window, priority: priority)
         startWorkerIfNeeded()
     }
@@ -388,7 +387,7 @@ public final class WindowThumbnailLoader {
         previewsAllowed = false
         requestQueue.clear()
         activeWindowIDs.removeAll(keepingCapacity: true)
-        requestedWindowIDs.removeAll(keepingCapacity: true)
+        completedWindowIDs.removeAll(keepingCapacity: true)
         refreshTask?.cancel()
         if !preservingCachedThumbnails {
             store.clear()
@@ -443,6 +442,7 @@ public final class WindowThumbnailLoader {
                 }
 
                 activeWindowIDs.remove(window.id)
+                completedWindowIDs.insert(window.id)
                 if let thumbnail {
                     store.setThumbnail(thumbnail, for: window.id)
                     if !didEmitFirstThumbnailForGeneration {
