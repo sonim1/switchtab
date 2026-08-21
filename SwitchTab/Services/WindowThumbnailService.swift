@@ -90,10 +90,10 @@ public final class WindowThumbnailStore: ObservableObject {
     private let memoryPressureEstimatedCost: Int
 
     public init(
-        maximumEntryCount: Int = 32,
-        maximumEstimatedCost: Int = 64 * 1_024 * 1_024,
-        memoryPressureEntryCount: Int = 16,
-        memoryPressureEstimatedCost: Int = 32 * 1_024 * 1_024
+        maximumEntryCount: Int = 16,
+        maximumEstimatedCost: Int = 24 * 1_024 * 1_024,
+        memoryPressureEntryCount: Int = 8,
+        memoryPressureEstimatedCost: Int = 12 * 1_024 * 1_024
     ) {
         self.maximumEntryCount = max(1, maximumEntryCount)
         self.maximumEstimatedCost = max(1, maximumEstimatedCost)
@@ -115,6 +115,10 @@ public final class WindowThumbnailStore: ObservableObject {
 
     func containsThumbnail(for key: String) -> Bool {
         thumbnails[key] != nil
+    }
+
+    func thumbnail(for key: String) -> WindowThumbnail? {
+        thumbnails[key]
     }
 
     public func image(for key: String) -> NSImage? {
@@ -196,6 +200,38 @@ public final class WindowThumbnailStore: ObservableObject {
             maximumEntryCount: memoryPressureEntryCount,
             maximumEstimatedCost: memoryPressureEstimatedCost
         )
+    }
+
+    public func removeThumbnail(for key: String) {
+        guard thumbnails[key] != nil
+                || decodedImages[key] != nil
+                || accessOrder.contains(key) else {
+            return
+        }
+
+        objectWillChange.send()
+        thumbnails.removeValue(forKey: key)
+        decodedImages.removeValue(forKey: key)
+        accessOrder.removeAll { $0 == key }
+    }
+
+    public func removeThumbnails(ownerProcessIdentifier: Int) {
+        let processPrefix = "\(ownerProcessIdentifier)-"
+        let keys = Set(
+            thumbnails.keys.filter { $0.hasPrefix(processPrefix) }
+                + decodedImages.keys.filter { $0.hasPrefix(processPrefix) }
+                + accessOrder.filter { $0.hasPrefix(processPrefix) }
+        )
+        guard !keys.isEmpty else {
+            return
+        }
+
+        objectWillChange.send()
+        for key in keys {
+            thumbnails.removeValue(forKey: key)
+            decodedImages.removeValue(forKey: key)
+        }
+        accessOrder.removeAll { keys.contains($0) }
     }
 
     public func clear() {
@@ -297,6 +333,16 @@ struct WindowThumbnailRequestQueue: Sendable {
         visible.removeAll(keepingCapacity: true)
     }
 
+    mutating func remove(windowID: String) {
+        _ = remove(windowID: windowID, from: &selected)
+        _ = remove(windowID: windowID, from: &visible)
+    }
+
+    mutating func remove(ownerProcessIdentifier: Int) {
+        selected.removeAll { $0.ownerProcessIdentifier == ownerProcessIdentifier }
+        visible.removeAll { $0.ownerProcessIdentifier == ownerProcessIdentifier }
+    }
+
     private func remove(windowID: String, from windows: inout [WindowItem]) -> Bool {
         guard let index = windows.firstIndex(where: { $0.id == windowID }) else {
             return false
@@ -312,6 +358,9 @@ public final class WindowThumbnailLoader {
     private let capturer: any WindowThumbnailCapturing
     private var requestQueue = WindowThumbnailRequestQueue()
     private var activeWindowIDs: Set<String> = []
+    private var completedWindowIDs: Set<String> = []
+    private var invalidatedWindowIDs: Set<String> = []
+    private var invalidatedOwnerProcessIdentifiers: Set<Int> = []
     private var previewsAllowed = false
     private var viewportPixelSize = CGSize(width: 240, height: 165)
     private var refreshTask: Task<Void, Never>?
@@ -346,6 +395,9 @@ public final class WindowThumbnailLoader {
         didEmitFirstThumbnailForGeneration = false
         requestQueue.clear()
         activeWindowIDs.removeAll(keepingCapacity: true)
+        completedWindowIDs.removeAll(keepingCapacity: true)
+        invalidatedWindowIDs.removeAll(keepingCapacity: true)
+        invalidatedOwnerProcessIdentifiers.removeAll(keepingCapacity: true)
         previewsAllowed = !permissionState.blocksWindowPreviews
         self.viewportPixelSize = viewportPixelSize
         refreshTask?.cancel()
@@ -360,7 +412,8 @@ public final class WindowThumbnailLoader {
     ) {
         guard previewsAllowed,
               Self.screenCaptureIdentifier(for: window) != nil,
-              !store.containsThumbnail(for: window.id),
+              !isInvalidated(window),
+              !completedWindowIDs.contains(window.id),
               !activeWindowIDs.contains(window.id) else {
             return
         }
@@ -381,10 +434,33 @@ public final class WindowThumbnailLoader {
         previewsAllowed = false
         requestQueue.clear()
         activeWindowIDs.removeAll(keepingCapacity: true)
+        completedWindowIDs.removeAll(keepingCapacity: true)
+        invalidatedWindowIDs.removeAll(keepingCapacity: true)
+        invalidatedOwnerProcessIdentifiers.removeAll(keepingCapacity: true)
         refreshTask?.cancel()
         if !preservingCachedThumbnails {
             store.clear()
         }
+    }
+
+    public func invalidateThumbnail(for windowID: String) {
+        invalidatedWindowIDs.insert(windowID)
+        requestQueue.remove(windowID: windowID)
+        activeWindowIDs.remove(windowID)
+        completedWindowIDs.remove(windowID)
+        store.removeThumbnail(for: windowID)
+    }
+
+    public func invalidateThumbnails(ownerProcessIdentifier: Int) {
+        invalidatedOwnerProcessIdentifiers.insert(ownerProcessIdentifier)
+        requestQueue.remove(ownerProcessIdentifier: ownerProcessIdentifier)
+        activeWindowIDs = activeWindowIDs.filter {
+            !$0.hasPrefix("\(ownerProcessIdentifier)-")
+        }
+        completedWindowIDs = completedWindowIDs.filter {
+            !$0.hasPrefix("\(ownerProcessIdentifier)-")
+        }
+        store.removeThumbnails(ownerProcessIdentifier: ownerProcessIdentifier)
     }
 
     private func startWorkerIfNeeded() {
@@ -426,6 +502,11 @@ public final class WindowThumbnailLoader {
                     return
                 }
 
+                guard !isInvalidated(window) else {
+                    activeWindowIDs.remove(window.id)
+                    continue
+                }
+
                 let thumbnail = await capturer.captureThumbnail(
                     for: window,
                     viewportPixelSize: viewportPixelSize
@@ -435,6 +516,11 @@ public final class WindowThumbnailLoader {
                 }
 
                 activeWindowIDs.remove(window.id)
+                guard !isInvalidated(window) else {
+                    continue
+                }
+
+                completedWindowIDs.insert(window.id)
                 if let thumbnail {
                     store.setThumbnail(thumbnail, for: window.id)
                     if !didEmitFirstThumbnailForGeneration {
@@ -449,6 +535,11 @@ public final class WindowThumbnailLoader {
     private func finishWorker() {
         refreshTask = nil
         startWorkerIfNeeded()
+    }
+
+    private func isInvalidated(_ window: WindowItem) -> Bool {
+        invalidatedWindowIDs.contains(window.id)
+            || invalidatedOwnerProcessIdentifiers.contains(window.ownerProcessIdentifier)
     }
 
     nonisolated private static func screenCaptureIdentifier(for window: WindowItem) -> CGWindowID? {

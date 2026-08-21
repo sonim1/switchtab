@@ -276,7 +276,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         debugLog("application did finish launching")
         let overlayController = SwitcherOverlayController(thumbnailStore: thumbnailStore)
         overlayController.onDismiss = { [weak self] in
-            self?.cancelThumbnailLoadingIfNeeded()
+            self?.cancelThumbnailLoadingIfNeeded(preservingCachedThumbnails: true)
             self?.windowCloseService.cancelAll()
             // Resuming is scoped to one held-modifier session.
             self?.modeSwitchMemory.reset()
@@ -307,7 +307,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func applicationWillTerminate(_ _: Notification) {
-        cancelThumbnailLoadingIfNeeded()
+        cancelThumbnailLoadingIfNeeded(preservingCachedThumbnails: false)
         thumbnailMemoryPressureSource?.cancel()
         thumbnailMemoryPressureSource = nil
         menuBarStatusItemController?.invalidate()
@@ -480,9 +480,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             return false
         }
 
-        cancelThumbnailLoadingIfNeeded(
-            preservingCachedThumbnails: retainingSession
-        )
+        cancelThumbnailLoadingIfNeeded(preservingCachedThumbnails: true)
         let accessibilityState = permissionService.currentAccessibilityState()
         debugLog("accessibility state=\(accessibilityState)")
         guard !accessibilityState.blocksCapability else {
@@ -550,7 +548,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         thumbnailLoader.beginRefresh(
             permissionState: permissionState,
             viewportPixelSize: viewportPixelSize,
-            preservingCachedThumbnails: retainingSession
+            preservingCachedThumbnails: true
         )
         overlayController.present(
             mode: .currentAppWindowSwitching,
@@ -573,6 +571,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     window,
                     permissionState: permissionState,
                     onDestroyed: {
+                        self.thumbnailLoader?.invalidateThumbnail(for: item.id)
                         overlayController?.confirmWindowDisappeared(
                             id: item.id,
                             presentationID: presentationID
@@ -621,9 +620,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             return false
         }
 
-        cancelThumbnailLoadingIfNeeded(
-            preservingCachedThumbnails: retainingSession
-        )
+        cancelThumbnailLoadingIfNeeded(preservingCachedThumbnails: true)
         let recentlyOrderedApplications = applicationRecencyStore.order(
             applicationProvider.runningApplications()
         ) { application in
@@ -817,7 +814,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             if event.contains(.critical) {
-                self.cancelThumbnailLoadingIfNeeded()
+                self.cancelThumbnailLoadingIfNeeded(preservingCachedThumbnails: false)
             } else if event.contains(.warning) {
                 self.thumbnailStore.trimForMemoryPressure()
             }
@@ -900,13 +897,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 isTerminated: application.isTerminated,
                 isActive: application.isActive
             )
-            guard let id = WorkspaceApplicationTerminationPolicy.applicationIdentifier(
-                for: snapshot
-            ) else {
-                return
-            }
+            let id = WorkspaceApplicationTerminationPolicy.applicationIdentifier(for: snapshot)
 
             MainActor.assumeIsolated {
+                self?.thumbnailLoader?.invalidateThumbnails(
+                    ownerProcessIdentifier: snapshot.processIdentifier
+                )
+                guard let id else {
+                    return
+                }
+
                 // A recycled process identifier must not resume a dead app's window.
                 self?.modeSwitchMemory.forgetWindows(
                     ownerProcessIdentifier: snapshot.processIdentifier

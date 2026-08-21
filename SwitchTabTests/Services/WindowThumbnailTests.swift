@@ -21,6 +21,10 @@ enum WindowThumbnailTests {
         try await testThumbnailLoaderSkipsPreparationWhenNoWindowsAreCapturable()
         try await testThumbnailStoreInvalidatesUndecodableMarkerWhenThumbnailChanges()
         try await testThumbnailStoreDoesNotCacheMissingThumbnailAsUndecodable()
+        try await testThumbnailStoreDefaultLimitKeepsSixteenMostRecentEntries()
+        try await testThumbnailStoreDefaultWarningTrimKeepsEightEntriesAndTwelveMiB()
+        try await testThumbnailStoreRemovesWindowAndOwningProcessEntries()
+        try await testThumbnailStorePublishesOnceForActualRemovalChanges()
         try await testThumbnailStoreEvictsLeastRecentlyUsedEntryAtCountLimit()
         try await testThumbnailStoreEvictsEntriesAtByteLimit()
         try await testThumbnailStoreTrimsForMemoryPressureAndAllowsReinsertion()
@@ -30,12 +34,18 @@ enum WindowThumbnailTests {
         try testThumbnailRequestQueueCoalescesAndPrioritizesSelection()
         try await testThumbnailLoaderCapturesOnlyRequestedWindowsInBoundedBatches()
         try await testThumbnailLoaderCoalescesDuplicateDemand()
-        try await testThumbnailLoaderSkipsAlreadyCachedDemand()
+        try await testThumbnailLoaderRequestsEachThumbnailOncePerGeneration()
+        try await testThumbnailLoaderPromotesSelectedDuplicateDemandAheadOfVisibleWork()
+        try await testThumbnailLoaderRecoversRejectedAndEvictedDemandFromBoundedQueue()
+        try await testThumbnailLoaderRefreshesCachedThumbnailOnceInNewGeneration()
         try await testThumbnailLoaderLeavesPlaceholderWhenCaptureReturnsNil()
+        try await testThumbnailLoaderAttemptsFailedCaptureOnlyOncePerGeneration()
         try await testThumbnailLoaderCancelDiscardsInFlightCapture()
         try await testThumbnailLoaderDiscardsStaleCaptureBeforeStartingNextGeneration()
         try await testThumbnailLoaderPreservesCacheAcrossRetainedRefresh()
         try await testThumbnailLoaderPreservingCancelDropsInFlightWorkButKeepsCompletedCache()
+        try await testThumbnailLoaderExactInvalidationBlocksActiveAndPendingLateResults()
+        try await testThumbnailLoaderProcessInvalidationBlocksMatchingLateResults()
         try await testThumbnailLoaderClearsPreservedCacheWhenPreviewPermissionIsBlocked()
     }
 
@@ -168,6 +178,83 @@ enum WindowThumbnailTests {
         try expectEqual(store.cachedKeys, ["a"])
     }
 
+    @MainActor
+    static func testThumbnailStoreDefaultLimitKeepsSixteenMostRecentEntries() throws {
+        let store = WindowThumbnailStore()
+        for index in 0..<17 {
+            store.setThumbnail(WindowThumbnail(pngData: Data([UInt8(index)])), for: "42-\(index)")
+        }
+
+        try expectEqual(store.cachedEntryCount, 16)
+        try expectEqual(store.containsThumbnail(for: "42-0"), false)
+        try expectEqual(store.containsThumbnail(for: "42-16"), true)
+    }
+
+    @MainActor
+    static func testThumbnailStoreDefaultWarningTrimKeepsEightEntriesAndTwelveMiB() throws {
+        let store = WindowThumbnailStore()
+        let thumbnailData = Data(repeating: 0, count: 3_200_000)
+        for index in 0..<8 {
+            store.setThumbnail(
+                WindowThumbnail(pngData: thumbnailData),
+                for: "42-\(index)"
+            )
+        }
+
+        try expectTrue(
+            store.estimatedCost <= 24 * 1_024 * 1_024,
+            "Expected default cache to keep estimated cost at or below twenty-four MiB"
+        )
+
+        store.trimForMemoryPressure()
+
+        try expectTrue(store.cachedEntryCount <= 8, "Expected warning trim to keep at most eight entries")
+        try expectTrue(
+            store.estimatedCost <= 12 * 1_024 * 1_024,
+            "Expected warning trim to keep estimated cost at or below twelve MiB"
+        )
+    }
+
+    @MainActor
+    static func testThumbnailStoreRemovesWindowAndOwningProcessEntries() throws {
+        let store = WindowThumbnailStore()
+        store.setThumbnail(WindowThumbnail(pngData: Data("a".utf8)), for: "42-7")
+        store.setThumbnail(WindowThumbnail(pngData: Data("b".utf8)), for: "42-8")
+        store.setThumbnail(WindowThumbnail(pngData: Data("c".utf8)), for: "43-7")
+        store.setThumbnail(WindowThumbnail(pngData: Data("d".utf8)), for: "420-7")
+        _ = store.image(for: "42-7")
+        _ = store.image(for: "42-8")
+        _ = store.image(for: "43-7")
+
+        store.removeThumbnail(for: "42-7")
+        store.removeThumbnails(ownerProcessIdentifier: 42)
+
+        try expectEqual(store.cachedKeys, ["420-7", "43-7"])
+    }
+
+    @MainActor
+    static func testThumbnailStorePublishesOnceForActualRemovalChanges() throws {
+        let store = WindowThumbnailStore()
+        store.setThumbnail(WindowThumbnail(pngData: Data("a".utf8)), for: "42-7")
+        store.setThumbnail(WindowThumbnail(pngData: Data("b".utf8)), for: "42-8")
+        store.setThumbnail(WindowThumbnail(pngData: Data("c".utf8)), for: "43-7")
+        var publishCount = 0
+        let cancellable = store.objectWillChange.sink {
+            publishCount += 1
+        }
+        defer { cancellable.cancel() }
+
+        store.removeThumbnails(ownerProcessIdentifier: 42)
+        try expectEqual(publishCount, 1)
+
+        store.removeThumbnails(ownerProcessIdentifier: 42)
+        store.removeThumbnail(for: "missing")
+        try expectEqual(publishCount, 1)
+
+        store.removeThumbnail(for: "43-7")
+        try expectEqual(publishCount, 2)
+    }
+
     static func testThumbnailRequestQueueIsBoundedAndBatched() throws {
         var queue = WindowThumbnailRequestQueue(maximumCount: 64, batchSize: 8)
         for identifier in 0..<100 {
@@ -238,7 +325,7 @@ enum WindowThumbnailTests {
     }
 
     @MainActor
-    static func testThumbnailLoaderSkipsAlreadyCachedDemand() async throws {
+    static func testThumbnailLoaderRequestsEachThumbnailOncePerGeneration() async throws {
         let window = makeWindow(7)
         let store = WindowThumbnailStore()
         let capturer = FakeWindowThumbnailCapturer(thumbnails: [
@@ -258,6 +345,80 @@ enum WindowThumbnailTests {
     }
 
     @MainActor
+    static func testThumbnailLoaderPromotesSelectedDuplicateDemandAheadOfVisibleWork() async throws {
+        let visibleWindow = makeWindow(1)
+        let selectedWindow = makeWindow(2)
+        let store = WindowThumbnailStore()
+        let capturer = FakeWindowThumbnailCapturer(thumbnails: [
+            visibleWindow.windowIdentifier: WindowThumbnail(pngData: Data("visible".utf8)),
+            selectedWindow.windowIdentifier: WindowThumbnail(pngData: Data("selected".utf8))
+        ])
+        let loader = WindowThumbnailLoader(store: store, capturer: capturer)
+        loader.beginRefresh(
+            permissionState: PermissionState(accessibility: .granted, screenRecording: .granted)
+        )
+
+        loader.requestThumbnail(for: visibleWindow, priority: .visible)
+        loader.requestThumbnail(for: selectedWindow, priority: .visible)
+        loader.requestThumbnail(for: selectedWindow, priority: .selected)
+        await loader.waitForCurrentRefresh()
+
+        try expectEqual(capturer.requestedWindowIdentifiers, [2, 1])
+    }
+
+    @MainActor
+    static func testThumbnailLoaderRecoversRejectedAndEvictedDemandFromBoundedQueue() async throws {
+        let windows = (0...64).map(makeWindow)
+        let thumbnails = Dictionary(uniqueKeysWithValues: windows.map {
+            ($0.windowIdentifier, WindowThumbnail(pngData: Data("\($0.windowIdentifier)".utf8)))
+        })
+        let store = WindowThumbnailStore()
+        let capturer = FakeWindowThumbnailCapturer(thumbnails: thumbnails)
+        let loader = WindowThumbnailLoader(store: store, capturer: capturer)
+        loader.beginRefresh(
+            permissionState: PermissionState(accessibility: .granted, screenRecording: .granted)
+        )
+
+        for window in windows {
+            loader.requestThumbnail(for: window, priority: .visible)
+        }
+        loader.requestThumbnail(for: windows[64], priority: .selected)
+        loader.requestThumbnail(for: windows[0], priority: .selected)
+        await loader.waitForCurrentRefresh()
+
+        try expectEqual(Array(capturer.requestedWindowIdentifiers.prefix(2)), [0, 64])
+    }
+
+    @MainActor
+    static func testThumbnailLoaderRefreshesCachedThumbnailOnceInNewGeneration() async throws {
+        let window = makeWindow(7)
+        let stale = WindowThumbnail(pngData: Data("stale".utf8))
+        let fresh = WindowThumbnail(pngData: Data("fresh".utf8))
+        let store = WindowThumbnailStore()
+        store.setThumbnail(stale, for: window.id)
+        let capturer = FakeWindowThumbnailCapturer(thumbnails: [
+            window.windowIdentifier: fresh
+        ])
+        let loader = WindowThumbnailLoader(store: store, capturer: capturer)
+
+        loader.beginRefresh(
+            permissionState: PermissionState(accessibility: .granted, screenRecording: .granted),
+            preservingCachedThumbnails: true
+        )
+        loader.requestThumbnail(for: window, priority: .selected)
+        loader.requestThumbnail(for: window, priority: .visible)
+        loader.requestThumbnail(for: window, priority: .selected)
+        loader.requestThumbnail(for: window, priority: .visible)
+        await loader.waitForCurrentRefresh()
+
+        loader.requestThumbnail(for: window, priority: .selected)
+        await loader.waitForCurrentRefresh()
+
+        try expectEqual(capturer.requestedWindowIdentifiers, [7])
+        try expectEqual(store.thumbnail(for: window.id), fresh)
+    }
+
+    @MainActor
     static func testThumbnailLoaderLeavesPlaceholderWhenCaptureReturnsNil() async throws {
         let window = makeWindow(7)
         let store = WindowThumbnailStore()
@@ -272,6 +433,25 @@ enum WindowThumbnailTests {
 
         try expectEqual(capturer.requestedWindowIdentifiers, [7])
         try expectEqual(store.cachedEntryCount, 0)
+    }
+
+    @MainActor
+    static func testThumbnailLoaderAttemptsFailedCaptureOnlyOncePerGeneration() async throws {
+        let window = makeWindow(7)
+        let store = WindowThumbnailStore()
+        let capturer = FakeWindowThumbnailCapturer(thumbnails: [:])
+        let loader = WindowThumbnailLoader(store: store, capturer: capturer)
+        loader.beginRefresh(
+            permissionState: PermissionState(accessibility: .granted, screenRecording: .granted)
+        )
+
+        loader.requestThumbnail(for: window, priority: .visible)
+        await loader.waitForCurrentRefresh()
+        loader.requestThumbnail(for: window, priority: .selected)
+        await loader.waitForCurrentRefresh()
+
+        try expectEqual(capturer.requestedWindowIdentifiers, [7])
+        try expectEqual(store.thumbnail(for: window.id), nil)
     }
 
     @MainActor
@@ -342,7 +522,7 @@ enum WindowThumbnailTests {
         loader.requestThumbnail(for: window, priority: .selected)
         await loader.waitForCurrentRefresh()
 
-        try expectEqual(capturer.requestedWindowIdentifiers, [7])
+        try expectEqual(capturer.requestedWindowIdentifiers, [7, 7])
         try expectEqual(store.cachedKeys, [window.id])
     }
 
@@ -368,6 +548,93 @@ enum WindowThumbnailTests {
         await loader.waitForCurrentRefresh()
 
         try expectEqual(store.cachedKeys, [cachedWindow.id])
+    }
+
+    @MainActor
+    static func testThumbnailLoaderExactInvalidationBlocksActiveAndPendingLateResults() async throws {
+        let activeWindow = makeWindow(7)
+        let pendingWindow = makeWindow(8)
+        let store = WindowThumbnailStore()
+        store.setThumbnail(WindowThumbnail(pngData: Data("active-stale".utf8)), for: activeWindow.id)
+        store.setThumbnail(WindowThumbnail(pngData: Data("pending-stale".utf8)), for: pendingWindow.id)
+        let capturer = PausingWindowThumbnailCapturer()
+        let loader = WindowThumbnailLoader(store: store, capturer: capturer)
+        let permissionState = PermissionState(accessibility: .granted, screenRecording: .granted)
+
+        loader.beginRefresh(
+            permissionState: permissionState,
+            preservingCachedThumbnails: true
+        )
+        loader.requestThumbnail(for: activeWindow, priority: .selected)
+        loader.requestThumbnail(for: pendingWindow, priority: .visible)
+        await capturer.waitUntilCaptureCount(1)
+
+        loader.invalidateThumbnail(for: activeWindow.id)
+        loader.invalidateThumbnail(for: pendingWindow.id)
+        capturer.resumeFirstCapture(with: WindowThumbnail(pngData: Data("active-late".utf8)))
+        await loader.waitForCurrentRefresh()
+
+        try expectEqual(capturer.requestedWindowIdentifiers, [7])
+        try expectEqual(store.cachedKeys, [])
+
+        loader.beginRefresh(
+            permissionState: permissionState,
+            preservingCachedThumbnails: true
+        )
+        loader.requestThumbnail(for: activeWindow, priority: .selected)
+        await capturer.waitUntilCaptureCount(2)
+        capturer.resumeFirstCapture(with: WindowThumbnail(pngData: Data("active-current".utf8)))
+        await loader.waitForCurrentRefresh()
+
+        try expectEqual(capturer.requestedWindowIdentifiers, [7, 7])
+        try expectEqual(
+            store.thumbnail(for: activeWindow.id),
+            WindowThumbnail(pngData: Data("active-current".utf8))
+        )
+    }
+
+    @MainActor
+    static func testThumbnailLoaderProcessInvalidationBlocksMatchingLateResults() async throws {
+        let activeWindow = makeWindow(7)
+        let pendingWindow = makeWindow(8)
+        let otherProcessWindow = WindowItem(
+            windowIdentifier: 9,
+            ownerProcessIdentifier: 43,
+            ownerName: "Preview",
+            title: "Window 9",
+            screenCaptureIdentifier: 1_009,
+            isMinimized: false,
+            availability: .available
+        )
+        let store = WindowThumbnailStore()
+        store.setThumbnail(WindowThumbnail(pngData: Data("active-stale".utf8)), for: activeWindow.id)
+        store.setThumbnail(WindowThumbnail(pngData: Data("pending-stale".utf8)), for: pendingWindow.id)
+        store.setThumbnail(WindowThumbnail(pngData: Data("other-stale".utf8)), for: otherProcessWindow.id)
+        let capturer = PausingWindowThumbnailCapturer()
+        let loader = WindowThumbnailLoader(store: store, capturer: capturer)
+        let permissionState = PermissionState(accessibility: .granted, screenRecording: .granted)
+
+        loader.beginRefresh(
+            permissionState: permissionState,
+            preservingCachedThumbnails: true
+        )
+        loader.requestThumbnail(for: activeWindow, priority: .selected)
+        loader.requestThumbnail(for: pendingWindow, priority: .visible)
+        loader.requestThumbnail(for: otherProcessWindow, priority: .visible)
+        await capturer.waitUntilCaptureCount(1)
+
+        loader.invalidateThumbnails(ownerProcessIdentifier: 42)
+        capturer.resumeFirstCapture(with: WindowThumbnail(pngData: Data("active-late".utf8)))
+        await capturer.waitUntilCaptureCount(2)
+        capturer.resumeFirstCapture(with: WindowThumbnail(pngData: Data("other-fresh".utf8)))
+        await loader.waitForCurrentRefresh()
+
+        try expectEqual(capturer.requestedWindowIdentifiers, [7, 9])
+        try expectEqual(store.cachedKeys, [otherProcessWindow.id])
+        try expectEqual(
+            store.thumbnail(for: otherProcessWindow.id),
+            WindowThumbnail(pngData: Data("other-fresh".utf8))
+        )
     }
 
     @MainActor
