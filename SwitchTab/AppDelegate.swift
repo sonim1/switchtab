@@ -571,7 +571,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     window,
                     permissionState: permissionState,
                     onDestroyed: {
-                        self.thumbnailStore.removeThumbnail(for: item.id)
+                        self.thumbnailLoader?.invalidateThumbnail(for: item.id)
                         overlayController?.confirmWindowDisappeared(
                             id: item.id,
                             presentationID: presentationID
@@ -900,7 +900,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             let id = WorkspaceApplicationTerminationPolicy.applicationIdentifier(for: snapshot)
 
             MainActor.assumeIsolated {
-                self?.thumbnailStore.removeThumbnails(
+                self?.thumbnailLoader?.invalidateThumbnails(
                     ownerProcessIdentifier: snapshot.processIdentifier
                 )
                 guard let id else {

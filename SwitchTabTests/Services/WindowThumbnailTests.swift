@@ -44,6 +44,8 @@ enum WindowThumbnailTests {
         try await testThumbnailLoaderDiscardsStaleCaptureBeforeStartingNextGeneration()
         try await testThumbnailLoaderPreservesCacheAcrossRetainedRefresh()
         try await testThumbnailLoaderPreservingCancelDropsInFlightWorkButKeepsCompletedCache()
+        try await testThumbnailLoaderExactInvalidationBlocksActiveAndPendingLateResults()
+        try await testThumbnailLoaderProcessInvalidationBlocksMatchingLateResults()
         try await testThumbnailLoaderClearsPreservedCacheWhenPreviewPermissionIsBlocked()
     }
 
@@ -546,6 +548,93 @@ enum WindowThumbnailTests {
         await loader.waitForCurrentRefresh()
 
         try expectEqual(store.cachedKeys, [cachedWindow.id])
+    }
+
+    @MainActor
+    static func testThumbnailLoaderExactInvalidationBlocksActiveAndPendingLateResults() async throws {
+        let activeWindow = makeWindow(7)
+        let pendingWindow = makeWindow(8)
+        let store = WindowThumbnailStore()
+        store.setThumbnail(WindowThumbnail(pngData: Data("active-stale".utf8)), for: activeWindow.id)
+        store.setThumbnail(WindowThumbnail(pngData: Data("pending-stale".utf8)), for: pendingWindow.id)
+        let capturer = PausingWindowThumbnailCapturer()
+        let loader = WindowThumbnailLoader(store: store, capturer: capturer)
+        let permissionState = PermissionState(accessibility: .granted, screenRecording: .granted)
+
+        loader.beginRefresh(
+            permissionState: permissionState,
+            preservingCachedThumbnails: true
+        )
+        loader.requestThumbnail(for: activeWindow, priority: .selected)
+        loader.requestThumbnail(for: pendingWindow, priority: .visible)
+        await capturer.waitUntilCaptureCount(1)
+
+        loader.invalidateThumbnail(for: activeWindow.id)
+        loader.invalidateThumbnail(for: pendingWindow.id)
+        capturer.resumeFirstCapture(with: WindowThumbnail(pngData: Data("active-late".utf8)))
+        await loader.waitForCurrentRefresh()
+
+        try expectEqual(capturer.requestedWindowIdentifiers, [7])
+        try expectEqual(store.cachedKeys, [])
+
+        loader.beginRefresh(
+            permissionState: permissionState,
+            preservingCachedThumbnails: true
+        )
+        loader.requestThumbnail(for: activeWindow, priority: .selected)
+        await capturer.waitUntilCaptureCount(2)
+        capturer.resumeFirstCapture(with: WindowThumbnail(pngData: Data("active-current".utf8)))
+        await loader.waitForCurrentRefresh()
+
+        try expectEqual(capturer.requestedWindowIdentifiers, [7, 7])
+        try expectEqual(
+            store.thumbnail(for: activeWindow.id),
+            WindowThumbnail(pngData: Data("active-current".utf8))
+        )
+    }
+
+    @MainActor
+    static func testThumbnailLoaderProcessInvalidationBlocksMatchingLateResults() async throws {
+        let activeWindow = makeWindow(7)
+        let pendingWindow = makeWindow(8)
+        let otherProcessWindow = WindowItem(
+            windowIdentifier: 9,
+            ownerProcessIdentifier: 43,
+            ownerName: "Preview",
+            title: "Window 9",
+            screenCaptureIdentifier: 1_009,
+            isMinimized: false,
+            availability: .available
+        )
+        let store = WindowThumbnailStore()
+        store.setThumbnail(WindowThumbnail(pngData: Data("active-stale".utf8)), for: activeWindow.id)
+        store.setThumbnail(WindowThumbnail(pngData: Data("pending-stale".utf8)), for: pendingWindow.id)
+        store.setThumbnail(WindowThumbnail(pngData: Data("other-stale".utf8)), for: otherProcessWindow.id)
+        let capturer = PausingWindowThumbnailCapturer()
+        let loader = WindowThumbnailLoader(store: store, capturer: capturer)
+        let permissionState = PermissionState(accessibility: .granted, screenRecording: .granted)
+
+        loader.beginRefresh(
+            permissionState: permissionState,
+            preservingCachedThumbnails: true
+        )
+        loader.requestThumbnail(for: activeWindow, priority: .selected)
+        loader.requestThumbnail(for: pendingWindow, priority: .visible)
+        loader.requestThumbnail(for: otherProcessWindow, priority: .visible)
+        await capturer.waitUntilCaptureCount(1)
+
+        loader.invalidateThumbnails(ownerProcessIdentifier: 42)
+        capturer.resumeFirstCapture(with: WindowThumbnail(pngData: Data("active-late".utf8)))
+        await capturer.waitUntilCaptureCount(2)
+        capturer.resumeFirstCapture(with: WindowThumbnail(pngData: Data("other-fresh".utf8)))
+        await loader.waitForCurrentRefresh()
+
+        try expectEqual(capturer.requestedWindowIdentifiers, [7, 9])
+        try expectEqual(store.cachedKeys, [otherProcessWindow.id])
+        try expectEqual(
+            store.thumbnail(for: otherProcessWindow.id),
+            WindowThumbnail(pngData: Data("other-fresh".utf8))
+        )
     }
 
     @MainActor
