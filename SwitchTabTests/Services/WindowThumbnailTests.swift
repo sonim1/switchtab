@@ -31,6 +31,7 @@ enum WindowThumbnailTests {
         try await testThumbnailLoaderCapturesOnlyRequestedWindowsInBoundedBatches()
         try await testThumbnailLoaderCoalescesDuplicateDemand()
         try await testThumbnailLoaderSkipsAlreadyCachedDemand()
+        try await testThumbnailLoaderRefreshesCachedThumbnailOnceInNewGeneration()
         try await testThumbnailLoaderLeavesPlaceholderWhenCaptureReturnsNil()
         try await testThumbnailLoaderCancelDiscardsInFlightCapture()
         try await testThumbnailLoaderDiscardsStaleCaptureBeforeStartingNextGeneration()
@@ -258,6 +259,35 @@ enum WindowThumbnailTests {
     }
 
     @MainActor
+    static func testThumbnailLoaderRefreshesCachedThumbnailOnceInNewGeneration() async throws {
+        let window = makeWindow(7)
+        let stale = WindowThumbnail(pngData: Data("stale".utf8))
+        let fresh = WindowThumbnail(pngData: Data("fresh".utf8))
+        let store = WindowThumbnailStore()
+        store.setThumbnail(stale, for: window.id)
+        let capturer = FakeWindowThumbnailCapturer(thumbnails: [
+            window.windowIdentifier: fresh
+        ])
+        let loader = WindowThumbnailLoader(store: store, capturer: capturer)
+
+        loader.beginRefresh(
+            permissionState: PermissionState(accessibility: .granted, screenRecording: .granted),
+            preservingCachedThumbnails: true
+        )
+        loader.requestThumbnail(for: window, priority: .selected)
+        loader.requestThumbnail(for: window, priority: .visible)
+        loader.requestThumbnail(for: window, priority: .selected)
+        loader.requestThumbnail(for: window, priority: .visible)
+        await loader.waitForCurrentRefresh()
+
+        loader.requestThumbnail(for: window, priority: .selected)
+        await loader.waitForCurrentRefresh()
+
+        try expectEqual(capturer.requestedWindowIdentifiers, [7])
+        try expectEqual(store.thumbnail(for: window.id), fresh)
+    }
+
+    @MainActor
     static func testThumbnailLoaderLeavesPlaceholderWhenCaptureReturnsNil() async throws {
         let window = makeWindow(7)
         let store = WindowThumbnailStore()
@@ -342,7 +372,7 @@ enum WindowThumbnailTests {
         loader.requestThumbnail(for: window, priority: .selected)
         await loader.waitForCurrentRefresh()
 
-        try expectEqual(capturer.requestedWindowIdentifiers, [7])
+        try expectEqual(capturer.requestedWindowIdentifiers, [7, 7])
         try expectEqual(store.cachedKeys, [window.id])
     }
 

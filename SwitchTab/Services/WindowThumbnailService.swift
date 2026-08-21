@@ -117,6 +117,10 @@ public final class WindowThumbnailStore: ObservableObject {
         thumbnails[key] != nil
     }
 
+    func thumbnail(for key: String) -> WindowThumbnail? {
+        thumbnails[key]
+    }
+
     public func image(for key: String) -> NSImage? {
         touch(key)
         if let cachedImage = decodedImages[key] {
@@ -312,6 +316,7 @@ public final class WindowThumbnailLoader {
     private let capturer: any WindowThumbnailCapturing
     private var requestQueue = WindowThumbnailRequestQueue()
     private var activeWindowIDs: Set<String> = []
+    private var requestedWindowIDs: Set<String> = []
     private var previewsAllowed = false
     private var viewportPixelSize = CGSize(width: 240, height: 165)
     private var refreshTask: Task<Void, Never>?
@@ -346,6 +351,7 @@ public final class WindowThumbnailLoader {
         didEmitFirstThumbnailForGeneration = false
         requestQueue.clear()
         activeWindowIDs.removeAll(keepingCapacity: true)
+        requestedWindowIDs.removeAll(keepingCapacity: true)
         previewsAllowed = !permissionState.blocksWindowPreviews
         self.viewportPixelSize = viewportPixelSize
         refreshTask?.cancel()
@@ -360,11 +366,12 @@ public final class WindowThumbnailLoader {
     ) {
         guard previewsAllowed,
               Self.screenCaptureIdentifier(for: window) != nil,
-              !store.containsThumbnail(for: window.id),
+              !requestedWindowIDs.contains(window.id),
               !activeWindowIDs.contains(window.id) else {
             return
         }
 
+        requestedWindowIDs.insert(window.id)
         requestQueue.enqueue(window, priority: priority)
         startWorkerIfNeeded()
     }
@@ -381,6 +388,7 @@ public final class WindowThumbnailLoader {
         previewsAllowed = false
         requestQueue.clear()
         activeWindowIDs.removeAll(keepingCapacity: true)
+        requestedWindowIDs.removeAll(keepingCapacity: true)
         refreshTask?.cancel()
         if !preservingCachedThumbnails {
             store.clear()
