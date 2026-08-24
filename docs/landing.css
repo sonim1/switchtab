@@ -276,6 +276,12 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .site-footer { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-top: 26px; padding-bottom: 30px; border-top: 1px solid var(--line-soft); }
 .brand--footer { color: var(--text-soft); font-size: 12px; }.brand--footer img { width: 24px; height: 24px; border-radius: 6px; }.footer-note { margin: 0; color: var(--text-faint); font-size: 11px; }
 
+.not-found-page { min-height: 100vh; }
+.not-found { display: flex; min-height: 100vh; padding-top: 24px; padding-bottom: 48px; flex-direction: column; }
+.not-found__copy { display: grid; max-width: 720px; margin: auto; justify-items: start; }
+.not-found__copy h1 { margin: 18px 0 22px; font-size: clamp(58px, 9vw, 112px); font-weight: 600; line-height: 0.92; letter-spacing: -0.065em; }
+.not-found__copy p:not(.eyebrow) { margin: 0 0 30px; color: var(--muted); font-size: 18px; }
+
 @media (max-width: 930px) {
   .hero { gap: 42px; padding-top: 76px; }
   .hero-copy { max-width: 700px; }
