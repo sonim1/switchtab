@@ -513,6 +513,10 @@ struct ShortcutSettingsRowPresentation: Equatable, Sendable {
         self.resetAccessibilityLabel = "Restore \(title) default shortcut"
         self.resetAccessibilityHint = "Restore \(title) default shortcut."
     }
+
+    func helperText(isRecording: Bool) -> String? {
+        isRecording ? "Press shortcut now" : nil
+    }
 }
 
 @MainActor
@@ -594,11 +598,13 @@ private struct ShortcutRecorderRow: View {
                     Text(presentation.title)
                         .font(.body.weight(.medium))
                         .lineLimit(layout.titleLineLimit)
-                    Text(isRecording ? "Press shortcut now" : "Click the keycap to record")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(layout.titleLineLimit)
-                        .truncationMode(.tail)
+                    if let helperText = presentation.helperText(isRecording: isRecording) {
+                        Text(helperText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(layout.titleLineLimit)
+                            .truncationMode(.tail)
+                    }
                 }
                 .frame(minWidth: layout.titleMinWidth, alignment: .leading)
                 .layoutPriority(1)

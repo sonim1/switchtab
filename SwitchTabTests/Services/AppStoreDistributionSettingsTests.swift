@@ -88,6 +88,8 @@ enum AppStoreDistributionSettingsTests {
             let enabledPresentation = ShortcutSettingsRowPresentation(mode: mode, isEnabled: true)
             try expectEqual(enabledPresentation.title, expectedTitle)
             try expectEqual(enabledPresentation.statusText, "Enabled")
+            try expectEqual(enabledPresentation.helperText(isRecording: false), nil)
+            try expectEqual(enabledPresentation.helperText(isRecording: true), "Press shortcut now")
             try expectEqual(enabledPresentation.toggleAccessibilityLabel, "Enable \(expectedTitle)")
             try expectEqual(
                 enabledPresentation.resetAccessibilityLabel,
