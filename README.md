@@ -73,7 +73,7 @@ swift test
 
 ## Documentation
 
-- [Landing page](docs/index.html) — an interactive visual introduction to the app and window switching workflow
+- [Landing page](https://switchtab.royjen.com/) ([source](docs/index.html)) — an interactive visual introduction to the app and window switching workflow
 - [Changelog](CHANGELOG.md) — user-facing changes grouped by release
 - [Development](docs/development.md) — local setup, build, test, and verification
 - [AI context and verification](docs/AI_CONTEXT.md) — current architecture, invariants, and compact macOS QA guidance

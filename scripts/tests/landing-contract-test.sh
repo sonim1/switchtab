@@ -5,14 +5,74 @@ page='docs/index.html'
 style='docs/landing.css'
 headers='docs/_headers'
 icon='docs/AppIcon-256.png'
+social_card='docs/social-card.png'
+robots='docs/robots.txt'
+sitemap='docs/sitemap.xml'
+not_found='docs/404.html'
 
-for path in "$page" "$style" "$headers" "$icon"; do
+for path in "$page" "$style" "$headers" "$icon" "$social_card" "$robots" "$sitemap" "$not_found"; do
   test -s "$path" || { echo "missing landing asset: $path" >&2; exit 1; }
 done
 
 test "$(grep -oE '<h1[[:space:]>]' "$page" | wc -l | tr -d ' ')" = 1
 grep -qE '<main[[:space:]>]' "$page"
 grep -qE '<footer[[:space:]>]' "$page"
+grep -q '<title>SwitchTab — Free macOS App &amp; Window Switcher</title>' "$page"
+grep -q '<link rel="canonical" href="https://switchtab.royjen.com/">' "$page"
+grep -q '<meta name="robots" content="index, follow, max-image-preview:large">' "$page"
+grep -q '<meta property="og:url" content="https://switchtab.royjen.com/">' "$page"
+grep -q '<meta property="og:image" content="https://switchtab.royjen.com/social-card.png">' "$page"
+grep -q '<meta name="twitter:card" content="summary_large_image">' "$page"
+grep -q 'id="quick-answers"' "$page"
+grep -q 'What is SwitchTab?' "$page"
+grep -q 'How is SwitchTab different from macOS Command-Tab?' "$page"
+grep -q 'Does SwitchTab require Screen Recording?' "$page"
+grep -q 'Is SwitchTab free?' "$page"
+test "$(grep -o '<script type="application/ld+json">' "$page" | wc -l | tr -d ' ')" = 1
+
+python3 - "$page" <<'PY'
+from html.parser import HTMLParser
+import json
+from pathlib import Path
+import sys
+
+class Scripts(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.capture = False
+        self.types = []
+        self.buffers = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag != "script":
+            return
+        attributes = dict(attrs)
+        self.types.append(attributes.get("type"))
+        self.capture = True
+        self.buffers.append([])
+
+    def handle_data(self, data):
+        if self.capture:
+            self.buffers[-1].append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "script":
+            self.capture = False
+
+parser = Scripts()
+parser.feed(Path(sys.argv[1]).read_text())
+assert parser.types == ["application/ld+json"], parser.types
+payload = json.loads("".join(parser.buffers[0]))
+assert payload["@context"] == "https://schema.org"
+nodes = {node["@type"]: node for node in payload["@graph"]}
+assert nodes["WebSite"]["name"] == "SwitchTab"
+assert nodes["WebSite"]["url"] == "https://switchtab.royjen.com/"
+app = nodes["SoftwareApplication"]
+assert app["operatingSystem"] == "macOS 14 or later"
+assert app["offers"] == {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+assert "aggregateRating" not in app
+assert "review" not in app
+PY
 grep -q 'id="how-it-works"' "$page"
 grep -q 'class="demo-reel"' "$page"
 grep -q 'class="demo-menubar"' "$page"
@@ -56,10 +116,14 @@ if grep -qE 'layer-finder\.webp|layer-preview-secondary\.webp|layer-app-switcher
   exit 1
 fi
 grep -q 'brew install --cask sonim1/tap/switchtab' "$page"
-if grep -qiE '<script[[:space:]>]|<video[[:space:]>]|<canvas[[:space:]>]|tracker|analytics|http://' "$page" "$style"; then
-  echo 'landing page must stay free of scripts, video, canvas, trackers, and insecure URLs' >&2
+if grep -qiE '<video[[:space:]>]|<canvas[[:space:]>]|tracker|http://' "$page" "$style"; then
+  echo 'landing page must stay free of video, canvas, trackers, and insecure URLs' >&2
   exit 1
 fi
+test "$(grep -oE '<script([[:space:]][^>]*)?>' "$page" | wc -l | tr -d ' ')" = 1 || {
+  echo 'landing page must contain only its JSON-LD script' >&2
+  exit 1
+}
 if grep -qiE 'src="https?://' "$page"; then
   echo 'landing page images must be served locally' >&2
   exit 1
@@ -77,6 +141,38 @@ if grep -R -qE "${macos_user_root}|file:///" docs; then
   echo 'public documentation contains a local filesystem identifier' >&2
   exit 1
 fi
+
+grep -qx 'User-agent: \*' "$robots"
+grep -qx 'User-agent: OAI-SearchBot' "$robots"
+grep -qx 'Sitemap: https://switchtab.royjen.com/sitemap.xml' "$robots"
+grep -q '<loc>https://switchtab.royjen.com/</loc>' "$sitemap"
+grep -q '<title>Page not found — SwitchTab</title>' "$not_found"
+grep -q 'href="/"' "$not_found"
+if grep -qE 'rel="canonical"|application/ld\+json' "$not_found"; then
+  echo '404 page must not publish home-page search signals' >&2
+  exit 1
+fi
+if grep -q 'href="index.html"' "$page"; then
+  echo 'home links must use the canonical root path' >&2
+  exit 1
+fi
+
+python3 - "$sitemap" "$social_card" <<'PY'
+from pathlib import Path
+import struct
+import sys
+import xml.etree.ElementTree as ET
+
+sitemap, card = map(Path, sys.argv[1:])
+root = ET.parse(sitemap).getroot()
+namespace = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+locations = [node.text for node in root.findall("s:url/s:loc", namespace)]
+assert locations == ["https://switchtab.royjen.com/"], locations
+data = card.read_bytes()[:24]
+assert data[:8] == b"\x89PNG\r\n\x1a\n"
+width, height = struct.unpack(">II", data[16:24])
+assert (width, height) == (1200, 630), (width, height)
+PY
 
 demo_dir='docs/demo'
 demo_assets=(

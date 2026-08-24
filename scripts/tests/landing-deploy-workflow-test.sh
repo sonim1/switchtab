@@ -34,6 +34,10 @@ assert(workflow.fetch("concurrency") == {
 }, "deployment concurrency must cancel stale runs")
 
 job = workflow.fetch("jobs").fetch("deploy")
+assert(job.fetch("environment") == {
+  "name" => "production",
+  "url" => "https://switchtab.royjen.com/",
+}, "production environment must link to the canonical custom domain")
 assert(job["runs-on"] == "ubuntu-latest", "deployment must use ubuntu-latest")
 assert(job["timeout-minutes"] == 10, "deployment timeout must be bounded")
 steps = job.fetch("steps")
