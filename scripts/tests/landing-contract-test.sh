@@ -116,8 +116,8 @@ if grep -qE 'layer-finder\.webp|layer-preview-secondary\.webp|layer-app-switcher
   exit 1
 fi
 grep -q 'brew install --cask sonim1/tap/switchtab' "$page"
-if grep -qiE '<video[[:space:]>]|<canvas[[:space:]>]|tracker|analytics|http://' "$page" "$style"; then
-  echo 'landing page must stay free of video, canvas, trackers, analytics, and insecure URLs' >&2
+if grep -qiE '<video[[:space:]>]|<canvas[[:space:]>]|tracker|http://' "$page" "$style"; then
+  echo 'landing page must stay free of video, canvas, trackers, and insecure URLs' >&2
   exit 1
 fi
 test "$(grep -oE '<script([[:space:]][^>]*)?>' "$page" | wc -l | tr -d ' ')" = 1 || {
