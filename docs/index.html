@@ -3,8 +3,52 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="SwitchTab is a native macOS app switcher for moving between apps and windows with one keystroke.">
-    <title>SwitchTab — Your apps, one keystroke away</title>
+    <meta name="description" content="SwitchTab is a free, native macOS app and window switcher. Use Command-Tab for apps and Command-Backtick for windows, with optional live previews.">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <title>SwitchTab — Free macOS App &amp; Window Switcher</title>
+    <link rel="canonical" href="https://switchtab.royjen.com/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SwitchTab">
+    <meta property="og:title" content="SwitchTab — Free macOS App &amp; Window Switcher">
+    <meta property="og:description" content="Switch apps with Command-Tab, then land on the exact window with Command-Backtick.">
+    <meta property="og:url" content="https://switchtab.royjen.com/">
+    <meta property="og:image" content="https://switchtab.royjen.com/social-card.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="SwitchTab switching from macOS apps to a selected window">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="SwitchTab — Free macOS App &amp; Window Switcher">
+    <meta name="twitter:description" content="Switch apps with Command-Tab, then land on the exact window with Command-Backtick.">
+    <meta name="twitter:image" content="https://switchtab.royjen.com/social-card.png">
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://switchtab.royjen.com/#website",
+            "url": "https://switchtab.royjen.com/",
+            "name": "SwitchTab"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://switchtab.royjen.com/#software",
+            "name": "SwitchTab",
+            "url": "https://switchtab.royjen.com/",
+            "downloadUrl": "https://github.com/sonim1/switchtab/releases/latest",
+            "description": "A free, native macOS app and window switcher for keyboard-first navigation.",
+            "applicationCategory": "UtilitiesApplication",
+            "operatingSystem": "macOS 14 or later",
+            "isAccessibleForFree": true,
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            }
+          }
+        ]
+      }
+    </script>
     <link rel="icon" href="AppIcon-32.png">
     <link rel="stylesheet" href="landing.css">
   </head>
@@ -13,7 +57,7 @@
     <div class="page-glow page-glow--bottom" aria-hidden="true"></div>
 
     <header class="site-header shell">
-      <a class="brand" href="index.html" aria-label="SwitchTab home">
+      <a class="brand" href="/" aria-label="SwitchTab home">
         <img src="AppIcon-256.png" alt="">
         <span>SwitchTab</span>
       </a>
@@ -26,9 +70,9 @@
     <main>
       <section class="hero shell" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span> No swiping. No Mission Control. Just the window.</p>
-          <h1 id="hero-title">Your apps,<br><em>one keystroke away.</em></h1>
-          <p class="hero-lede">SwitchTab gives your apps and windows a calm, focused shortcut. Use <kbd>⌘</kbd><kbd>Tab</kbd> for apps and <kbd>⌘</kbd><kbd>`</kbd> for windows in the app you are using.</p>
+          <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span> Free native macOS app and window switcher</p>
+          <h1 id="hero-title">Switch apps.<br><em>Land on the exact window.</em></h1>
+          <p class="hero-lede">Use <kbd>⌘</kbd><kbd>Tab</kbd> to move between apps, then <kbd>⌘</kbd><kbd>`</kbd> to choose a window without releasing Command.</p>
           <div class="hero-actions">
             <a class="button button--primary" href="#install">Install SwitchTab <span aria-hidden="true">→</span></a>
             <a class="text-link" href="#how-it-works">See how it works <span aria-hidden="true">↓</span></a>
@@ -141,6 +185,34 @@
         </div>
       </section>
 
+      <section class="quick-answers shell" id="quick-answers" aria-labelledby="answers-title">
+        <div class="section-heading section-heading--split">
+          <div>
+            <p class="eyebrow">Quick answers</p>
+            <h2 id="answers-title">The macOS switcher,<br><em>without the hunt.</em></h2>
+          </div>
+          <p class="section-intro">What SwitchTab changes, what it needs, and what it costs.</p>
+        </div>
+        <div class="answer-grid">
+          <article class="answer-card">
+            <h3>What is SwitchTab?</h3>
+            <p>SwitchTab is a free, native macOS utility for keyboard-first switching between running apps and the windows of the current app.</p>
+          </article>
+          <article class="answer-card">
+            <h3>How is SwitchTab different from macOS Command-Tab?</h3>
+            <p>macOS Command-Tab switches between apps. SwitchTab keeps that app flow and lets you move into the highlighted app’s windows without releasing Command.</p>
+          </article>
+          <article class="answer-card">
+            <h3>Does SwitchTab require Screen Recording?</h3>
+            <p>No. Accessibility permission is required to discover and focus windows. Screen Recording is optional and used only for live previews; switching still works with app icons and placeholders.</p>
+          </article>
+          <article class="answer-card">
+            <h3>Is SwitchTab free?</h3>
+            <p>Yes. SwitchTab has no ads, purchases, subscription, analytics SDK, or account, and no remote service is required for switching.</p>
+          </article>
+        </div>
+      </section>
+
       <section class="features shell" aria-labelledby="features-title">
         <div class="section-heading section-heading--split">
           <div>
@@ -179,7 +251,7 @@
     </main>
 
     <footer class="site-footer shell">
-      <a class="brand brand--footer" href="index.html">
+      <a class="brand brand--footer" href="/">
         <img src="AppIcon-256.png" alt="">
         <span>SwitchTab</span>
       </a>

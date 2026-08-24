@@ -223,9 +223,14 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
   85.555%, 100% { border-color: rgba(255, 255, 255, 0.28); background: rgba(255, 255, 255, 0.11); box-shadow: none; transform: none; }
 }
 
-.how-it-works, .features { position: relative; padding-top: 78px; padding-bottom: 105px; }
+.how-it-works, .quick-answers, .features { position: relative; padding-top: 78px; padding-bottom: 105px; }
 .section-heading { margin-bottom: 39px; }
 .section-heading h2 { margin-bottom: 0; font-size: clamp(36px, 4.4vw, 58px); font-weight: 600; line-height: 1.02; }
+.quick-answers { padding-top: 42px; }
+.answer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.answer-card { min-height: 196px; padding: 28px; border: 1px solid var(--line); border-radius: var(--radius-md); background: rgba(17, 20, 29, 0.78); }
+.answer-card h3 { margin: 0 0 14px; font-size: 22px; font-weight: 600; line-height: 1.2; letter-spacing: -0.025em; }
+.answer-card p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.68; }
 .steps { display: grid; grid-template-columns: 1fr 32px 1fr 32px 1fr; align-items: center; }
 .step-card { min-height: 180px; padding: 25px; border: 1px solid var(--line-soft); border-radius: var(--radius-md); background: linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018)); }
 .step-number { display: block; margin-bottom: 20px; color: var(--text-faint); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: 0.12em; }
@@ -300,7 +305,10 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
   .demo-hud { left: 50%; right: auto; bottom: 9px; min-width: 200px; gap: 5px; padding: 8px 10px; }
   .demo-hud small { margin-right: 2px; font-size: 10px; }
   .demo-hud kbd { min-width: 34px; height: 34px; padding-inline: 8px; font-size: 14px; }
-  .how-it-works, .features { padding-top: 62px; padding-bottom: 74px; }
+  .how-it-works, .quick-answers, .features { padding-top: 62px; padding-bottom: 74px; }
+  .quick-answers { padding-top: 32px; }
+  .answer-grid { grid-template-columns: 1fr; }
+  .answer-card { min-height: 0; padding: 23px; }
   .steps { grid-template-columns: 1fr; gap: 10px; }
   .step-connector { transform: rotate(90deg); }
   .step-card { min-height: auto; padding: 20px; }
