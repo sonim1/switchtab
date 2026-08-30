@@ -264,6 +264,59 @@ if grep -qE '\.switcher-window|\.app-strip|\.app-tile|\.app-icon--' "$style"; th
   exit 1
 fi
 
+python3 - "$page" "$style" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+page, style = map(Path, sys.argv[1:])
+html = page.read_text()
+css = style.read_text()
+desktop_css = css.split('@media', 1)[0]
+
+def declarations(selector):
+    match = re.search(rf'{re.escape(selector)}\s*\{{([^}}]*)\}}', css, re.DOTALL)
+    assert match, selector
+    return {
+        name.strip(): value.strip()
+        for name, value in re.findall(r'([\w-]+)\s*:\s*([^;]+);', match.group(1))
+    }
+
+def declarations_for_class(class_name):
+    found = {}
+    for selector, body in re.findall(r'([^{}]+)\{([^{}]*)\}', desktop_css, re.DOTALL):
+        if class_name in selector:
+            found.update({
+                name.strip(): value.strip()
+                for name, value in re.findall(r'([\w-]+)\s*:\s*([^;]+);', body)
+            })
+    assert found, class_name
+    return found
+
+assert 'class="trust-row trust-row--band" aria-label="Product highlights"' in html
+hero = declarations('.hero')
+assert hero['display'] == 'grid'
+tracks = re.findall(r'minmax\(\s*([^,]+),\s*([^)]+)\)', hero['grid-template-columns'])
+assert len(tracks) == 2 and [minimum.strip() for minimum, _ in tracks] == ['0', '0']
+assert '--radius-lg: 24px;' in css
+assert '--radius-md: 16px;' in css
+assert not re.search(r'^\s*--(?:purple|green|amber)\s*:', css, re.MULTILINE)
+assert declarations('.demo-window')['transform'].startswith('perspective(')
+step = declarations('.step-card')
+assert 'border-top' in step and 'background' not in step and 'border-radius' not in step
+assert 'padding' in step
+assert declarations('.feature-grid')['grid-template-columns'].startswith('repeat(12,')
+for class_name, span in (('.feature-card--blue', 'span 7'), ('.feature-card--purple', 'span 5'), ('.feature-card--amber', 'span 7'), ('.feature-card--green', 'span 5')):
+    card = declarations_for_class(class_name)
+    assert card['grid-column'] == span and card['color'] == 'var(--blue)'
+assert declarations('.trust-row--band')['grid-template-columns'] == 'repeat(4, 1fr)'
+assert declarations('.hero .eyebrow')['justify-content'] == 'center'
+mobile = re.search(r'@media\s*\(max-width:\s*930px\)\s*\{.*?\.hero\s*\{([^}]*)\}', css, re.DOTALL)
+assert mobile and 'grid-template-columns: 1fr' in mobile.group(1)
+mobile_band = re.search(r'@media\s*\(max-width:\s*640px\)\s*\{.*?\.trust-row--band\s*\{([^}]*)\}', css, re.DOTALL)
+assert mobile_band and 'grid-template-columns: repeat(2, 1fr)' in mobile_band.group(1)
+PY
+
 grep -q 'X-Content-Type-Options: nosniff' "$headers"
 grep -q 'X-Frame-Options: DENY' "$headers"
 grep -q 'Content-Security-Policy:' "$headers"
