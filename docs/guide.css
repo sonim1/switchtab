@@ -1,0 +1,42 @@
+.guide-page {
+  --guide-width: 760px;
+  --guide-body: 1rem;
+  --guide-small: .875rem;
+  --guide-title: clamp(2rem, 5vw, 3.5rem);
+  --guide-heading: clamp(1.5rem, 3vw, 2rem);
+  --guide-space-2: 8px;
+  --guide-space-4: 16px;
+  --guide-space-6: 24px;
+  --guide-space-8: 32px;
+  --guide-space-12: 48px;
+  --guide-space-16: 64px;
+}
+
+.guide { max-width: var(--guide-width); padding-block: var(--guide-space-12) var(--guide-space-16); font-size: var(--guide-body); line-height: 1.75; }
+.guide h1 { max-width: none; margin-block: var(--guide-space-6); font-size: var(--guide-title); line-height: 1.1; text-wrap: balance; }
+.guide h2 { margin-block: 0 var(--guide-space-4); font-size: var(--guide-heading); line-height: 1.2; }
+.guide h3 { margin-block: var(--guide-space-6) var(--guide-space-2); font-size: var(--guide-body); letter-spacing: normal; }
+.guide p, .guide li { color: var(--text-soft); }
+.guide p { margin-bottom: var(--guide-space-6); }
+.guide a:not(.button) { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
+.guide a:not(.button):hover { color: var(--text); }
+.guide a:not(.button):active { color: var(--text-soft); }
+.guide section { margin-top: var(--guide-space-12); scroll-margin-top: var(--guide-space-6); }
+.guide ul, .guide ol { padding-left: var(--guide-space-6); }
+.guide li + li { margin-top: var(--guide-space-2); }
+.guide-toc { padding-block: var(--guide-space-4); border-block: 1px solid var(--line); }
+.guide-toc ul { margin: 0; }
+.guide table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-block: var(--guide-space-6); font-size: var(--guide-small); }
+.guide caption { text-align: left; font-weight: 600; margin-bottom: var(--guide-space-2); }
+.guide th, .guide td { padding: var(--guide-space-4) var(--guide-space-2); text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.guide th:first-child { width: 40%; }
+.guide td { color: var(--text-soft); }
+.guide figure { margin: var(--guide-space-8) 0; }
+.guide figure img { display: block; width: 100%; height: auto; border-radius: var(--radius-md); }
+.guide figcaption { margin-top: var(--guide-space-2); color: var(--text-soft); font-size: var(--guide-small); }
+.guide pre { padding: var(--guide-space-4); background: var(--surface-soft); border: 1px solid var(--line); border-radius: var(--radius-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+.guide code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--guide-small); }
+.guide .eyebrow { color: var(--blue); }
+.guide .button { max-width: 100%; white-space: normal; text-align: center; }
+.guide-page .header-nav { flex-wrap: wrap; }
+.guide-page .site-footer a { text-decoration: underline; text-underline-offset: 3px; }
