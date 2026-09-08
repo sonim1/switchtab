@@ -5,10 +5,33 @@
 <h1 align="center">SwitchTab</h1>
 
 <p align="center">
-  <strong>Fast, keyboard-first window and application switching for macOS.</strong>
+  <strong>A free, open-source macOS app and window switcher with keyboard shortcuts and window previews.</strong>
+</p>
+
+<p align="center">
+  <a href="https://switchtab.royjen.com/">Website</a> ·
+  <a href="https://github.com/sonim1/switchtab/releases/latest">Download</a> ·
+  <a href="#installation">Installation</a>
 </p>
 
 ---
+
+## Installation
+
+Requires **macOS 14 or later**. No Xcode or Swift toolchain is needed to use the app.
+
+With [Homebrew](https://brew.sh/):
+
+```bash
+brew install --cask sonim1/tap/switchtab
+```
+
+Or [download the latest signed and notarized DMG](https://github.com/sonim1/switchtab/releases/latest),
+open it, and drag SwitchTab to Applications. Open SwitchTab and grant Accessibility
+permission for switching. Screen Recording is optional and enables window previews.
+
+[See SwitchTab in action](https://switchtab.royjen.com/#how-it-works) or read
+[how to switch between apps and windows on Mac](https://switchtab.royjen.com/guides/switch-windows-on-mac/).
 
 ## What SwitchTab Does
 
@@ -57,7 +80,7 @@ can deliver updates.
 ## Requirements
 
 - macOS 14.0 or later
-- Swift 6 toolchain or Xcode with Swift 5.10+
+- To build from source: Swift 6 toolchain or Xcode with Swift 5.10+
 
 ## Quick Start
 

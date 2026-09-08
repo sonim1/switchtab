@@ -227,6 +227,8 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .section-heading { margin-bottom: 39px; }
 .section-heading h2 { margin-bottom: 0; font-size: clamp(36px, 4.4vw, 58px); font-weight: 600; line-height: 1.02; }
 .quick-answers { padding-top: 42px; }
+.guide-link { margin: 24px 0 0; color: var(--text-soft); font-size: 14px; line-height: 1.7; }
+.guide-link .text-link { color: var(--blue); font-size: inherit; text-decoration: underline; text-underline-offset: 3px; }
 .answer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .answer-card { min-height: 196px; padding: 28px; border: 1px solid var(--line); border-radius: var(--radius-md); background: rgba(17, 20, 29, 0.78); }
 .answer-card h3 { margin: 0 0 14px; font-size: 22px; font-weight: 600; line-height: 1.2; letter-spacing: -0.025em; }

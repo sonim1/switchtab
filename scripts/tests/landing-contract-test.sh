@@ -167,7 +167,10 @@ sitemap, card = map(Path, sys.argv[1:])
 root = ET.parse(sitemap).getroot()
 namespace = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 locations = [node.text for node in root.findall("s:url/s:loc", namespace)]
-assert locations == ["https://switchtab.royjen.com/"], locations
+assert locations == [
+    "https://switchtab.royjen.com/",
+    "https://switchtab.royjen.com/guides/switch-windows-on-mac/",
+], locations
 data = card.read_bytes()[:24]
 assert data[:8] == b"\x89PNG\r\n\x1a\n"
 width, height = struct.unpack(">II", data[16:24])

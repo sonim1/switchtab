@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>How to Switch Between Apps and Windows on Mac | SwitchTab</title>
+    <meta name="description" content="Learn Command-Tab vs Command-Backtick on Mac, switch windows within one app, and use SwitchTab for window previews and app-to-window switching.">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <link rel="canonical" href="https://switchtab.royjen.com/guides/switch-windows-on-mac/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="SwitchTab">
+    <meta property="og:title" content="How to Switch Between Apps and Windows on Mac">
+    <meta property="og:description" content="Native Mac shortcuts first. Window previews and a continuous app-to-window flow when you need them.">
+    <meta property="og:url" content="https://switchtab.royjen.com/guides/switch-windows-on-mac/">
+    <meta property="og:image" content="https://switchtab.royjen.com/social-card.png">
+    <meta property="og:image:alt" content="SwitchTab switching from macOS apps to a selected window">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="How to Switch Between Apps and Windows on Mac">
+    <meta name="twitter:description" content="Command-Tab, Command-Backtick, and a window-preview alternative for macOS.">
+    <meta name="twitter:image" content="https://switchtab.royjen.com/social-card.png">
+    <link rel="icon" href="/AppIcon-32.png">
+    <link rel="stylesheet" href="/landing.css">
+    <link rel="stylesheet" href="/guide.css">
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "TechArticle",
+        "headline": "How to Switch Between Apps and Windows on Mac",
+        "description": "A guide to native Mac switching shortcuts and SwitchTab's app-to-window switching flow.",
+        "inLanguage": "en",
+        "mainEntityOfPage": "https://switchtab.royjen.com/guides/switch-windows-on-mac/",
+        "image": "https://switchtab.royjen.com/social-card.png",
+        "author": { "@type": "Organization", "name": "SwitchTab", "url": "https://switchtab.royjen.com/" },
+        "publisher": { "@type": "Organization", "name": "SwitchTab", "url": "https://switchtab.royjen.com/" }
+      }
+    </script>
+  </head>
+  <body class="guide-page">
+    <header class="site-header shell">
+      <a class="brand" href="/" aria-label="SwitchTab home">
+        <img src="/AppIcon-256.png" alt="" width="256" height="256">
+        <span>SwitchTab</span>
+      </a>
+      <nav class="header-nav" aria-label="Primary navigation">
+        <a class="button button--small button--light" href="/#install">Install SwitchTab</a>
+      </nav>
+    </header>
+    <main class="guide shell" id="main">
+      <article aria-labelledby="guide-title">
+        <header>
+          <p class="eyebrow">The SwitchTab guide</p>
+          <h1 id="guide-title">How to switch between apps and windows on Mac</h1>
+          <p>Use <kbd>Command</kbd> + <kbd>Tab</kbd> to switch apps. Use <kbd>Command</kbd> + <kbd>`</kbd> (backtick) to switch windows in the app you are using. The difference matters when one app has several open windows.</p>
+          <p>For example, Safari is one app, but two separate Safari windows are two destinations. Command-Tab selects Safari; the window shortcut moves between its windows. Browser tabs are a separate level of navigation.</p>
+        </header>
+        <nav class="guide-toc" aria-label="On this page">
+          <ul>
+            <li><a href="#native-shortcuts">Mac's built-in switching shortcuts</a></li>
+            <li><a href="#window-previews">When a window switcher helps</a></li>
+            <li><a href="#switchtab-flow">Switch from an app to a specific window</a></li>
+            <li><a href="#troubleshooting">If a shortcut or preview does not work</a></li>
+            <li><a href="#install">Install SwitchTab</a></li>
+          </ul>
+        </nav>
+        <section id="native-shortcuts" aria-labelledby="native-title">
+          <h2 id="native-title">Mac's built-in switching shortcuts</h2>
+          <table>
+            <caption>App switching and window switching are different actions.</caption>
+            <thead><tr><th scope="col">Shortcut</th><th scope="col">What it selects</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Command + Tab</th><td>A different open app. Hold Command and tap Tab until the app you want is selected.</td></tr>
+              <tr><th scope="row">Command + Shift + Tab</th><td>The previous app in the app switcher.</td></tr>
+              <tr><th scope="row">Command + `</th><td>Another window in the current app. The ` symbol is the grave accent, also called backtick.</td></tr>
+            </tbody>
+          </table>
+          <p>You do not need an extra app to use these shortcuts. Key placement and window-shortcut labels can vary with your keyboard layout. Check System Settings &gt; Keyboard &gt; Keyboard Shortcuts if your layout differs.</p>
+          <p>Apple documents the built-in behavior in <a href="https://support.apple.com/guide/mac-help/mchlb7beb9af/mac">See your open windows on Mac</a>.</p>
+        </section>
+        <section id="window-previews" aria-labelledby="previews-title">
+          <h2 id="previews-title">When a macOS window switcher helps</h2>
+          <p>Built-in app switching works well when choosing an app is enough. If you keep several documents or windows in the same app, a window list can help you choose the destination before bringing it forward.</p>
+          <p><a href="/">SwitchTab</a> is a free, open-source Command-Tab alternative for macOS 14 or later. It combines an app switcher with a current-app window switcher. Window titles identify each destination, and optional previews show its contents.</p>
+          <figure>
+            <img src="/demo/layer-app-switcher-curated.webp" alt="SwitchTab application switcher showing a row of application icons" width="1320" height="376" loading="lazy" decoding="async">
+            <figcaption>Application mode selects an app.</figcaption>
+          </figure>
+          <figure>
+            <img src="/demo/layer-window-switcher-curated.webp" alt="SwitchTab window switcher showing multiple window previews for the selected application" width="1610" height="708" loading="lazy" decoding="async">
+            <figcaption>Window mode lets you choose a specific window. These curated UI examples are also used in the homepage demo.</figcaption>
+          </figure>
+          <p>SwitchTab is for switching focus, not tiling or resizing windows. Its window list includes standard, visible, non-minimized windows; it does not promise to list every full-screen, hidden, or minimized window.</p>
+        </section>
+        <section id="switchtab-flow" aria-labelledby="flow-title">
+          <h2 id="flow-title">Switch from an app to a specific window</h2>
+          <p>With both SwitchTab modes enabled and their default shortcuts registered:</p>
+          <ol>
+            <li>Hold Command and press Tab to open the application switcher.</li>
+            <li>Keep holding Command and tap Tab to highlight the app you want. Add Shift to move backward.</li>
+            <li>Still holding Command, press backtick (`) to show the highlighted app's windows.</li>
+            <li>Tap backtick to cycle windows, then release Command to focus the selected window.</li>
+          </ol>
+          <p>Press Escape before releasing Command to cancel. You can also click a destination to confirm it. To switch windows in the current app directly, start with Command-Backtick.</p>
+          <p><a href="/#how-it-works">Watch the app-to-window switching demo</a>.</p>
+        </section>
+        <section id="troubleshooting" aria-labelledby="troubleshooting-title">
+          <h2 id="troubleshooting-title">If a shortcut or preview does not work</h2>
+          <h3>Command-Tab still opens the macOS switcher</h3>
+          <p>Check that application switching is enabled in SwitchTab's shortcut settings and that Accessibility permission is granted. Upgrades can preserve an earlier disabled setting. If interception cannot be installed, SwitchTab leaves the native shortcut working and shows registration guidance.</p>
+          <h3>Command-Backtick cannot be registered</h3>
+          <p>macOS can reserve this shortcut. SwitchTab can use Option-Control-Backtick as a fallback, or you can choose another shortcut in Settings. The steps above describe the default key assignments.</p>
+          <h3>Window previews are missing</h3>
+          <p>Screen Recording permission is optional and enables previews. Without it, switching still works with window titles and placeholders. Accessibility permission is required to discover and focus windows. An individual preview can also be unavailable even when permission is granted.</p>
+          <h3>How do I get the native switcher back?</h3>
+          <p>Disable application switching in SwitchTab's settings or quit SwitchTab. Command-Tab returns to macOS.</p>
+        </section>
+        <section id="install" aria-labelledby="install-title">
+          <h2 id="install-title">Install SwitchTab</h2>
+          <p>SwitchTab requires macOS 14 or later. It is free, with no account, ads, subscription, or paid feature tier.</p>
+          <p>If you already use <a href="https://brew.sh/">Homebrew</a>, run:</p>
+          <pre><code>brew install --cask sonim1/tap/switchtab</code></pre>
+          <p>Otherwise, download the signed and notarized DMG, open it, and drag SwitchTab to Applications. Open the app and follow its permission guidance.</p>
+          <p><a class="button button--primary" href="https://github.com/sonim1/switchtab/releases/latest">Download SwitchTab for Mac</a></p>
+          <p>Developers can find the code and build instructions in the <a href="https://github.com/sonim1/switchtab">SwitchTab GitHub repository</a>.</p>
+        </section>
+      </article>
+    </main>
+    <footer class="site-footer shell">
+      <a class="brand brand--footer" href="/">SwitchTab home</a>
+      <p class="footer-note">A native macOS app and window switcher.</p>
+    </footer>
+  </body>
+</html>
