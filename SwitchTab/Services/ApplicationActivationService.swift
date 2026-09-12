@@ -139,6 +139,7 @@ struct AXApplicationForegroundCorrector: ApplicationForegroundCorrecting {
         guard AXUIElementCopyAttributeValue(application, kAXFocusedWindowAttribute as CFString, &value) == .success,
               let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
         let window = unsafeDowncast(value, to: AXUIElement.self)
+        guard AXUIElementSetMessagingTimeout(window, 0.05) == .success else { return nil }
         var minimized: CFTypeRef?
         guard AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &minimized) == .success,
               let isMinimized = minimized as? Bool, !isMinimized else { return nil }

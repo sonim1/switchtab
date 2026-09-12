@@ -1,8 +1,29 @@
 import CoreGraphics
+import ApplicationServices
 import XCTest
 @testable import SwitchTab
 
 final class ApplicationForegroundCorrectionTests: XCTestCase {
+    @MainActor
+    func testStalledFocusedWindowReadIsBoundedWhenFixturePIDProvided() async throws {
+        guard let value = ProcessInfo.processInfo.environment["SWITCHTAB_SLOW_AX_PID"],
+              let processIdentifier = Int(value) else {
+            throw XCTSkip("Set SWITCHTAB_SLOW_AX_PID to the running scripts/tests/fixtures/slow-ax-window.swift fixture PID")
+        }
+        guard AXIsProcessTrusted() else { throw XCTSkip("Native AX fixture requires existing Accessibility permission") }
+        var focusedWindow: CFTypeRef?
+        XCTAssertEqual(AXUIElementCopyAttributeValue(
+            AXUIElementCreateApplication(pid_t(processIdentifier)),
+            kAXFocusedWindowAttribute as CFString, &focusedWindow
+        ), .success, "The slow fixture must be running with a focused window")
+        let started = ContinuousClock.now
+        let identifier = AXApplicationForegroundCorrector().focusedWindowIdentifier(
+            processIdentifier: processIdentifier
+        )
+        XCTAssertLessThan(started.duration(to: .now), .milliseconds(250))
+        XCTAssertNil(identifier)
+    }
+
     func testOnlyForeignOverlappingNormalWindowAboveTargetRequiresRaise() {
         let target = window(10, owner: 1)
         XCTAssertTrue(ApplicationForegroundCorrectionPolicy.isOccluded(
