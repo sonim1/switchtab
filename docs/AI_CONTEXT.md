@@ -38,6 +38,7 @@
 - If application shortcut interception cannot be installed, keep the saved preference, explain the registration problem, and leave native Command-Tab untouched.
 - Opening the overlay does not commit a choice. Commit happens on modifier release or direct click; cancellation must not change focus or MRU order.
 - A confirmed window choice focuses that exact window. A confirmed application choice activates the selected application and hands focus away from SwitchTab.
+- Application confirmation allows one window-order check after 120 ms: raise only the same existing, non-minimized focused window if the selected app is still active and another app's normal window overlaps it from above. Skip when a selected-app window is already frontmost or identity is unavailable; cancel on a new switch, activation away, or new key/mouse/scroll input. Never create, restore, or choose an alternate window for this correction.
 - Window and application MRU histories remain independent. Failed or cancelled activations do not promote an item.
 - A mode switch commits nothing: it keeps the panel, the event tap, and the modifiers that opened the session, so releasing them still confirms. A switch that finds no windows, no permission, or an unregistered target mode leaves the live session untouched. Resume memory lives for one held-modifier session and is cleared on dismissal.
 - Selection identity is stable across thumbnail/icon updates and candidate refreshes. Presentation updates must not cause panel-height or tile-position jumps.
