@@ -219,6 +219,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private let windowFocusService = WindowFocusService()
     private let windowCloseService = WindowCloseService()
     private let applicationActivationService = ApplicationActivationService()
+    private let applicationForegroundCorrection = ApplicationForegroundCorrectionCoordinator()
     private let applicationTerminationService = ApplicationTerminationService()
     private let applicationWindowCountLoader = ApplicationWindowCountLoader()
     private let permissionService = PermissionService()
@@ -307,6 +308,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func applicationWillTerminate(_ _: Notification) {
+        applicationForegroundCorrection.cancel()
         cancelThumbnailLoadingIfNeeded(preservingCachedThumbnails: false)
         thumbnailMemoryPressureSource?.cancel()
         thumbnailMemoryPressureSource = nil
@@ -321,6 +323,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func showCurrentAppSwitcher(reverse: Bool = false) {
+        applicationForegroundCorrection.cancel()
         debugLog("hotkey handler entered reverse=\(reverse)")
         usageMetricsStore.recordWindowShortcutUse()
         guard let overlayController else {
@@ -367,6 +370,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func showApplicationSwitcher(reverse: Bool = false) {
+        applicationForegroundCorrection.cancel()
         guard let overlayController else {
             return
         }
@@ -677,7 +681,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     activationService: self.applicationActivationService,
                     recencyStore: self.applicationRecencyStore
                 )
-                selectionCoordinator.confirm(selectedApplication)
+                self.applicationForegroundCorrection.schedule(
+                    processIdentifier: selectedApplication.processIdentifier
+                )
+                if selectionCoordinator.confirm(selectedApplication) != .activated {
+                    self.applicationForegroundCorrection.cancel()
+                }
             },
             onModeSwitch: { [weak self] reverse in
                 self?.switchOverlayMode(reverse: reverse)
@@ -868,6 +877,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 isActive: application.isActive
             )
             MainActor.assumeIsolated {
+                self?.applicationForegroundCorrection.applicationDidActivate(
+                    processIdentifier: snapshot.processIdentifier
+                )
                 self?.workspaceActivationRecencyObserver.recordActivation(snapshot)
             }
         }
