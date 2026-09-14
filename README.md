@@ -33,6 +33,26 @@ permission for switching. Screen Recording is optional and enables window previe
 [See SwitchTab in action](https://switchtab.royjen.com/#how-it-works) or read
 [how to switch between apps and windows on Mac](https://switchtab.royjen.com/guides/switch-windows-on-mac/).
 
+### Install with AI
+
+Copy this prompt into a coding agent with **local terminal access** on your Mac.
+Chat-only tools cannot install apps. You still approve macOS permissions yourself.
+[Open the plain-text prompt](https://switchtab.royjen.com/install-with-ai.txt).
+
+```text
+Install SwitchTab on this Mac using local terminal access. If you cannot run local commands, say so instead of claiming installation succeeded.
+
+1. Confirm macOS 14 or later and Apple silicon hardware (including when the terminal runs under Rosetta). Stop and explain if this Mac is unsupported.
+2. Read the official README at https://github.com/sonim1/switchtab and resolve the current stable release at https://github.com/sonim1/switchtab/releases/latest. Use only the official sonim1/switchtab release or sonim1/tap Homebrew cask.
+3. Check for an existing SwitchTab installation first. Report its version and ask before updating or replacing it. Preserve its settings.
+4. If Homebrew is already available, run: brew install --cask sonim1/tap/switchtab
+Do not install Homebrew, Xcode, or a Swift toolchain just for this app.
+5. Without Homebrew, download the stable DMG and its matching .dmg.sha256 file from that same official release into a temporary directory. Verify SHA-256 before mounting read-only. Verify the app's Developer ID signature and notarization with codesign and spctl, and confirm bundle ID com.royjen.switchtab. Stop if any check fails. Copy it to /Applications only if no installation exists; if access is denied, ask me to drag the verified app there. Eject only the image you mounted.
+6. Verify the installed app's version, bundle ID, signature, and notarization, then open it. Report whether its process is running. Do not claim switching works until I complete the permission and shortcut check.
+7. Ask me to approve Accessibility in System Settings > Privacy & Security > Accessibility, then test my switching shortcut. Screen Recording is optional for window previews. Never grant permissions automatically.
+8. Do not use sudo, remove quarantine, disable Gatekeeper, change security settings, or request passwords in chat. Report the installed version, path, verification results, and any remaining manual steps.
+```
+
 ## What SwitchTab Does
 
 SwitchTab provides two focused switching modes:

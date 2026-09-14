@@ -16,5 +16,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
       - name: Validate landing page
         run: bash scripts/tests/landing-contract-test.sh
+      - name: Validate AI installation prompt
+        run: bash scripts/tests/agent-install-contract-test.sh
       - name: Validate search discovery
         run: bash scripts/tests/search-discovery-test.sh

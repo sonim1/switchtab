@@ -74,6 +74,7 @@
 - The checked-in Xcode project is Sparkle-free. `scripts/build-direct-distribution.sh` creates a separate Sparkle-enabled workspace under `.build/direct-distribution/`.
 - Direct releases are signed and notarized, then published as immutable versioned DMG, checksum, manifest, and appcast assets. R2 publication uses conditional writes; GitHub Releases and Homebrew are downstream consumers.
 - Pull-request CI owns version preparation. Default is a patch bump; `release:minor` or `release:major` labels select a larger bump. Documentation-only changes do not change the product version or trigger a release.
+- The exact landing-test paths `scripts/tests/landing-contract-test.sh` and `scripts/tests/agent-install-contract-test.sh` share that exemption. Other scripts, workflows, and mixed app changes remain release-relevant.
 - Never commit signing, notarization, R2, Sparkle, GitHub, or Cloudflare credentials. Keep the existing split between local keychain profiles and CI's temporary keychain.
 - Live procedures are authoritative in `docs/direct-distribution.md`, `docs/update-hosting.md`, `docs/release-workflow.md`, and `docs/repository-maintenance.md`.
 

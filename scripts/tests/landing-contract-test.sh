@@ -103,7 +103,7 @@ if grep -q '′' "$page"; then
   echo 'landing page must show the real backtick window shortcut' >&2
   exit 1
 fi
-if grep -qE 'Everyday|Developer|Creative|demo-scene__label|demo-scene--' "$page"; then
+if sed -n '/<figure class="demo-reel"/,/<\/figure>/p' "$page" | grep -qE 'Everyday|Developer|Creative|demo-scene__label|demo-scene--'; then
   echo 'persona scenes remain on landing page' >&2
   exit 1
 fi
@@ -223,12 +223,12 @@ grep -q '.demo-scene { position: absolute; inset: 0; }' "$style"
 grep -q '.demo-desktop { position: absolute; inset: 0; z-index: 0;' "$style"
 grep -q '.demo-layer { position: absolute; display: block; height: auto; max-width: none;' "$style"
 grep -q '.demo-hud { position: absolute; left: 50%; right: auto; bottom: 24px; z-index: 8;' "$style"
-grep -q '.demo-layer--app-switcher { top: 50%; left: 50%; z-index: 6; width: 48%; opacity: 0; transform: translate(-50%, -50%); animation: demo-app-overlay var(--demo-cycle) steps(1, end) infinite; }' "$style"
-grep -q '.demo-layer--window-switcher { top: 50%; left: 50%; z-index: 6; width: 48%; opacity: 0; transform: translate(-50%, -50%); animation: demo-window-overlay var(--demo-cycle) steps(1, end) infinite; }' "$style"
-grep -q '.demo-layer--preview-final { top: 8%; left: 27%; z-index: 5; width: 62%; opacity: 0; animation: demo-preview-final var(--demo-cycle) steps(1, end) infinite; }' "$style"
-grep -q '.demo-hud--apps { animation: demo-hud-apps var(--demo-cycle) steps(1, end) infinite; }' "$style"
-grep -q '.demo-hud--windows { animation: demo-hud-windows var(--demo-cycle) steps(1, end) infinite; }' "$style"
-grep -q '.demo-hud--release { animation: demo-hud-release var(--demo-cycle) steps(1, end) infinite; }' "$style"
+grep -q '.demo-layer--app-switcher { top: 50%; left: 50%; z-index: 6; width: 48%; opacity: 0; transform: translate(-50%, -50%); animation: demo-app-overlay var(--demo-cycle) var(--demo-ease) infinite; }' "$style"
+grep -q '.demo-layer--window-switcher { top: 50%; left: 50%; z-index: 6; width: 48%; opacity: 0; transform: translate(-50%, -50%); animation: demo-window-overlay var(--demo-cycle) var(--demo-ease) infinite; }' "$style"
+grep -q '.demo-layer--preview-final { top: 8%; left: 27%; z-index: 5; width: 62%; opacity: 0; animation: demo-preview-final var(--demo-cycle) var(--demo-ease) infinite; }' "$style"
+grep -q '.demo-hud--apps { animation: demo-hud-apps var(--demo-cycle) var(--demo-ease) infinite; }' "$style"
+grep -q '.demo-hud--windows { animation: demo-hud-windows var(--demo-cycle) var(--demo-ease) infinite; }' "$style"
+grep -q '.demo-hud--release { animation: demo-hud-release var(--demo-cycle) var(--demo-ease) infinite; }' "$style"
 if grep -qE '@keyframes demo-scene-cycle|@keyframes demo-frame-cycle' "$style"; then
   echo 'obsolete full-screen frame cycle remains on landing page' >&2
   exit 1
@@ -238,28 +238,25 @@ grep -q '@keyframes demo-window-overlay' "$style"
 grep -q '@keyframes demo-preview-final' "$style"
 grep -q '@keyframes demo-menubar-notes' "$style"
 grep -q '@keyframes demo-menubar-preview' "$style"
-test "$(grep -o 'steps(1, end)' "$style" | wc -l | tr -d ' ')" = 8
+if grep -q 'steps(1, end)' "$style"; then
+  echo 'demo transitions must interpolate rather than jump between frames' >&2
+  exit 1
+fi
 grep -q '@keyframes demo-hud-apps' "$style"
 grep -q '@keyframes demo-hud-windows' "$style"
 grep -q '@keyframes demo-hud-release' "$style"
 grep -q '@keyframes demo-key-tab' "$style"
 grep -q '@keyframes demo-key-window' "$style"
 grep -q '@keyframes demo-key-release' "$style"
-grep -q '16.667%, 49.999% { opacity: 1; }' "$style"
-grep -q '50%, 83.332% { opacity: 1; }' "$style"
-grep -q '83.333%, 99.999% { opacity: 1; }' "$style"
-grep -q '18.889%, 100%' "$style"
-grep -q '52.222%, 100%' "$style"
-grep -q '85.555%, 100%' "$style"
-test "$(grep -o 'border-color: rgba(255, 255, 255, 0.28); background: rgba(255, 255, 255, 0.11); box-shadow: none; transform: none;' "$style" | wc -l | tr -d ' ')" = 5
+grep -q '.demo-motion-toggle:checked ~ .demo-window .demo-key::before' "$style"
+grep -q '.demo-key--held::before { opacity: 1; }' "$style"
+test "$(grep -o 'class="demo-key demo-key--held"' "$page" | wc -l | tr -d ' ')" = 2
 grep -q 'box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34)' "$style"
 grep -q 'left: 50%; right: auto; bottom: 24px' "$style"
 grep -q 'min-width: 220px' "$style"
 grep -q 'font-size: 18px' "$style"
 grep -q '.demo-layer--window-switcher { width: 68%; }' "$style"
 grep -q '.demo-layer--app-switcher { width: 48%; }' "$style"
-grep -q '83.333%, 100% { opacity: 1; }' "$style"
-grep -q '83.333%, 100% { opacity: 0; }' "$style"
 grep -q 'prefers-reduced-motion: reduce' "$style"
 grep -q 'demo-frame--poster' "$style"
 if grep -qE '\.switcher-window|\.app-strip|\.app-tile|\.app-icon--' "$style"; then
@@ -278,7 +275,7 @@ css = style.read_text()
 desktop_css = css.split('@media', 1)[0]
 
 def declarations(selector):
-    match = re.search(rf'{re.escape(selector)}\s*\{{([^}}]*)\}}', css, re.DOTALL)
+    match = re.search(rf'{re.escape(selector)}\s*(?:,[^{{}}]+)?\{{([^}}]*)\}}', css, re.DOTALL)
     assert match, selector
     return {
         name.strip(): value.strip()
@@ -295,6 +292,93 @@ def declarations_for_class(class_name):
             })
     assert found, class_name
     return found
+
+def animation_frames(name):
+    match = re.search(rf'@keyframes {re.escape(name)}\s*\{{((?:[^{{}}]|\{{[^{{}}]*\}})*)\}}', css)
+    assert match, name
+    frames = {}
+    for offsets, body in re.findall(r'([^{}]+)\{([^{}]*)\}', match.group(1)):
+        values = dict(re.findall(r'([\w-]+)\s*:\s*([^;]+);', body))
+        assert set(values) <= {'opacity', 'transform'}, (name, values)
+        for offset in re.findall(r'(\d+(?:\.\d+)?)%', offsets):
+            frames[float(offset)] = values
+    return frames
+
+for name, enter_start, enter_end, exit_start, exit_end in (
+    ('demo-app-overlay', 16, 18, 49, 51),
+    ('demo-window-overlay', 50, 52, 76, 78),
+    ('demo-preview-final', 76, 79, 95, 98),
+    ('demo-menubar-preview', 76, 79, 95, 98),
+    ('demo-hud-apps', 12, 14, 44, 46),
+    ('demo-hud-windows', 46, 48, 73, 75),
+    ('demo-hud-release', 73, 75, 94, 96),
+):
+    frames = animation_frames(name)
+    assert frames[enter_start]['opacity'] == frames[exit_end]['opacity'] == '0'
+    assert frames[enter_end]['opacity'] == frames[exit_start]['opacity'] == '1'
+    assert frames[0] == frames[100], name
+
+for key, press_start, press_end in (('tab', 14, 15), ('window', 48, 49)):
+    frames = animation_frames(f'demo-key-{key}')
+    assert frames[press_start]['transform'] == 'translateY(0) scale(1)'
+    assert frames[press_end]['transform'] == 'translateY(var(--demo-key-travel)) scale(var(--demo-key-scale))'
+    assert frames[0] == frames[100]
+    highlight = animation_frames(f'demo-key-{key}-highlight')
+    assert highlight[press_start]['opacity'] == '0' and highlight[press_end]['opacity'] == '1'
+release = animation_frames('demo-key-release')
+assert release[76]['transform'] == 'translateY(var(--demo-key-travel)) scale(var(--demo-key-scale))'
+assert release[78]['transform'] == 'translateY(0) scale(1)'
+highlight = animation_frames('demo-key-release-highlight')
+assert highlight[76]['opacity'] == '1' and highlight[78]['opacity'] == '0'
+notes = animation_frames('demo-menubar-notes')
+assert notes[76]['opacity'] == notes[98]['opacity'] == '1'
+assert notes[79]['opacity'] == notes[95]['opacity'] == '0'
+assert (95 - 79) * 9 / 100 >= 1.4
+assert '.demo-key::before' in css.split('@media (prefers-reduced-motion: reduce)', 1)[1]
+
+tokens = declarations(':root')
+for token, size in (
+    ('body', '1rem'), ('lede', '1.125rem'), ('control', '.9375rem'),
+    ('secondary', '.875rem'), ('meta', '.8125rem'), ('eyebrow', '.75rem'),
+):
+    assert tokens[f'--type-{token}'] == size, token
+assert tokens['--text-faint'] == '#a2a8b8'
+for selector, token in (
+    ('body', 'body'), ('.hero-lede', 'lede'), ('.button', 'control'),
+    ('.button--small', 'control'), ('.nav-link', 'secondary'),
+    ('.text-link', 'secondary'), ('.install-option__label', 'secondary'),
+    ('.source-cta .install-note', 'secondary'),
+    ('.source-command code', 'secondary'), ('.guide-link', 'body'),
+    ('.answer-card p', 'body'), ('.source-cta p', 'body'),
+    ('.section-intro', 'body'), ('.trust-row', 'meta'),
+    ('.demo-motion-control', 'meta'), ('.demo-reel figcaption', 'meta'),
+    ('.brand--footer', 'meta'), ('.footer-note', 'meta'),
+    ('.eyebrow', 'eyebrow'), ('.demo-hud small', 'meta'),
+):
+    assert declarations(selector)['font-size'] == f'var(--type-{token})', selector
+command = declarations('.source-command code')
+assert command['min-width'] == '0' and command['white-space'] == 'normal'
+assert command['overflow-wrap'] == 'anywhere' and 'overflow' not in command
+assert declarations('.source-command')['padding'].split()[0] == '12px'
+assert declarations('.source-command a')['flex-shrink'] == '0'
+mobile_css = css.split('@media (max-width: 640px)', 1)[1].split('@container', 1)[0]
+assert '.hero-lede { font-size: var(--type-body); }' in mobile_css
+for selector in ('.demo-motion-control', '.demo-hud small'):
+    match = re.search(rf'{re.escape(selector)}\s*\{{([^}}]*)\}}', mobile_css)
+    assert not match or 'font-size:' not in match.group(1), selector
+assert declarations('.demo-reel')['--demo-menu-type'] == '9px'
+disclosure = declarations('.agent-install')
+assert disclosure['margin-top'] == '16px' and disclosure['padding'] == '24px'
+assert declarations('.agent-install summary')['min-height'] == '44px'
+assert declarations('.agent-install summary')['font-size'] == 'var(--type-control)'
+textarea = declarations('.agent-install textarea')
+assert textarea['font-size'] == 'var(--type-body)' and textarea['line-height'] == '1.65'
+assert textarea['width'] == '100%' and textarea['min-height'] == '16rem'
+assert textarea['resize'] == 'vertical' and textarea['overflow-wrap'] == 'anywhere'
+assert textarea['white-space'] == 'pre-wrap'
+assert 'monospace' in textarea['font-family']
+assert declarations('.agent-install summary:focus-visible')['outline']
+assert declarations('.agent-install textarea:focus-visible')['outline']
 
 assert 'class="trust-row trust-row--band" aria-label="Product highlights"' in html
 hero = declarations('.hero')

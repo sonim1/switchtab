@@ -169,6 +169,36 @@ assert_status 0
 [[ -f "$OUTPUT_FILE" && "$(<"$OUTPUT_FILE")" == "$PREPARE_OUTPUT" ]] || \
     fail 'output file did not match stdout'
 
+for landing_test in landing-contract-test.sh agent-install-contract-test.sh; do
+    checkout_base
+    mkdir -p "$REPOSITORY/scripts/tests"
+    printf '#!/usr/bin/env bash\n' > "$REPOSITORY/scripts/tests/$landing_test"
+    LANDING_HEAD="$(commit_all "landing test $landing_test")"
+    run_prepare "$BASE_COMMIT" "$LANDING_HEAD" major
+    assert_status 0
+    [[ "$PREPARE_OUTPUT" == $'release=false\nchanged=false\nready=true' ]] || \
+        fail "landing test triggered a release: $PREPARE_OUTPUT"
+    assert_project_versions '1.0.4' '5'
+
+    printf 'func mixedChange() {}\n' >> "$REPOSITORY/SwitchTab/App.swift"
+    MIXED_HEAD="$(commit_all 'landing test and native change')"
+    run_prepare "$BASE_COMMIT" "$MIXED_HEAD" patch
+    assert_status 0
+    assert_output_contains 'release=true'
+    assert_project_versions '1.0.5' '6'
+done
+
+for relevant_path in scripts/tests/other-test.sh scripts/plan-release.sh scripts/prepare-pr-version.sh; do
+    checkout_base
+    mkdir -p "$(dirname "$REPOSITORY/$relevant_path")"
+    printf '#!/usr/bin/env bash\n' > "$REPOSITORY/$relevant_path"
+    SCRIPT_HEAD="$(commit_all "relevant script $relevant_path")"
+    run_prepare "$BASE_COMMIT" "$SCRIPT_HEAD" patch
+    assert_status 0
+    assert_output_contains 'release=true'
+    assert_project_versions '1.0.5' '6'
+done
+
 # The base version is trusted input and must be consistent and well formed.
 checkout_base
 write_project '1.0.4' '5' '1.0.5' '5'
