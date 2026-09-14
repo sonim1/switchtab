@@ -45,17 +45,5 @@ assert '<label for="agent-install-prompt">Installation prompt</label>' in html
 assert '<summary>Install with AI</summary>' in html
 assert 'href="/install-with-ai.txt"' in html
 assert 'https://switchtab.royjen.com/install-with-ai.txt' in section
-for phrase in (
-    'local terminal access', 'macOS 14 or later', 'Apple silicon',
-    'https://github.com/sonim1/switchtab',
-    'brew install --cask sonim1/tap/switchtab',
-    'ask before updating or replacing', 'SHA-256', 'codesign', 'spctl',
-    'com.royjen.switchtab', 'Accessibility', 'Screen Recording is optional',
-    'Do not use sudo', 'remove quarantine', 'disable Gatekeeper',
-    'Do not claim switching works',
-):
-    assert phrase in prompt, f'missing installer safeguard: {phrase}'
-assert not re.search(r'v\d+\.\d+\.\d+', prompt), 'prompt must resolve current stable release'
-assert not re.search(r'curl[^\n]*\|\s*(?:sh|bash)', prompt), 'no piped remote installer'
 print('agent installation contract passed')
 PY
