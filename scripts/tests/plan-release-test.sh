@@ -123,6 +123,29 @@ assert_status 0
 assert_output 'release=false'
 [[ "$PLAN_OUTPUT" != *'tag='* ]] || fail 'docs-only plan emitted a release tag'
 
+for landing_test in landing-contract-test.sh agent-install-contract-test.sh; do
+    git -C "$REPOSITORY" checkout --quiet "$BASE_COMMIT"
+    mkdir -p "$REPOSITORY/scripts/tests"
+    printf '#!/usr/bin/env bash\n' > "$REPOSITORY/scripts/tests/$landing_test"
+    LANDING_COMMIT="$(commit_fixture "landing test $landing_test")"
+    run_plan "$BASE_COMMIT" "$LANDING_COMMIT"
+    assert_status 0
+    assert_output 'release=false'
+
+    printf 'func mixedChange() {}\n' >> "$REPOSITORY/SwitchTab/App.swift"
+    MIXED_COMMIT="$(commit_fixture 'landing test and native change')"
+    assert_plan_failure "$BASE_COMMIT" "$MIXED_COMMIT"
+done
+
+for relevant_path in scripts/tests/other-test.sh scripts/plan-release.sh scripts/prepare-pr-version.sh; do
+    git -C "$REPOSITORY" checkout --quiet "$BASE_COMMIT"
+    mkdir -p "$(dirname "$REPOSITORY/$relevant_path")"
+    printf '#!/usr/bin/env bash\n' > "$REPOSITORY/$relevant_path"
+    RELEVANT_COMMIT="$(commit_fixture "relevant script $relevant_path")"
+    assert_plan_failure "$BASE_COMMIT" "$RELEVANT_COMMIT"
+done
+git -C "$REPOSITORY" checkout --quiet "$DOCS_ONLY_COMMIT"
+
 # Any source change is relevant and requires both versions to increase.
 printf 'func changed() {}\n' >> "$REPOSITORY/SwitchTab/App.swift"
 SOURCE_WITHOUT_BUMP_COMMIT="$(commit_fixture 'source without bump')"

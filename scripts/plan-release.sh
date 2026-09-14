@@ -194,6 +194,8 @@ while IFS= read -r -d '' changed_path; do
     case "$changed_path" in
         *.md|*.markdown|docs/*|specs/*)
             ;;
+        scripts/tests/landing-contract-test.sh|scripts/tests/agent-install-contract-test.sh)
+            ;;
         *)
             DOCS_ONLY=0
             ;;

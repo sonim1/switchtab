@@ -99,6 +99,9 @@ scan.
   policy before checkout mutation.
 - Documentation-only changes (`*.md`, `*.markdown`, `docs/`, and `specs/`) do
   not change versions and produce `release=false` after merge.
+- The same exemption covers only `scripts/tests/landing-contract-test.sh` and
+  `scripts/tests/agent-install-contract-test.sh`. Other scripts and workflows
+  remain release-relevant, including the release-policy scripts themselves.
 - The marketing version is derived from the current PR base and normalized to
   three components. The integer build number increments exactly once.
 - Write-scoped versioning runs only for a same-repository PR targeting `main`

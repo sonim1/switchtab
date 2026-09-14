@@ -15,6 +15,10 @@ release labels is invalid and blocks CI until one is removed. Documentation-
 only changes under `*.md`, `*.markdown`, `docs/`, or `specs/` do not change
 either version and do not create a release after merge.
 
+The exact landing-only test paths `scripts/tests/landing-contract-test.sh` and
+`scripts/tests/agent-install-contract-test.sh` are also excluded. Other scripts,
+workflows, and changes mixed with app code remain release-relevant.
+
 Automatic version commits are limited to trusted contributors working from a
 branch in this repository. Update an older pull-request branch from `main` when
 GitHub reports it is behind; CI then recalculates from the latest base.
