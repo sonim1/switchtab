@@ -40,4 +40,6 @@ explain owner permissions, fetching, submission status, and indexing limitations
   social metadata, structured data, and sitemap entry.
 - Local link/SEO contract tests and responsive browser verification.
 
-No analytics SDK or visitor-tracking script is needed for these changes.
+Search registration is separate from website analytics. The native app still
+contains no analytics SDK; Cloudflare Web Analytics measures website traffic.
+See [website operations](site-operations.md) for the shared measurement setup.
