@@ -18,7 +18,8 @@
 
 ## Installation
 
-Requires **macOS 14 or later**. No Xcode or Swift toolchain is needed to use the app.
+Current downloads require **an Apple silicon Mac running macOS 14 or later**.
+No Xcode or Swift toolchain is needed to use the app.
 
 With [Homebrew](https://brew.sh/):
 
@@ -100,6 +101,7 @@ can deliver updates.
 ## Requirements
 
 - macOS 14.0 or later
+- Apple silicon for the published DMG and Homebrew cask
 - To build from source: Swift 6 toolchain or Xcode with Swift 5.10+
 
 ## Quick Start
@@ -125,6 +127,7 @@ swift test
 - [Update hosting](docs/update-hosting.md) — Cloudflare R2, Sparkle publishing, and local fallback operations
 - [Release workflow](docs/release-workflow.md) — versioning, GitHub releases, Homebrew integration, and recovery
 - [Repository maintenance](docs/repository-maintenance.md) — dependency, security, and verification state
+- [Website operations](docs/site-operations.md) — search visibility, Cloudflare analytics and the shared three-site runbook
 
 ## License
 

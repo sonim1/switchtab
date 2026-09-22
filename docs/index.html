@@ -35,10 +35,13 @@
             "@id": "https://switchtab.royjen.com/#software",
             "name": "SwitchTab",
             "url": "https://switchtab.royjen.com/",
+            "publisher": { "@type": "Organization", "@id": "https://royjen.com/#organization", "name": "Royjen", "url": "https://royjen.com/" },
             "downloadUrl": "https://github.com/sonim1/switchtab/releases/latest",
             "description": "A free, native macOS app and window switcher for keyboard-first navigation.",
             "applicationCategory": "UtilitiesApplication",
             "operatingSystem": "macOS 14 or later",
+            "softwareRequirements": "Apple silicon Mac; Accessibility permission for switching; optional Screen Recording permission for previews",
+            "sameAs": "https://github.com/sonim1/switchtab",
             "isAccessibleForFree": true,
             "offers": {
               "@type": "Offer",
@@ -157,6 +160,7 @@
               <a class="button button--light install-download" href="https://github.com/sonim1/switchtab/releases/latest">Get the latest DMG <span aria-hidden="true">↗</span></a>
             </div>
             <p class="install-note">Rather compile it yourself? <a href="https://github.com/sonim1/switchtab#quick-start">Build from source</a>.</p>
+            <p class="install-note">Current downloads require an Apple silicon Mac running macOS 14 or later.</p>
           </div>
         </div>
         <details class="agent-install">
@@ -278,7 +282,7 @@ Do not install Homebrew, Xcode, or a Swift toolchain just for this app.
         <img src="AppIcon-256.png" alt="">
         <span>SwitchTab</span>
       </a>
-      <p class="footer-note">A native macOS switcher for the moment between tasks.</p>
+      <p class="footer-note">By <a href="https://royjen.com/">Royjen</a> · <a href="https://royjen.com/privacy/">Website privacy</a></p>
     </footer>
   </body>
 </html>
