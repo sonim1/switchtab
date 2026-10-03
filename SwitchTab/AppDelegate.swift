@@ -212,6 +212,118 @@ final class ShortcutRecordingHotkeyLifecycle {
 }
 
 @MainActor
+struct WindowSwitchingHotkeyController {
+    let hotkeyService: HotkeyService
+
+    func register(
+        setting windowSetting: ShortcutSetting,
+        configurations: [SwitcherShortcutConfiguration],
+        forwardHandler: @escaping () -> Void,
+        reverseHandler: @escaping () -> Void,
+        log: (String) -> Void = { _ in }
+    ) -> Bool {
+        hotkeyService.unregisterAll()
+        let windowReverseSetting = windowSetting.reverseVariant(id: "\(windowSetting.id)-reverse")
+        let existingShortcuts = AppDelegateShortcutConflictPolicy.windowRegistrationExistingShortcuts(
+            windowSetting: windowSetting,
+            configurations: configurations
+        )
+
+        let forwardResult = hotkeyService.registerFirstUsable(
+            primaryCandidate: windowSetting,
+            fallbackCandidate: .fallbackCurrentAppWindowSwitching,
+            existing: existingShortcuts.forward,
+            mode: .currentAppWindowSwitching,
+            handler: forwardHandler
+        )
+        log("registered forward shortcut=\(windowSetting.displayText) keyCode=\(String(describing: windowSetting.keyCode)) result=\(forwardResult)")
+        guard forwardResult == .registered else {
+            hotkeyService.rollbackRegistrations(preserving: hotkeyService.registrationMessageSnapshot())
+            return false
+        }
+
+        let reverseMessageStart = hotkeyService.registrationMessageSnapshot().count
+        let reverseResult = hotkeyService.registerFirstUsable(
+            primaryCandidate: windowReverseSetting,
+            fallbackCandidate: .fallbackCurrentAppWindowSwitchingReverse,
+            existing: existingShortcuts.reverse,
+            mode: .currentAppWindowSwitching,
+            handler: reverseHandler
+        )
+        log("registered reverse shortcut=\(windowReverseSetting.displayText) keyCode=\(String(describing: windowReverseSetting.keyCode)) result=\(reverseResult)")
+        guard reverseResult == .registered else {
+            let failureMessages = Array(hotkeyService.registrationMessageSnapshot().dropFirst(reverseMessageStart))
+            hotkeyService.rollbackRegistrations(preserving: failureMessages)
+            return false
+        }
+
+        return true
+    }
+
+    func restore(
+        snapshot: HotkeyRegistrationSnapshot,
+        configuredSetting: ShortcutSetting,
+        configurations: [SwitcherShortcutConfiguration],
+        forwardHandler: @escaping () -> Void,
+        reverseHandler: @escaping () -> Void
+    ) -> Bool {
+        hotkeyService.unregisterAll()
+        let directions = snapshot.settings.compactMap {
+            direction(for: $0, configuredSetting: configuredSetting)
+        }
+        guard snapshot.mode == .currentAppWindowSwitching,
+              snapshot.hasCompleteLiveRegistrationState,
+              directions.count == snapshot.settings.count,
+              snapshot.expectedEnabled
+                ? directions == [.forward, .reverse]
+                : directions.isEmpty else {
+            return false
+        }
+
+        let applicationShortcuts = AppDelegateShortcutConflictPolicy.enabledApplicationShortcuts(
+            in: configurations
+        )
+        var restoredSettings: [ShortcutSetting] = []
+        for (setting, direction) in zip(snapshot.settings, directions) {
+            let result = hotkeyService.register(
+                setting: setting,
+                existing: applicationShortcuts + restoredSettings,
+                mode: .currentAppWindowSwitching,
+                handler: direction == .forward ? forwardHandler : reverseHandler
+            )
+            guard result == .registered else {
+                hotkeyService.rollbackRegistrations(preserving: hotkeyService.registrationMessageSnapshot())
+                return false
+            }
+            restoredSettings.append(setting)
+        }
+
+        return hotkeyService.restoreRegistrationMetadata(from: snapshot)
+    }
+
+    private enum Direction: Equatable {
+        case forward
+        case reverse
+    }
+
+    private func direction(
+        for setting: ShortcutSetting,
+        configuredSetting: ShortcutSetting
+    ) -> Direction? {
+        if setting == configuredSetting || setting == .fallbackCurrentAppWindowSwitching {
+            return .forward
+        }
+
+        let configuredReverse = configuredSetting.reverseVariant(id: "\(configuredSetting.id)-reverse")
+        if setting == configuredReverse || setting == .fallbackCurrentAppWindowSwitchingReverse {
+            return .reverse
+        }
+
+        return nil
+    }
+}
+
+@MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayController: SwitcherOverlayController?
     private let windowProvider = AccessibilityWindowProvider()
@@ -1113,36 +1225,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         setting windowSetting: ShortcutSetting,
         configurations: [SwitcherShortcutConfiguration]
     ) -> Bool {
-        hotkeyService.unregisterAll()
-
-        let windowReverseSetting = windowSetting.reverseVariant(id: "\(windowSetting.id)-reverse")
-        let existingShortcuts = AppDelegateShortcutConflictPolicy
-            .windowRegistrationExistingShortcuts(
-                windowSetting: windowSetting,
-                configurations: configurations
-            )
-
-        let forwardResult = hotkeyService.registerFirstUsable(
-            primaryCandidate: windowSetting,
-            fallbackCandidate: .fallbackCurrentAppWindowSwitching,
-            existing: existingShortcuts.forward,
-            mode: .currentAppWindowSwitching
-        ) { [weak self] in
-            self?.showCurrentAppSwitcher()
-        }
-        debugLog("registered forward shortcut=\(windowSetting.displayText) keyCode=\(String(describing: windowSetting.keyCode)) result=\(forwardResult)")
-
-        let reverseResult = hotkeyService.registerFirstUsable(
-            primaryCandidate: windowReverseSetting,
-            fallbackCandidate: .fallbackCurrentAppWindowSwitchingReverse,
-            existing: existingShortcuts.reverse,
-            mode: .currentAppWindowSwitching
-        ) { [weak self] in
-            self?.showCurrentAppSwitcher(reverse: true)
-        }
-        debugLog("registered reverse shortcut=\(windowReverseSetting.displayText) keyCode=\(String(describing: windowReverseSetting.keyCode)) result=\(reverseResult)")
-
-        return forwardResult == .registered && reverseResult == .registered
+        WindowSwitchingHotkeyController(hotkeyService: hotkeyService).register(
+            setting: windowSetting,
+            configurations: configurations,
+            forwardHandler: { [weak self] in self?.showCurrentAppSwitcher() },
+            reverseHandler: { [weak self] in self?.showCurrentAppSwitcher(reverse: true) },
+            log: debugLog
+        )
     }
 
     private func registerConfiguredHotkeys(
@@ -1357,76 +1446,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         configuredSetting: ShortcutSetting,
         configurations: [SwitcherShortcutConfiguration]
     ) -> Bool {
-        hotkeyService.unregisterAll()
-        let directions = snapshot.settings.compactMap {
-            windowHotkeyDirection(for: $0, configuredSetting: configuredSetting)
-        }
-        guard snapshot.mode == .currentAppWindowSwitching,
-              directions.count == snapshot.settings.count,
-              snapshot.expectedEnabled
-                ? directions == [.forward, .reverse]
-                : directions.isEmpty else {
-            return false
-        }
-
-        let applicationShortcuts = AppDelegateShortcutConflictPolicy
-            .enabledApplicationShortcuts(in: configurations)
-        var restoredSettings: [ShortcutSetting] = []
-
-        for (setting, direction) in zip(snapshot.settings, directions) {
-            let existingSettings = applicationShortcuts + restoredSettings
-            let result: HotkeyRegistrationResult
-            switch direction {
-            case .forward:
-                result = hotkeyService.register(
-                    setting: setting,
-                    existing: existingSettings,
-                    mode: .currentAppWindowSwitching
-                ) { [weak self] in
-                    self?.showCurrentAppSwitcher()
-                }
-            case .reverse:
-                result = hotkeyService.register(
-                    setting: setting,
-                    existing: existingSettings,
-                    mode: .currentAppWindowSwitching
-                ) { [weak self] in
-                    self?.showCurrentAppSwitcher(reverse: true)
-                }
-            }
-
-            guard result == .registered else {
-                return false
-            }
-            restoredSettings.append(setting)
-        }
-
-        return hotkeyService.restoreRegistrationMetadata(from: snapshot)
-    }
-
-    private enum WindowHotkeyDirection: Equatable {
-        case forward
-        case reverse
-    }
-
-    private func windowHotkeyDirection(
-        for setting: ShortcutSetting,
-        configuredSetting: ShortcutSetting
-    ) -> WindowHotkeyDirection? {
-        if setting == configuredSetting
-            || setting == .fallbackCurrentAppWindowSwitching {
-            return .forward
-        }
-
-        let configuredReverse = configuredSetting.reverseVariant(
-            id: "\(configuredSetting.id)-reverse"
+        WindowSwitchingHotkeyController(hotkeyService: hotkeyService).restore(
+            snapshot: snapshot,
+            configuredSetting: configuredSetting,
+            configurations: configurations,
+            forwardHandler: { [weak self] in self?.showCurrentAppSwitcher() },
+            reverseHandler: { [weak self] in self?.showCurrentAppSwitcher(reverse: true) }
         )
-        if setting == configuredReverse
-            || setting == .fallbackCurrentAppWindowSwitchingReverse {
-            return .reverse
-        }
-
-        return nil
     }
 
     private func configuration(

@@ -1,5 +1,58 @@
 import Foundation
 @testable import SwitchTab
+import XCTest
+
+final class ApplicationShortcutDiagnosticsTests: XCTestCase {
+    func testForwardConflictPreservesValidationDiagnostic() {
+        assertValidationDiagnostic(
+            conflicts: [.defaultApplicationSwitching],
+            rejectsReverse: false
+        )
+    }
+
+    func testReverseConflictPreservesValidationDiagnosticAndRemovesForwardHandler() {
+        assertValidationDiagnostic(
+            conflicts: [.defaultApplicationSwitchingReverse],
+            rejectsReverse: true
+        )
+    }
+
+    private func assertValidationDiagnostic(
+        conflicts: [ShortcutSetting],
+        rejectsReverse: Bool
+    ) {
+        let registrar = InMemoryHotkeyRegistrar()
+        let service = HotkeyService(registrar: registrar)
+        let controller = ApplicationSwitchingHotkeyController(hotkeyService: service)
+        var invocationCount = 0
+
+        XCTAssertFalse(controller.updateRegistration(
+            setting: .defaultApplicationSwitching,
+            enabled: true,
+            existing: conflicts,
+            forwardHandler: { invocationCount += 1 },
+            reverseHandler: { invocationCount += 1 }
+        ))
+        registrar.invoke(settingID: ShortcutSetting.defaultApplicationSwitching.id)
+        registrar.invoke(settingID: ShortcutSetting.defaultApplicationSwitchingReverse.id)
+
+        let expectedService = HotkeyService(registrar: InMemoryHotkeyRegistrar())
+        let rejectedSetting = rejectsReverse
+            ? ShortcutSetting.defaultApplicationSwitchingReverse
+            : .defaultApplicationSwitching
+        _ = expectedService.register(
+            setting: rejectedSetting,
+            existing: conflicts,
+            mode: .applicationSwitching,
+            handler: {}
+        )
+
+        XCTAssertEqual(controller.registrationMessageSnapshot(), expectedService.registrationMessageSnapshot())
+        XCTAssertFalse(controller.isRegistered)
+        XCTAssertEqual(service.registeredSettings(for: .applicationSwitching), [])
+        XCTAssertEqual(invocationCount, 0)
+    }
+}
 
 @MainActor
 enum ApplicationSwitchingTests {
@@ -596,12 +649,16 @@ enum ApplicationSwitchingTests {
             liveWindowSettings
         )
         try expectEqual(applicationRegistrar.events, [])
+        let diagnosticService = HotkeyService(registrar: applicationRegistrar)
+        _ = diagnosticService.register(
+            setting: conflictingApplicationShortcut,
+            existing: liveWindowSettings,
+            mode: .applicationSwitching,
+            handler: {}
+        )
         try expectEqual(
             persistedMessageSnapshots.last?.last,
-            ShortcutRegistrationMessage(
-                mode: .applicationSwitching,
-                message: ApplicationSwitchingHotkeyController.registrationFailureMessage
-            )
+            diagnosticService.registrationMessageSnapshot().last
         )
     }
 
@@ -1632,7 +1689,7 @@ private final class RecordingApplicationSelectionRecencyStore: ApplicationSelect
     }
 }
 
-private final class ApplicationSwitchingRecordingRegistrar: HotkeyRegistering {
+final class ApplicationSwitchingRecordingRegistrar: HotkeyRegistering {
     private let shouldRegister: (ShortcutSetting) -> Bool
     private(set) var attemptedSettings: [ShortcutSetting] = []
     var events: [String] = []
