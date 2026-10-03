@@ -30,7 +30,7 @@ assert.equal(typeof sharpLock.integrity, 'string', 'locked sharp integrity must 
 assert.match(sharpLock.integrity, /^sha512-/, 'locked sharp integrity must begin with sha512-');
 NODE
 
-ignore_source="$(git -C "$PROJECT_ROOT" check-ignore -v node_modules)"
+ignore_source="$(git -C "$PROJECT_ROOT" check-ignore -v node_modules/)"
 if [[ "$ignore_source" != .gitignore:* ]]; then
   printf 'node_modules must be ignored by .gitignore, got: %s\n' "$ignore_source" >&2
   exit 1
