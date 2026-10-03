@@ -135,7 +135,8 @@ After a release-relevant PR merges, the push to `main` creates or verifies the
 annotated `refs/tags/v<MARKETING_VERSION>` on that exact merge commit and pushes
 only that tag ref. GitHub recursion suppression means the tag push with
 `GITHUB_TOKEN` does not start another workflow, so the automatic workflow
-explicitly dispatches `release.yml` with the existing tag.
+explicitly dispatches `release.yml` using the existing tag for both the workflow
+ref and the release input, so a later `main` commit cannot change its workflow.
 
 Both automatic planning/tagging and downstream release execution use fixed,
 non-cancelling, max-queued concurrency groups. Rapid main merges are serialized
