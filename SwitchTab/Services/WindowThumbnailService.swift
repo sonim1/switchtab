@@ -359,6 +359,7 @@ public final class WindowThumbnailLoader {
     private var requestQueue = WindowThumbnailRequestQueue()
     private var activeWindowIDs: Set<String> = []
     private var completedWindowIDs: Set<String> = []
+    private var failedWindowIDs: Set<String> = []
     private var invalidatedWindowIDs: Set<String> = []
     private var invalidatedOwnerProcessIdentifiers: Set<Int> = []
     private var previewsAllowed = false
@@ -396,6 +397,7 @@ public final class WindowThumbnailLoader {
         requestQueue.clear()
         activeWindowIDs.removeAll(keepingCapacity: true)
         completedWindowIDs.removeAll(keepingCapacity: true)
+        failedWindowIDs.removeAll(keepingCapacity: true)
         invalidatedWindowIDs.removeAll(keepingCapacity: true)
         invalidatedOwnerProcessIdentifiers.removeAll(keepingCapacity: true)
         previewsAllowed = !permissionState.blocksWindowPreviews
@@ -413,9 +415,16 @@ public final class WindowThumbnailLoader {
         guard previewsAllowed,
               Self.screenCaptureIdentifier(for: window) != nil,
               !isInvalidated(window),
-              !completedWindowIDs.contains(window.id),
+              !failedWindowIDs.contains(window.id),
               !activeWindowIDs.contains(window.id) else {
             return
+        }
+
+        if completedWindowIDs.contains(window.id) {
+            guard priority == .selected,
+                  !store.containsThumbnail(for: window.id) else {
+                return
+            }
         }
 
         requestQueue.enqueue(window, priority: priority)
@@ -435,6 +444,7 @@ public final class WindowThumbnailLoader {
         requestQueue.clear()
         activeWindowIDs.removeAll(keepingCapacity: true)
         completedWindowIDs.removeAll(keepingCapacity: true)
+        failedWindowIDs.removeAll(keepingCapacity: true)
         invalidatedWindowIDs.removeAll(keepingCapacity: true)
         invalidatedOwnerProcessIdentifiers.removeAll(keepingCapacity: true)
         refreshTask?.cancel()
@@ -448,6 +458,7 @@ public final class WindowThumbnailLoader {
         requestQueue.remove(windowID: windowID)
         activeWindowIDs.remove(windowID)
         completedWindowIDs.remove(windowID)
+        failedWindowIDs.remove(windowID)
         store.removeThumbnail(for: windowID)
     }
 
@@ -458,6 +469,9 @@ public final class WindowThumbnailLoader {
             !$0.hasPrefix("\(ownerProcessIdentifier)-")
         }
         completedWindowIDs = completedWindowIDs.filter {
+            !$0.hasPrefix("\(ownerProcessIdentifier)-")
+        }
+        failedWindowIDs = failedWindowIDs.filter {
             !$0.hasPrefix("\(ownerProcessIdentifier)-")
         }
         store.removeThumbnails(ownerProcessIdentifier: ownerProcessIdentifier)
@@ -527,6 +541,8 @@ public final class WindowThumbnailLoader {
                         didEmitFirstThumbnailForGeneration = true
                         SwitcherPerformanceTrace.firstThumbnail()
                     }
+                } else {
+                    failedWindowIDs.insert(window.id)
                 }
             }
         }
