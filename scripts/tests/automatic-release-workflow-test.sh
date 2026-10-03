@@ -245,7 +245,7 @@ assert(dispatch["env"] == {
   "GH_TOKEN" => "${{ github.token }}",
   "RELEASE_TAG" => "${{ steps.release-plan.outputs.tag }}"
 }, "release dispatch must use only github.token and the planned tag")
-assert(dispatch["run"] == 'gh workflow run release.yml --ref main -f tag="$RELEASE_TAG"', "release dispatch command must be exact")
+assert(dispatch["run"] == 'gh workflow run release.yml --ref "$RELEASE_TAG" -f tag="$RELEASE_TAG"', "release workflow and source must both resolve through the planned tag")
 
 assert_sha_pinned_actions(automatic, [CHECKOUT_ACTION], "automatic release")
 assert_no_release_secrets(automatic_source, "automatic release")
@@ -255,6 +255,7 @@ RUBY
 TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/switchtab-automatic-release-workflow.XXXXXX")"
 trap 'rm -rf "$TEMP_ROOT"' EXIT
 TAG_HARNESS="$TEMP_ROOT/tag-step.sh"
+DISPATCH_HARNESS="$TEMP_ROOT/dispatch-step.sh"
 
 /usr/bin/ruby - "$AUTOMATIC_WORKFLOW_PATH" > "$TAG_HARNESS" <<'RUBY'
 require "yaml"
@@ -269,6 +270,15 @@ puts step.fetch("run")
 RUBY
 chmod +x "$TAG_HARNESS"
 
+/usr/bin/ruby - "$AUTOMATIC_WORKFLOW_PATH" > "$DISPATCH_HARNESS" <<'RUBY'
+require "yaml"
+workflow = YAML.safe_load(File.read(ARGV.fetch(0)), permitted_classes: [], permitted_symbols: [], aliases: false)
+step = workflow.fetch("jobs").fetch("release").fetch("steps")
+  .find { |entry| entry["name"] == "Dispatch release workflow" }
+raise "missing dispatch step" unless step
+puts step.fetch("run")
+RUBY
+
 REMOTE_REPOSITORY="$TEMP_ROOT/remote.git"
 TAG_REPOSITORY="$TEMP_ROOT/repository"
 git init --quiet --bare "$REMOTE_REPOSITORY"
@@ -277,7 +287,10 @@ git init --quiet "$TAG_REPOSITORY"
     cd -- "$TAG_REPOSITORY"
     git config user.name 'SwitchTab Test'
     git config user.email 'switchtab@example.invalid'
-    git commit --allow-empty --quiet -m 'release target'
+    mkdir -p .github/workflows
+    printf 'name: tagged release workflow\n' > .github/workflows/release.yml
+    git add .github/workflows/release.yml
+    git commit --quiet -m 'release target'
     git branch -M main
     git remote add origin "$REMOTE_REPOSITORY"
     git push --quiet --set-upstream origin main
@@ -324,6 +337,34 @@ status=$?
 set -e
 [[ "$status" -ne 0 ]] || fail 'conflicting annotated release tag was accepted'
 [[ "$output" == *'does not match the pushed commit'* ]] || fail "conflicting tag failure was not explicit: $output"
+
+# Advancing main after tag creation must not change the workflow selected by dispatch.
+(
+    cd -- "$TAG_REPOSITORY"
+    printf 'name: newer main workflow\n' > .github/workflows/release.yml
+    git add .github/workflows/release.yml
+    git commit --quiet -m 'advance main workflow'
+    git push --quiet origin main
+)
+mkdir -p "$TEMP_ROOT/bin"
+cat > "$TEMP_ROOT/bin/gh" <<'BASH'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$#" -eq 7 && "$1" == workflow && "$2" == run && "$3" == release.yml && "$4" == --ref && "$6" == -f ]]
+printf '%s\n' "$5" "$7" > "$DISPATCH_RECORD"
+git show "$5:.github/workflows/release.yml" > "$DISPATCH_WORKFLOW_RECORD"
+BASH
+chmod +x "$TEMP_ROOT/bin/gh"
+(
+    cd -- "$TAG_REPOSITORY"
+    PATH="$TEMP_ROOT/bin:/usr/bin:/bin" RELEASE_TAG='v1.0.1' \
+        DISPATCH_RECORD="$TEMP_ROOT/dispatch-record" \
+        DISPATCH_WORKFLOW_RECORD="$TEMP_ROOT/dispatch-workflow" \
+        /bin/bash "$DISPATCH_HARNESS"
+)
+[[ "$(sed -n '1p' "$TEMP_ROOT/dispatch-record")" == 'v1.0.1' ]] || fail 'dispatch selected moving main instead of the release tag'
+[[ "$(sed -n '2p' "$TEMP_ROOT/dispatch-record")" == 'tag=v1.0.1' ]] || fail 'dispatch tag input did not match its workflow ref'
+[[ "$(cat "$TEMP_ROOT/dispatch-workflow")" == 'name: tagged release workflow' ]] || fail 'main advance changed the dispatched workflow source'
 
 bash -n "$0"
 echo 'automatic release workflow contract tests passed'

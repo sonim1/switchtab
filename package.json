@@ -5,7 +5,8 @@
     "wrangler": "4.122.0"
   },
   "overrides": {
-    "sharp": "0.35.3"
+    "sharp": "0.35.4",
+    "undici": "7.29.1"
   },
   "version": "1.0.0.0"
 }

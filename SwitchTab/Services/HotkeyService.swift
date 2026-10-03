@@ -7,6 +7,12 @@ public enum HotkeyRegistrationResult: Equatable, Sendable {
     case noUsableShortcut
 }
 
+enum HotkeyRegistrationAttemptResult: Equatable {
+    case registered
+    case rejectedBeforeRegistrar
+    case rejectedByRegistrar
+}
+
 struct HotkeyRegistrationSnapshot: Equatable, Sendable {
     let mode: SwitcherMode
     let expectedEnabled: Bool
@@ -58,7 +64,7 @@ public final class HotkeyService {
             mode: mode,
             requestedDisplayText: &requestedDisplayText,
             handler: handler
-        ) {
+        ) == .registered {
             return .registered
         }
 
@@ -68,7 +74,7 @@ public final class HotkeyService {
             mode: mode,
             requestedDisplayText: &requestedDisplayText,
             handler: handler
-        ) {
+        ) == .registered {
             return .registered
         }
 
@@ -81,18 +87,30 @@ public final class HotkeyService {
         mode: SwitcherMode,
         handler: @escaping () -> Void
     ) -> HotkeyRegistrationResult where Settings.Element == ShortcutSetting {
+        registerAttempt(setting: setting, existing: settings, mode: mode, handler: handler) == .registered
+            ? .registered
+            : .noUsableShortcut
+    }
+
+    func registerAttempt<Settings: Sequence>(
+        setting: ShortcutSetting,
+        existing settings: Settings,
+        mode: SwitcherMode,
+        handler: @escaping () -> Void
+    ) -> HotkeyRegistrationAttemptResult where Settings.Element == ShortcutSetting {
         var requestedDisplayText: String?
-        guard registerIfUsable(
+        let result = registerIfUsable(
             setting,
             existing: settings,
             mode: mode,
             requestedDisplayText: &requestedDisplayText,
             handler: handler
-        ) else {
-            return finishRegistrationAttempt(requestedDisplayText, mode: mode)
+        )
+        if result != .registered {
+            _ = finishRegistrationAttempt(requestedDisplayText, mode: mode)
         }
 
-        return .registered
+        return result
     }
 
     public func unregisterAll() {
@@ -106,6 +124,11 @@ public final class HotkeyService {
         }
         registeredSettingsByMode.removeAll(keepingCapacity: true)
         registrationMessages.removeAll(keepingCapacity: true)
+    }
+
+    func rollbackRegistrations(preserving messages: [ShortcutRegistrationMessage]) {
+        unregisterAll()
+        registrationMessages = messages
     }
 
     public func registeredSetting(for mode: SwitcherMode) -> ShortcutSetting? {
@@ -149,15 +172,19 @@ public final class HotkeyService {
         mode: SwitcherMode,
         requestedDisplayText: inout String?,
         handler: @escaping () -> Void
-    ) -> Bool {
+    ) -> HotkeyRegistrationAttemptResult {
         guard setting.mode == mode else {
-            return false
+            return .rejectedBeforeRegistrar
         }
 
-        guard validator.validate(setting, existing: settings) == .valid,
-              registrar.register(setting: setting, handler: handler) else {
+        guard validator.validate(setting, existing: settings) == .valid else {
             requestedDisplayText = requestedDisplayText ?? setting.displayText
-            return false
+            return .rejectedBeforeRegistrar
+        }
+
+        guard registrar.register(setting: setting, handler: handler) else {
+            requestedDisplayText = requestedDisplayText ?? setting.displayText
+            return .rejectedByRegistrar
         }
 
         registeredSettingsByMode[mode, default: []].append(setting)
@@ -171,7 +198,7 @@ public final class HotkeyService {
             )
         }
 
-        return true
+        return .registered
     }
 
     private func finishRegistrationAttempt(

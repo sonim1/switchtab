@@ -28,12 +28,14 @@ assert(workflow.fetch("on") == {
   "workflow_dispatch" => nil,
 }, "deployment must run only for docs changes pushed to main, plus an explicit manual redeploy")
 assert(workflow["permissions"] == {"contents" => "read"}, "workflow permissions must be read-only")
-assert(workflow.fetch("concurrency") == {
-  "group" => "switchtab-landing-${{ github.ref }}",
-  "cancel-in-progress" => true,
-}, "deployment concurrency must cancel stale runs")
+assert(!workflow.key?("concurrency"), "a skipped non-main dispatch must not cancel a production deployment")
 
 job = workflow.fetch("jobs").fetch("deploy")
+assert(job["if"] == "github.ref == 'refs/heads/main'", "manual deployments must reject non-main refs before entering production concurrency")
+assert(job.fetch("concurrency") == {
+  "group" => "switchtab-landing-refs/heads/main",
+  "cancel-in-progress" => true,
+}, "production deployments must retain the existing main concurrency group across rollout")
 assert(job.fetch("environment") == {
   "name" => "production",
   "url" => "https://switchtab.royjen.com/",
@@ -53,6 +55,7 @@ assert(deploy.fetch("env")["CLOUDFLARE_ACCOUNT_ID"] == "${{ vars.CLOUDFLARE_ACCO
 command = deploy.fetch("run")
 assert(command.include?("npx wrangler pages deploy docs"), "deployment must publish docs")
 assert(command.include?("--project-name switchtab-landing"), "deployment must target switchtab-landing")
+assert(command.include?("--branch main"), "the guarded main checkout must deploy to the production branch")
 assert(command.include?("--commit-hash \"$GITHUB_SHA\""), "deployment must attach the triggering commit")
 assert(!command.include?("--commit-dirty"), "CI deployment must not allow dirty files")
 puts "landing deploy workflow contract passed"

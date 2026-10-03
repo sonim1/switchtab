@@ -624,6 +624,7 @@ final class SwitcherOverlayController {
         }
 
         presentationModel.update(state)
+        requestSelectedThumbnail()
     }
 
     func enableHoverSelectionIfPointerMoved(to pointerLocation: CGPoint) {

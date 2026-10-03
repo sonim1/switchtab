@@ -951,6 +951,54 @@ enum SwitcherOverlayPresentationPolicyTests {
     }
 }
 
+final class SwitcherOverlayThumbnailDemandTests: XCTestCase {
+    @MainActor
+    func testHoverRequestsSelectedThumbnailWithoutScrolling() {
+        let controller = SwitcherOverlayController(
+            thumbnailStore: WindowThumbnailStore(),
+            eventTapBackend: RecordingSwitcherOverlayEventTapBackend(),
+            eventSink: RecordingSwitcherOverlayEventSink()
+        )
+        defer { controller.dismiss() }
+        let items = (0..<3).map { index in
+            SwitcherListItem(
+                id: "window-\(index)",
+                title: "Window \(index)",
+                subtitle: nil,
+                thumbnailKey: "window-\(index)"
+            )
+        }
+        var requestedIDs: [String] = []
+
+        controller.present(
+            mode: .currentAppWindowSwitching,
+            items: items,
+            selectedIndex: 1,
+            onThumbnailDemand: { item, priority in
+                if priority == .selected {
+                    requestedIDs.append(item.id)
+                }
+            }
+        )
+        let scrollToken = controller.presentationScrollToken
+
+        controller.hoverItem(at: 2)
+        XCTAssertEqual(requestedIDs, [items[1].id])
+
+        controller.enableHoverSelectionIfPointerMoved(to: CGPoint(
+            x: NSEvent.mouseLocation.x + 400,
+            y: NSEvent.mouseLocation.y + 400
+        ))
+        controller.hoverItem(at: 2)
+        controller.hoverItem(at: 2)
+        controller.hoverItem(at: -1)
+
+        XCTAssertEqual(controller.selectedItem?.id, items[2].id)
+        XCTAssertEqual(requestedIDs, [items[1].id, items[2].id])
+        XCTAssertEqual(controller.presentationScrollToken, scrollToken)
+    }
+}
+
 @MainActor
 private final class RecordingSwitcherOverlayEventTapBackend: SwitcherOverlayEventTapBackend {
     let shouldInstall: Bool

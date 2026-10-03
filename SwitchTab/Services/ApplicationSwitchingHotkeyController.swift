@@ -35,25 +35,25 @@ public final class ApplicationSwitchingHotkeyController {
             return true
         }
 
-        let forwardResult = hotkeyService.register(
+        let forwardResult = hotkeyService.registerAttempt(
             setting: setting,
             existing: existing,
             mode: .applicationSwitching,
             handler: forwardHandler
         )
         guard forwardResult == .registered else {
-            return handleRegistrationFailure()
+            return handleRegistrationFailure(forwardResult)
         }
 
         let reverseSetting = setting.reverseVariant(id: "application-switching-reverse")
-        let reverseResult = hotkeyService.register(
+        let reverseResult = hotkeyService.registerAttempt(
             setting: reverseSetting,
             existing: existing + [setting],
             mode: .applicationSwitching,
             handler: reverseHandler
         )
         guard reverseResult == .registered else {
-            return handleRegistrationFailure()
+            return handleRegistrationFailure(reverseResult)
         }
 
         isRegistered = true
@@ -70,18 +70,18 @@ public final class ApplicationSwitchingHotkeyController {
         registrationMessages
     }
 
-    private func handleRegistrationFailure() -> Bool {
+    private func handleRegistrationFailure(_ result: HotkeyRegistrationAttemptResult) -> Bool {
         isRegistered = false
-        let serviceMessages = hotkeyService.registrationMessageSnapshot()
-        let failureMode = serviceMessages.first(where: { $0.mode == .applicationSwitching })?.mode
-            ?? .applicationSwitching
+        let serviceMessages = hotkeyService.registrationMessageSnapshot().filter {
+            $0.mode == .applicationSwitching
+        }
         hotkeyService.unregisterAll()
-        registrationMessages = [
+        registrationMessages = result == .rejectedByRegistrar ? [
             ShortcutRegistrationMessage(
-                mode: failureMode,
+                mode: .applicationSwitching,
                 message: Self.registrationFailureMessage
             )
-        ]
+        ] : serviceMessages
         return false
     }
 }
