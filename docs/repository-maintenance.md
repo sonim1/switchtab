@@ -40,8 +40,9 @@ scan.
 - The generated distribution workspace pins Sparkle 2.9.4 at
   `b6496a74a087257ef5e6da1c5b29a447a60f5bd7`:
   https://github.com/sparkle-project/Sparkle/releases/tag/2.9.4
-- `package-lock.json` locks the repository release tooling to Wrangler 4.112.0
-  and overrides its transitive `sharp` dependency to patched 0.35.3; install it
+- `package-lock.json` locks the repository release tooling to Wrangler 4.122.0
+  and overrides its transitive `sharp` and `undici` dependencies to patched
+  0.35.4 and 7.29.1, respectively; install it
   with `npm ci --ignore-scripts`.
 - `.github/workflows/release.yml` installs Node 24.18.0 with a full-SHA-pinned
   `actions/setup-node` action before installing the release tooling.
