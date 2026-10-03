@@ -3,7 +3,10 @@
 Production: `https://switchtab.royjen.com/`. Cloudflare Pages project:
 `switchtab-landing`, production branch `main`, static output `docs/`.
 
-The landing deployment workflow publishes `docs/**` changes on `main`. The app's
+The landing deployment workflow publishes `docs/**` changes on `main`. Manual
+redeployments must also select `main`; other refs are skipped. Production
+deployments share one job-level concurrency group, so skipped runs do not
+cancel an active deployment. The app's
 Swift sources, signing, DMG releases and Sparkle updates remain separate.
 
 Run the landing, search-discovery and agent-install contract checks before

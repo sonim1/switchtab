@@ -10,12 +10,12 @@ name: Deploy landing page
 permissions:
   contents: read
 
-concurrency:
-  group: switchtab-landing-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   deploy:
+    if: github.ref == 'refs/heads/main'
+    concurrency:
+      group: switchtab-landing-refs/heads/main
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
