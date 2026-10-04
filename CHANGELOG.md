@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.27] - 2026-10-04
+
+### Added
+
+- Reopen How to Use from the menu bar to see the active shortcuts and practice switching to a real window.
+- Verify practice completion only after the selected window is focused, with retry and skip options.
+
+### Changed
+
+- Explain minimized-window restoration and distinguish loading, unavailable, and permission-blocked previews.
+- Label the existing usage counter as Window Shortcut Uses while preserving saved counts.
+
 ## [1.0.0.0] - 2026-08-15
 
 ### Added
