@@ -45,7 +45,8 @@ public struct WindowItem: Identifiable, Equatable, Sendable {
             subtitle: ownerName,
             symbolName: "app",
             thumbnailKey: id,
-            appIconProcessIdentifier: ownerProcessIdentifier
+            appIconProcessIdentifier: ownerProcessIdentifier,
+            isMinimized: isMinimized
         )
     }
 }

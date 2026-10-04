@@ -11,6 +11,8 @@
 		A00000000000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* AppDelegate.swift */; };
 		A00000000000000000000115 /* SwitcherPerformanceTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000115 /* SwitcherPerformanceTrace.swift */; };
 		A00000000000000000000116 /* WindowThumbnailImageCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000116 /* WindowThumbnailImageCodec.swift */; };
+		A00000000000000000000117 /* SwitchingPracticeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000117 /* SwitchingPracticeModel.swift */; };
+		A00000000000000000000118 /* SwitchingGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000118 /* SwitchingGuideView.swift */; };
 		A00000000000000000000004 /* SwitcherMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000004 /* SwitcherMode.swift */; };
 		A00000000000000000000005 /* PermissionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000005 /* PermissionState.swift */; };
 		A00000000000000000000006 /* ShortcutSetting.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000006 /* ShortcutSetting.swift */; };
@@ -144,6 +146,8 @@
 		B00000000000000000000036 /* WindowThumbnailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowThumbnailService.swift; sourceTree = "<group>"; };
 		B00000000000000000000115 /* SwitcherPerformanceTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherPerformanceTrace.swift; sourceTree = "<group>"; };
 		B00000000000000000000116 /* WindowThumbnailImageCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowThumbnailImageCodec.swift; sourceTree = "<group>"; };
+		B00000000000000000000117 /* SwitchingPracticeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchingPracticeModel.swift; sourceTree = "<group>"; };
+		B00000000000000000000118 /* SwitchingGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchingGuideView.swift; sourceTree = "<group>"; };
 		B00000000000000000000037 /* WindowFocusService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFocusService.swift; sourceTree = "<group>"; };
 		B00000000000000000000039 /* AccessibilityWindowProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityWindowProviderTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000040 /* WindowThumbnailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowThumbnailTests.swift; sourceTree = "<group>"; };
@@ -291,6 +295,7 @@
 				B00000000000000000000036 /* WindowThumbnailService.swift */,
 				B00000000000000000000115 /* SwitcherPerformanceTrace.swift */,
 				B00000000000000000000116 /* WindowThumbnailImageCodec.swift */,
+				B00000000000000000000117 /* SwitchingPracticeModel.swift */,
 				B00000000000000000000037 /* WindowFocusService.swift */,
 				B00000000000000000000099 /* WindowCloseService.swift */,
 			);
@@ -429,6 +434,7 @@
 				B00000000000000000000044 /* ShortcutSettingsViewModel.swift */,
 				B00000000000000000000090 /* ApplicationSettingsViewModel.swift */,
 				B00000000000000000000045 /* ShortcutSettingsView.swift */,
+				B00000000000000000000118 /* SwitchingGuideView.swift */,
 				B00000000000000000000052 /* SettingsWindowController.swift */,
 			);
 			path = Settings;
@@ -589,6 +595,8 @@
 				A00000000000000000000032 /* WindowThumbnailService.swift in Sources */,
 				A00000000000000000000115 /* SwitcherPerformanceTrace.swift in Sources */,
 				A00000000000000000000116 /* WindowThumbnailImageCodec.swift in Sources */,
+				A00000000000000000000117 /* SwitchingPracticeModel.swift in Sources */,
+				A00000000000000000000118 /* SwitchingGuideView.swift in Sources */,
 				A00000000000000000000033 /* WindowFocusService.swift in Sources */,
 				A00000000000000000000040 /* ShortcutSettingsViewModel.swift in Sources */,
 				A00000000000000000000086 /* ApplicationSettingsViewModel.swift in Sources */,
@@ -743,7 +751,7 @@
 				CODE_SIGN_ENTITLEMENTS = SwitchTab/Resources/SwitchTab.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 37;
+				CURRENT_PROJECT_VERSION = 38;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -752,7 +760,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.26;
+				MARKETING_VERSION = 1.1.27;
 				PRODUCT_BUNDLE_IDENTIFIER = com.royjen.switchtab;
 				PRODUCT_NAME = SwitchTab;
 				SWIFT_VERSION = 5.0;
@@ -767,7 +775,7 @@
 				CODE_SIGN_ENTITLEMENTS = SwitchTab/Resources/SwitchTab.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 37;
+				CURRENT_PROJECT_VERSION = 38;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -776,7 +784,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.26;
+				MARKETING_VERSION = 1.1.27;
 				PRODUCT_BUNDLE_IDENTIFIER = com.royjen.switchtab;
 				PRODUCT_NAME = SwitchTab;
 				SWIFT_VERSION = 5.0;

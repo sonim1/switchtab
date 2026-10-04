@@ -68,6 +68,18 @@ Settings > Shortcut. If macOS refuses the reserved current-window default,
 SwitchTab falls back to
 <kbd>Option</kbd>+<kbd>Control</kbd>+<kbd>`</kbd>.
 
+Open **How to Use** from the menu bar, or **Settings > Practice**, to see the
+shortcuts currently registered, including any fallback. Start Practice returns
+to your previous app; a window switch completes the practice only after the
+exact selected window's focus is verified. The guide can be skipped and reopened.
+When both modes are registered, it also explains how to move between the app and
+window lists while keeping the original shortcut modifiers held.
+
+Minimized windows show a restore indicator; choosing one restores it. Preview
+placeholders distinguish loading, unavailable captures, and missing preview
+permission. The local About dashboard counts window-shortcut uses, including
+repeated presses and cancelled selections, rather than successful focus changes.
+
 Fresh installations enable both switching modes by default. Existing
 installations preserve an explicit previous application-switcher choice; when
 no previous choice can be detected, application switching remains disabled.

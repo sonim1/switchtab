@@ -2,6 +2,7 @@ import AppKit
 
 public enum MenuBarMenuItemKind: Equatable {
     case settings
+    case howToUse
     case checkForUpdates
     case separator
     case about
@@ -11,10 +12,10 @@ public enum MenuBarMenuItemKind: Equatable {
 public enum MenuBarMenuModel {
     public static func items(updateCheckingAvailable: Bool) -> [MenuBarMenuItemKind] {
         if updateCheckingAvailable {
-            return [.settings, .checkForUpdates, .separator, .about, .quit]
+            return [.settings, .howToUse, .checkForUpdates, .separator, .about, .quit]
         }
 
-        return [.settings, .separator, .about, .quit]
+        return [.settings, .howToUse, .separator, .about, .quit]
     }
 }
 
@@ -98,6 +99,8 @@ public final class MenuBarStatusItemController: NSObject {
             switch item {
             case .settings:
                 menu.addItem(menuItem(title: "Settings", action: #selector(showSettings)))
+            case .howToUse:
+                menu.addItem(menuItem(title: "How to Use", action: #selector(showSwitchingGuide)))
             case .checkForUpdates:
                 menu.addItem(menuItem(title: "Check for Updates...", action: #selector(checkForUpdates)))
             case .separator:
@@ -119,6 +122,10 @@ public final class MenuBarStatusItemController: NSObject {
 
     @objc private func showSettings() {
         NotificationCenter.default.post(name: .showSettingsWindow, object: nil)
+    }
+
+    @objc private func showSwitchingGuide() {
+        NotificationCenter.default.post(name: .showSwitchingGuide, object: nil)
     }
 
     @objc private func showAbout() {

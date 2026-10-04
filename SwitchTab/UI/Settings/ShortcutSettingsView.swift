@@ -8,18 +8,26 @@ public struct ShortcutSettingsView: View {
 
     @StateObject private var viewModel: ShortcutSettingsViewModel
     @StateObject private var applicationSettingsViewModel: ApplicationSettingsViewModel
+    @ObservedObject private var practiceModel: SwitchingPracticeModel
+    private let onBeginPractice: () -> Void
     @State private var selectedPanel = SettingsPanel.general
     @State private var hasAppeared = false
 
     @MainActor
     public init(
         viewModel: ShortcutSettingsViewModel = ShortcutSettingsViewModel(),
-        applicationSettingsViewModel: ApplicationSettingsViewModel? = nil
+        applicationSettingsViewModel: ApplicationSettingsViewModel? = nil,
+        practiceModel: SwitchingPracticeModel? = nil,
+        onBeginPractice: @escaping () -> Void = {},
+        showsGuide: Bool = false
     ) {
         _viewModel = StateObject(wrappedValue: viewModel)
         _applicationSettingsViewModel = StateObject(
             wrappedValue: applicationSettingsViewModel ?? ApplicationSettingsViewModel()
         )
+        _practiceModel = ObservedObject(wrappedValue: practiceModel ?? SwitchingPracticeModel())
+        self.onBeginPractice = onBeginPractice
+        _selectedPanel = State(initialValue: showsGuide ? .practice : .general)
     }
 
     public var body: some View {
@@ -69,6 +77,9 @@ public struct ShortcutSettingsView: View {
         .onReceive(Self.appDidBecomeActivePublisher) { _ in
             viewModel.refreshPermissionState()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .showSwitchingGuide)) { _ in
+            selectedPanel = .practice
+        }
     }
 
     @ViewBuilder
@@ -80,6 +91,11 @@ public struct ShortcutSettingsView: View {
             ShortcutSettingsPanel(viewModel: viewModel)
         case .permissions:
             PermissionsSettingsPanel(viewModel: viewModel)
+        case .practice:
+            SwitchingGuideView(model: practiceModel, onBeginPractice: onBeginPractice) {
+                practiceModel.skipGuide()
+                selectedPanel = .general
+            }
         }
     }
 
@@ -97,6 +113,7 @@ private enum SettingsPanel: String, CaseIterable, Identifiable {
     case general
     case shortcut
     case permissions
+    case practice
 
     var id: String { rawValue }
 
@@ -108,6 +125,8 @@ private enum SettingsPanel: String, CaseIterable, Identifiable {
             "Shortcut"
         case .permissions:
             "Permissions"
+        case .practice:
+            "Practice"
         }
     }
 
@@ -119,6 +138,8 @@ private enum SettingsPanel: String, CaseIterable, Identifiable {
             "keyboard"
         case .permissions:
             "lock.shield"
+        case .practice:
+            "keyboard.badge.ellipsis"
         }
     }
 }
@@ -359,7 +380,7 @@ private struct PermissionsSettingsPanel: View {
     }
 }
 
-private struct SettingsSection<Content: View>: View {
+struct SettingsSection<Content: View>: View {
     let title: String
     let subtitle: String
     let symbolName: String

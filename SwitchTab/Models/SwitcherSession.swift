@@ -5,6 +5,7 @@ public struct SwitcherListItem: Identifiable, Equatable, Sendable {
     public let symbolName: String?
     public let thumbnailKey: String?
     public let appIconProcessIdentifier: Int?
+    public let isMinimized: Bool
 
     public init(
         id: String,
@@ -12,7 +13,8 @@ public struct SwitcherListItem: Identifiable, Equatable, Sendable {
         subtitle: String?,
         symbolName: String? = nil,
         thumbnailKey: String? = nil,
-        appIconProcessIdentifier: Int? = nil
+        appIconProcessIdentifier: Int? = nil,
+        isMinimized: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -20,6 +22,7 @@ public struct SwitcherListItem: Identifiable, Equatable, Sendable {
         self.symbolName = symbolName
         self.thumbnailKey = thumbnailKey
         self.appIconProcessIdentifier = appIconProcessIdentifier
+        self.isMinimized = isMinimized
     }
 }
 

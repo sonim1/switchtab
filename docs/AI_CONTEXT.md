@@ -14,10 +14,13 @@
 - Each mode can be enabled or disabled independently and assigned its own shortcut in Settings > Shortcuts. Shift reverses traversal for the active shortcut.
 - Holding the shortcut modifier opens the overlay and repeated presses advance selection. Releasing the modifier confirms the selected window or application; clicking an item confirms it immediately.
 - While the modifier stays held, the other mode's key hands the same session to that mode. From application mode it lists the windows of the highlighted application; from window mode it returns to the application list, resumes the application that was left, and advances one step (Shift reverses). The alternate mode is matched on key code alone and only while that mode is enabled and registered.
-- Window mode shows standard, visible windows for the current application. Application mode shows eligible running applications in a compact icon strip.
+- Window mode shows standard windows for the current application, including minimized windows that restore on selection. Application mode shows eligible running applications in a compact icon strip.
 - In application mode, only the selected app shows its centered name below the icon. Its blue selection outline covers the icon tile, not the caption. A window count appears only for apps with at least two standard windows.
 - Arrow keys follow the overlay's visual grid. Escape cancels. Command-Q in application mode asks the selected app to quit normally; its tile remains until the process exits.
 - Overlay size is user-adjustable. Window thumbnails load on demand for selected and visible tiles without moving selection; unavailable previews keep the existing icon placeholder.
+- Menu bar > How to Use and Settings > Practice show actually registered shortcuts, including the window fallback, and teach the held-modifier mode handoff only when both modes are registered. Practice hides Settings and returns to the previous app; completion requires a successful focus request followed by observing the exact selected window in the active owner app. Cancellation, registration/permission changes, a failed focus, or stale verification cannot complete it. The guide is skippable and keeps completion locally.
+- Window tiles identify minimized windows and explain restoration. Fixed thumbnail bounds contain loading, unavailable-preview, and permission-blocked labels; preview loading metadata mirrors the bounded request queue and active batch.
+- About labels the existing local window-shortcut counter as Window Shortcut Uses. It counts handler invocations, including repeats and cancelled selections; existing storage keys and historical values remain unchanged.
 
 ## Architecture
 
