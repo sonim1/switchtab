@@ -45,6 +45,19 @@ public struct WindowFocusService {
 
         return .focused
     }
+
+    func isFocused(_ target: AXUIElement, ownerProcessIdentifier: Int) -> Bool {
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid_t(ownerProcessIdentifier) else {
+            return false
+        }
+        let applicationElement = AXUIElementCreateApplication(pid_t(ownerProcessIdentifier))
+        guard AXUIElementSetMessagingTimeout(applicationElement, 0.2) == .success else { return false }
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(applicationElement, kAXFocusedWindowAttribute as CFString, &value) == .success,
+              let value,
+              CFGetTypeID(value) == AXUIElementGetTypeID() else { return false }
+        return CFEqual(target, value)
+    }
 }
 
 extension WindowFocusService: WindowFocusServicing {}

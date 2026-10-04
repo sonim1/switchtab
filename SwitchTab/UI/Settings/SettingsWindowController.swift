@@ -3,6 +3,7 @@ import SwiftUI
 
 public extension Notification.Name {
     static let showSettingsWindow = Notification.Name("SwitchTab.showSettingsWindow")
+    static let showSwitchingGuide = Notification.Name("SwitchTab.showSwitchingGuide")
 }
 
 public enum ApplicationActivationPolicy: Equatable, Sendable {
@@ -100,7 +101,10 @@ public final class SettingsWindowController {
             SwitcherShortcutConfiguration,
             SwitcherShortcutConfiguration
         ) -> ShortcutChangeResult = { _, _ in .applied },
-        onEnabledChanged: @escaping (SwitcherShortcutConfiguration) -> Void = { _ in }
+        onEnabledChanged: @escaping (SwitcherShortcutConfiguration) -> Void = { _ in },
+        practiceModel: SwitchingPracticeModel? = nil,
+        onBeginPractice: @escaping () -> Void = {},
+        showsGuide: Bool = false
     ) {
         let hostingController = FloatingPanelFactory.hostingController(
             rootView: ShortcutSettingsView(
@@ -108,7 +112,10 @@ public final class SettingsWindowController {
                     onShortcutChanged: onShortcutChanged,
                     onEnabledChanged: onEnabledChanged
                 ),
-                applicationSettingsViewModel: ApplicationSettingsViewModel(updateChecker: updateChecker)
+                applicationSettingsViewModel: ApplicationSettingsViewModel(updateChecker: updateChecker),
+                practiceModel: practiceModel,
+                onBeginPractice: onBeginPractice,
+                showsGuide: showsGuide
             ),
             contentSize: SettingsWindowSizingPolicy.contentSize
         )
@@ -130,6 +137,11 @@ public final class SettingsWindowController {
     public func show() {
         activationCoordinator.settingsWindowWillShow()
         FloatingPanelFactory.show(window)
+    }
+
+    public func hideForPractice() {
+        window.orderOut(nil)
+        activationCoordinator.settingsWindowDidClose()
     }
 }
 

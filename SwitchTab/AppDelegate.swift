@@ -341,6 +341,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private let recencyStore = SwitcherRecencyStore()
     private let applicationRecencyStore = SwitcherRecencyStore(mode: .applicationSwitching)
     private let usageMetricsStore = UsageMetricsStore()
+    private let switchingPracticeModel = SwitchingPracticeModel()
+    private var practiceVerificationTask: Task<Void, Never>?
+    private var lastExternalApplication: NSRunningApplication?
     private let hotkeyService = HotkeyService()
     private let applicationHotkeyController = ApplicationSwitchingHotkeyController()
     private lazy var shortcutRecordingHotkeyLifecycle = ShortcutRecordingHotkeyLifecycle(
@@ -381,6 +384,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var workspaceApplicationTerminationObserver: NSObjectProtocol?
     private var modeSwitchMemory = SwitcherModeSwitchMemory()
     private var settingsRequestObserver: NSObjectProtocol?
+    private var switchingGuideRequestObserver: NSObjectProtocol?
     private var aboutRequestObserver: NSObjectProtocol?
     private var updateCheckRequestObserver: NSObjectProtocol?
 
@@ -395,6 +399,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.modeSwitchMemory.reset()
         }
         self.overlayController = overlayController
+        overlayController.onCancel = { [weak self] in
+            self?.cancelSwitchingPractice()
+        }
+        rememberExternalApplication(NSWorkspace.shared.frontmostApplication)
         menuBarStatusItemController = MenuBarStatusItemController(
             store: applicationSettingsStore,
             updateChecker: updateChecker
@@ -420,6 +428,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func applicationWillTerminate(_ _: Notification) {
+        cancelSwitchingPractice()
         applicationForegroundCorrection.cancel()
         cancelThumbnailLoadingIfNeeded(preservingCachedThumbnails: false)
         thumbnailMemoryPressureSource?.cancel()
@@ -435,6 +444,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func showCurrentAppSwitcher(reverse: Bool = false) {
+        if switchingPracticeModel.state == .verifying { cancelSwitchingPractice() }
         applicationForegroundCorrection.cancel()
         debugLog("hotkey handler entered reverse=\(reverse)")
         usageMetricsStore.recordWindowShortcutUse()
@@ -482,6 +492,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func showApplicationSwitcher(reverse: Bool = false) {
+        if switchingPracticeModel.state == .verifying { cancelSwitchingPractice() }
         applicationForegroundCorrection.cancel()
         guard let overlayController else {
             return
@@ -607,7 +618,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 return false
             }
 
-            showSettingsWindow()
+            let wasPracticing = switchingPracticeModel.isActive
+            if wasPracticing { switchingPracticeModel.fail(.accessibilityRequired) }
+            showSettingsWindow(showsGuide: wasPracticing)
             SwitcherPerformanceTrace.endInvocation(performanceInterval, itemCount: 0)
             return false
         }
@@ -646,6 +659,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             overlayController.dismiss()
+            if switchingPracticeModel.isActive { switchingPracticeModel.fail(.noWindows) }
             SwitcherPerformanceTrace.endInvocation(performanceInterval, itemCount: 0)
             return false
         }
@@ -705,7 +719,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     focusService: self.windowFocusService,
                     recencyStore: self.recencyStore
                 )
-                selectionCoordinator.confirm(selectedWindow, permissionState: permissionState)
+                let result = selectionCoordinator.confirm(selectedWindow, permissionState: permissionState)
+                self.verifyPracticeSwitch(selectedWindow, result: result)
                 self.usageMetricsStore.flush()
             },
             onModeSwitch: { [weak self] reverse in
@@ -989,6 +1004,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 isActive: application.isActive
             )
             MainActor.assumeIsolated {
+                self?.rememberExternalApplication(application)
                 self?.applicationForegroundCorrection.applicationDidActivate(
                     processIdentifier: snapshot.processIdentifier
                 )
@@ -1059,6 +1075,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         observe(.showSettingsWindow, storing: &settingsRequestObserver) { [weak self] in
             self?.showSettingsWindow()
         }
+        observe(.showSwitchingGuide, storing: &switchingGuideRequestObserver) { [weak self] in
+            self?.showSettingsWindow(showsGuide: true)
+        }
     }
 
     private func observeAboutRequests() {
@@ -1115,6 +1134,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         removeWorkspaceApplicationActivationObserver()
         removeWorkspaceApplicationTerminationObserver()
         removeObserver(&settingsRequestObserver)
+        removeObserver(&switchingGuideRequestObserver)
         removeObserver(&aboutRequestObserver)
         removeObserver(&updateCheckRequestObserver)
     }
@@ -1146,7 +1166,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         self.workspaceApplicationTerminationObserver = nil
     }
 
-    private func showSettingsWindow() {
+    private func showSettingsWindow(showsGuide: Bool = false) {
+        rememberExternalApplication(NSWorkspace.shared.frontmostApplication)
+        cancelSwitchingPractice()
+        refreshSwitchingGuide()
         if settingsWindowController == nil {
             settingsWindowController = SettingsWindowController(
                 activationCoordinator: SettingsActivationPolicyCoordinator(
@@ -1161,7 +1184,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 },
                 onEnabledChanged: { [weak self] configuration in
                     self?.applyEnabledChange(configuration: configuration)
-                }
+                },
+                practiceModel: switchingPracticeModel,
+                onBeginPractice: { [weak self] in self?.beginSwitchingPractice() },
+                showsGuide: showsGuide
             )
         }
 
@@ -1176,7 +1202,73 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        showSettingsWindow()
+        showSettingsWindow(showsGuide: !switchingPracticeModel.hasDismissedGuide)
+    }
+
+    private func rememberExternalApplication(_ application: NSRunningApplication?) {
+        guard let application,
+              application.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+              application.activationPolicy == .regular,
+              !application.isTerminated else { return }
+        lastExternalApplication = application
+    }
+
+    private func refreshSwitchingGuide() {
+        switchingPracticeModel.update(
+            windowShortcut: hotkeyService.registeredSetting(for: .currentAppWindowSwitching),
+            applicationShortcut: applicationHotkeyController.registeredShortcut,
+            permissionState: permissionService.currentState()
+        )
+    }
+
+    private func beginSwitchingPractice() {
+        cancelSwitchingPractice()
+        overlayController?.dismiss()
+        refreshSwitchingGuide()
+        guard switchingPracticeModel.begin() else { return }
+        guard let application = lastExternalApplication,
+              !application.isTerminated else {
+            switchingPracticeModel.fail(.applicationUnavailable)
+            return
+        }
+        settingsWindowController?.hideForPractice()
+        if !application.activate(options: []) {
+            switchingPracticeModel.fail(.applicationUnavailable)
+            showSettingsWindow(showsGuide: true)
+        }
+    }
+
+    private func cancelSwitchingPractice() {
+        practiceVerificationTask?.cancel()
+        practiceVerificationTask = nil
+        switchingPracticeModel.cancel()
+    }
+
+    private func verifyPracticeSwitch(_ window: WindowItem, result: WindowFocusResult) {
+        guard let generation = switchingPracticeModel.confirm(windowID: window.id, result: result) else { return }
+        practiceVerificationTask?.cancel()
+        guard let targetElement = AXWindowElementRegistry.shared.element(
+            ownerProcessIdentifier: window.ownerProcessIdentifier,
+            windowIdentifier: window.windowIdentifier
+        ) else {
+            switchingPracticeModel.verify(generation: generation, focusedWindowID: nil)
+            return
+        }
+        practiceVerificationTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .milliseconds(120)) } catch { return }
+            guard let self, !Task.isCancelled, self.switchingPracticeModel.state == .verifying else { return }
+            self.refreshSwitchingGuide()
+            guard self.switchingPracticeModel.state == .verifying else { return }
+            let didVerifyFocus: Bool
+            if !self.permissionService.currentAccessibilityState().blocksCapability,
+               self.windowFocusService.isFocused(targetElement, ownerProcessIdentifier: window.ownerProcessIdentifier) {
+                didVerifyFocus = true
+            } else {
+                didVerifyFocus = false
+            }
+            self.switchingPracticeModel.verify(generation: generation, focusedWindowID: didVerifyFocus ? window.id : nil)
+            self.practiceVerificationTask = nil
+        }
     }
 
     private func showAboutWindow() {
@@ -1238,6 +1330,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         _ configurations: [SwitcherShortcutConfiguration]
     ) {
         shortcutRecordingHotkeyLifecycle.restore(configurations: configurations)
+        refreshSwitchingGuide()
     }
 
     @discardableResult
@@ -1267,6 +1360,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func persistRegistrationMessages() {
+        refreshSwitchingGuide()
         let registrationMessages = hotkeyService.registrationMessageSnapshot()
             + applicationHotkeyController.registrationMessageSnapshot()
         if shortcutStore.saveRegistrationMessages(registrationMessages) {

@@ -68,11 +68,11 @@ enum UpdateControllerTests {
     static func testMenuModelIncludesUpdateItemOnlyWhenAvailable() throws {
         try expectEqual(
             MenuBarMenuModel.items(updateCheckingAvailable: false),
-            [.settings, .separator, .about, .quit]
+            [.settings, .howToUse, .separator, .about, .quit]
         )
         try expectEqual(
             MenuBarMenuModel.items(updateCheckingAvailable: true),
-            [.settings, .checkForUpdates, .separator, .about, .quit]
+            [.settings, .howToUse, .checkForUpdates, .separator, .about, .quit]
         )
     }
 

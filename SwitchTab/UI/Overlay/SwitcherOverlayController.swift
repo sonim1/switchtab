@@ -25,6 +25,7 @@ final class SwitcherOverlayController {
     private var triggerReleaseModifiers: SwitcherShortcutModifiers?
     private var alternateModeKeyCode: UInt16?
     var onDismiss: (() -> Void)?
+    var onCancel: (() -> Void)?
     private var presentationLayoutSize = SwitcherOverlayLayoutPolicy.defaultSize
     private var presentationLayoutMetrics = SwitcherOverlayLayoutMetrics.metrics(
         for: .default,
@@ -146,6 +147,7 @@ final class SwitcherOverlayController {
         state.dismiss()
         endPresentation()
         clearPresentationCallbacks()
+        onCancel?()
     }
 
     func handle(_ command: SwitcherCommand) -> SwitcherInteractionResult {
@@ -657,6 +659,7 @@ final class SwitcherOverlayController {
         case .cancelled:
             endPresentation()
             clearPresentationCallbacks()
+            onCancel?()
         case .none, .updated, .closeRequested, .quitRequested, .modeSwitchRequested:
             break
         }

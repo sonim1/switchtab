@@ -134,7 +134,7 @@ private struct SwitcherWindowTile: View {
     let switchAccessibilityHint: String
     let hoverEnabled: Bool
     let layoutMetrics: SwitcherOverlayLayoutMetrics
-    let thumbnailStore: WindowThumbnailStore
+    @ObservedObject var thumbnailStore: WindowThumbnailStore
     let applicationIconStore: ApplicationIconStore
     let onConfirm: (SwitcherListItem, Int) -> Void
     let onClose: (SwitcherListItem, Int) -> Void
@@ -154,7 +154,7 @@ private struct SwitcherWindowTile: View {
             .accessibilityLabel(
                 Text(SwitcherOverlayAccessibilityPolicy.switchLabel(for: item, mode: mode))
             )
-            .accessibilityHint(Text(switchAccessibilityHint))
+            .accessibilityHint(Text(windowAccessibilityHint))
 
             if showsCloseControl && (isSelected || isHovered) {
                 closeButton
@@ -177,6 +177,16 @@ private struct SwitcherWindowTile: View {
         }
 
         onHover(index)
+    }
+
+    private var windowAccessibilityHint: String {
+        guard mode == .currentAppWindowSwitching else { return switchAccessibilityHint }
+        var hint = switchAccessibilityHint
+        if item.isMinimized { hint += " Selecting restores this minimized window." }
+        if let key = item.thumbnailKey, let status = thumbnailStore.previewState(for: key).labelText {
+            hint += " \(status)."
+        }
+        return hint
     }
 
     @ViewBuilder
@@ -339,6 +349,14 @@ private struct SwitcherWindowTile: View {
                     )
             }
 
+            if item.isMinimized {
+                Image(systemName: "minus.rectangle")
+                    .font(.system(size: layoutMetrics.titleFontSize))
+                    .foregroundStyle(.secondary)
+                    .help("Minimized. Select to restore this window.")
+                    .accessibilityHidden(true)
+            }
+
             Text(item.title)
                 .font(.system(size: layoutMetrics.titleFontSize, weight: .medium))
                 .lineLimit(1)
@@ -416,6 +434,22 @@ private struct WindowThumbnailIconView: View {
     }
 
     var body: some View {
+        thumbnailContent.overlay(alignment: .bottom) {
+            if let status = thumbnailStore.previewState(for: thumbnailKey).labelText {
+                Text(status)
+                    .font(.system(size: max(9, layoutMetrics.titleFontSize * 0.85)))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Color.black.opacity(0.6), in: Capsule())
+                    .padding(4)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var thumbnailContent: some View {
         if let image = thumbnailStore.image(for: thumbnailKey) {
             Image(nsImage: image)
                 .resizable()
@@ -447,6 +481,17 @@ private struct WindowThumbnailIconView: View {
                     width: layoutMetrics.thumbnailSize.width,
                     height: layoutMetrics.thumbnailSize.height
                 )
+        }
+    }
+}
+
+private extension WindowThumbnailPreviewState {
+    var labelText: String? {
+        switch self {
+        case .available: nil
+        case .loading: "Loading preview"
+        case .unavailable: "Preview unavailable"
+        case .permissionBlocked: "Preview access off"
         }
     }
 }

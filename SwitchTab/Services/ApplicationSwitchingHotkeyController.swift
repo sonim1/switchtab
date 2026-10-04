@@ -9,6 +9,10 @@ public final class ApplicationSwitchingHotkeyController {
     /// while macOS still owns it.
     public private(set) var isRegistered = false
 
+    public var registeredShortcut: ShortcutSetting? {
+        isRegistered ? hotkeyService.registeredSetting(for: .applicationSwitching) : nil
+    }
+
     public init() {
         hotkeyService = HotkeyService(
             registrar: EventTapHotkeyRegistrar(invokesHandlersForAutorepeat: true)

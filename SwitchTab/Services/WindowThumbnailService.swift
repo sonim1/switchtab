@@ -76,6 +76,26 @@ public protocol WindowThumbnailCapturing: Sendable {
 
 @MainActor
 public final class WindowThumbnailStore: ObservableObject {
+    private var previewPermissionBlocked = false
+    private var previewLoadingIDs: Set<String> = []
+
+    func previewState(for key: String) -> WindowThumbnailPreviewState {
+        if previewPermissionBlocked { return .permissionBlocked }
+        if image(for: key) != nil { return .available }
+        return previewLoadingIDs.contains(key) ? .loading : .unavailable
+    }
+
+    func setPreviewPermissionBlocked(_ blocked: Bool) {
+        guard previewPermissionBlocked != blocked else { return }
+        objectWillChange.send()
+        previewPermissionBlocked = blocked
+    }
+
+    func setPreviewLoadingIDs(_ ids: Set<String>) {
+        guard previewLoadingIDs != ids else { return }
+        objectWillChange.send()
+        previewLoadingIDs = ids
+    }
     private enum CachedThumbnailImage {
         case decoded(NSImage)
         case undecodable
@@ -269,6 +289,10 @@ public final class WindowThumbnailStore: ObservableObject {
     }
 }
 
+enum WindowThumbnailPreviewState: Equatable {
+    case available, loading, unavailable, permissionBlocked
+}
+
 enum WindowThumbnailRequestPriority: Equatable, Sendable {
     case visible
     case selected
@@ -287,6 +311,10 @@ struct WindowThumbnailRequestQueue: Sendable {
 
     var count: Int {
         selected.count + visible.count
+    }
+
+    var windowIDs: Set<String> {
+        Set(selected.map(\.id)).union(visible.map(\.id))
     }
 
     mutating func enqueue(_ window: WindowItem, priority: WindowThumbnailRequestPriority) {
@@ -401,6 +429,8 @@ public final class WindowThumbnailLoader {
         invalidatedWindowIDs.removeAll(keepingCapacity: true)
         invalidatedOwnerProcessIdentifiers.removeAll(keepingCapacity: true)
         previewsAllowed = !permissionState.blocksWindowPreviews
+        store.setPreviewPermissionBlocked(!previewsAllowed)
+        updatePreviewLoadingIDs()
         self.viewportPixelSize = viewportPixelSize
         refreshTask?.cancel()
         if !preservingCachedThumbnails || !previewsAllowed {
@@ -428,6 +458,7 @@ public final class WindowThumbnailLoader {
         }
 
         requestQueue.enqueue(window, priority: priority)
+        updatePreviewLoadingIDs()
         startWorkerIfNeeded()
     }
 
@@ -448,6 +479,7 @@ public final class WindowThumbnailLoader {
         invalidatedWindowIDs.removeAll(keepingCapacity: true)
         invalidatedOwnerProcessIdentifiers.removeAll(keepingCapacity: true)
         refreshTask?.cancel()
+        updatePreviewLoadingIDs()
         if !preservingCachedThumbnails {
             store.clear()
         }
@@ -460,6 +492,7 @@ public final class WindowThumbnailLoader {
         completedWindowIDs.remove(windowID)
         failedWindowIDs.remove(windowID)
         store.removeThumbnail(for: windowID)
+        updatePreviewLoadingIDs()
     }
 
     public func invalidateThumbnails(ownerProcessIdentifier: Int) {
@@ -475,6 +508,11 @@ public final class WindowThumbnailLoader {
             !$0.hasPrefix("\(ownerProcessIdentifier)-")
         }
         store.removeThumbnails(ownerProcessIdentifier: ownerProcessIdentifier)
+        updatePreviewLoadingIDs()
+    }
+
+    private func updatePreviewLoadingIDs() {
+        store.setPreviewLoadingIDs(requestQueue.windowIDs.union(activeWindowIDs))
     }
 
     private func startWorkerIfNeeded() {
@@ -518,6 +556,7 @@ public final class WindowThumbnailLoader {
 
                 guard !isInvalidated(window) else {
                     activeWindowIDs.remove(window.id)
+                    updatePreviewLoadingIDs()
                     continue
                 }
 
@@ -544,6 +583,7 @@ public final class WindowThumbnailLoader {
                 } else {
                     failedWindowIDs.insert(window.id)
                 }
+                updatePreviewLoadingIDs()
             }
         }
     }

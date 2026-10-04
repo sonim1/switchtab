@@ -90,7 +90,7 @@ public final class UsageMetricsStore {
         let windowCount = cachedWindowUsageCount(on: date)
         let rows = [
             UsageDashboardRow(
-                title: "Window Switches",
+                title: "Window Shortcut Uses",
                 shortcutLabel: windowShortcutLabel,
                 count: windowCount
             )
