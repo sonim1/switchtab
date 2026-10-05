@@ -11,6 +11,7 @@ trap 'rm -rf -- "$fixture_root"' EXIT
 
 secret_prefix='AKIA'
 secret_suffix='A2B3C4D5E6F7G2H3'
+other_suffix="B${secret_suffix:1}"
 synthetic_secret="${secret_prefix}${secret_suffix}"
 
 init_repository() {
@@ -33,6 +34,8 @@ commit_file() {
 assert_redacted_failure() {
     local repository="$1"
     local scenario="$2"
+    local plaintext="${3:-$synthetic_secret}"
+    local expected_rule="${4:-}"
     local output="$fixture_root/${scenario}.log"
     local status
 
@@ -45,20 +48,48 @@ assert_redacted_failure() {
         echo "FAIL: $scenario did not detect the synthetic credential" >&2
         exit 1
     }
-    ! grep -Fq "$synthetic_secret" "$output" || {
-        echo "FAIL: $scenario exposed the synthetic credential" >&2
+    ! grep -Fq "$plaintext" "$output" || {
+        echo "FAIL: $scenario exposed the fixture credential" >&2
         exit 1
     }
     grep -Fq 'REDACTED' "$output" || {
         echo "FAIL: $scenario did not show a redacted finding" >&2
         exit 1
     }
+    if [[ -n "$expected_rule" ]]; then
+        grep -Fq "RuleID:      $expected_rule" "$output" || {
+            echo "FAIL: $scenario did not trigger $expected_rule" >&2
+            exit 1
+        }
+    fi
 }
 
 clean_repository="$fixture_root/clean repository"
 init_repository "$clean_repository"
 commit_file "$clean_repository" README.md 'public fixture content'
 GITLEAKS_BIN="$GITLEAKS_BIN" "$SCANNER" "$clean_repository" > "$fixture_root/clean.log" 2>&1
+
+allowlisted_repository="$fixture_root/allowlisted-fixture"
+init_repository "$allowlisted_repository"
+commit_file "$allowlisted_repository" scripts/tests/secret-scan-test.sh "secret_suffix='$secret_suffix'"
+if ! GITLEAKS_BIN="$GITLEAKS_BIN" "$SCANNER" "$allowlisted_repository" > "$fixture_root/allowlisted-fixture.log" 2>&1; then
+    echo 'FAIL: exact public scanner fixture line was reported' >&2
+    cat "$fixture_root/allowlisted-fixture.log" >&2
+    exit 1
+fi
+commit_file "$allowlisted_repository" scripts/tests/secret-scan-test.sh "secret_suffix='$secret_suffix'
+credential=$synthetic_secret"
+assert_redacted_failure "$allowlisted_repository" allowlisted-path-with-secret
+
+altered_line_repository="$fixture_root/altered-line"
+init_repository "$altered_line_repository"
+commit_file "$altered_line_repository" scripts/tests/secret-scan-test.sh "secret_suffix='$other_suffix'"
+assert_redacted_failure "$altered_line_repository" altered-line "$other_suffix" generic-api-key
+
+different_path_repository="$fixture_root/different-path"
+init_repository "$different_path_repository"
+commit_file "$different_path_repository" scripts/tests/another-test.sh "secret_suffix='$secret_suffix'"
+assert_redacted_failure "$different_path_repository" different-path "$secret_suffix"
 
 removed_repository="$fixture_root/removed"
 init_repository "$removed_repository"
