@@ -561,7 +561,7 @@ enum AppStoreDistributionSettingsTests {
         let scriptURL = projectRoot.appendingPathComponent("scripts/build-direct-distribution.sh")
         let contents = try String(contentsOf: scriptURL, encoding: .utf8)
 
-        try expectTrue(contents.contains("SPARKLE_PACKAGE_REVISION=\"${SPARKLE_PACKAGE_REVISION:-b6496a74a087257ef5e6da1c5b29a447a60f5bd7}\""))
+        try expectTrue(contents.contains("SPARKLE_PACKAGE_REVISION=\"${SPARKLE_PACKAGE_REVISION:-ac2def288cbff5cfc7df3ffef6abdf45b72bcb0a}\""))
         try expectTrue(contents.contains("kind = revision;"))
         try expectTrue(contents.contains("revision = #{sparkle_revision};"))
         try expectFalse(contents.contains("kind = upToNextMajorVersion;"))
