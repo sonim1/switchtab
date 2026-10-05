@@ -80,6 +80,7 @@
 - Pull-request CI owns version preparation. Default is a patch bump; `release:minor` or `release:major` labels select a larger bump. Documentation-only changes do not change the product version or trigger a release.
 - The exact landing-test paths `scripts/tests/landing-contract-test.sh` and `scripts/tests/agent-install-contract-test.sh` share that exemption. Other scripts, workflows, and mixed app changes remain release-relevant.
 - Never commit signing, notarization, R2, Sparkle, GitHub, or Cloudflare credentials. Keep the existing split between local keychain profiles and CI's temporary keychain.
+- Signing and publishing use the `release-signing` Environment; Homebrew notification uses the separate legacy `release` Environment with only the tap App key. Restrict production deployment refs and keep release tags immutable. Require the secret-free `secret-scan` check alongside `verify` after enabling the scanner workflow and confirming its exact successful pull-request check name.
 - Live procedures are authoritative in `docs/direct-distribution.md`, `docs/update-hosting.md`, `docs/release-workflow.md`, and `docs/repository-maintenance.md`.
 
 ## Verification

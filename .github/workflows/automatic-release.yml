@@ -6,7 +6,7 @@ name: Automatic Release
       - main
 
 permissions:
-  contents: write
+  contents: read
   actions: write
 
 concurrency:
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
       actions: write
     steps:
       - name: Checkout pushed commit
@@ -27,7 +27,7 @@ jobs:
         with:
           ref: "${{ github.sha }}"
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
           token: "${{ github.token }}"
 
       - name: Verify pushed commit
@@ -54,12 +54,33 @@ jobs:
           HEAD_SHA: "${{ github.sha }}"
         run: scripts/plan-release.sh "$BASE_SHA" "$HEAD_SHA" "$GITHUB_OUTPUT"
 
+      - name: Create tagging GitHub App token
+        if: "${{ steps.release-plan.outputs.release == 'true' }}"
+        id: tag-token
+        uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42
+        with:
+          app-id: "${{ vars.VERSION_GITHUB_APP_ID }}"
+          private-key: "${{ secrets.VERSION_GITHUB_APP_PRIVATE_KEY }}"
+          owner: sonim1
+          repositories: switchtab
+          permission-contents: write
+
+      - name: Checkout for tag publication
+        if: "${{ steps.release-plan.outputs.release == 'true' }}"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: "${{ github.sha }}"
+          fetch-depth: 0
+          persist-credentials: true
+          token: "${{ steps.tag-token.outputs.token }}"
+
       - name: Fetch tags
         if: "${{ steps.release-plan.outputs.release == 'true' }}"
         shell: bash
         run: git fetch --force --tags origin
 
       - name: Create or verify annotated release tag
+        id: tag
         if: "${{ steps.release-plan.outputs.release == 'true' }}"
         shell: bash
         env:
@@ -79,6 +100,7 @@ jobs:
               echo "Existing release tag does not match the pushed commit: $tag_ref" >&2
               exit 65
             fi
+            echo 'created=false' >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -86,9 +108,10 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git tag --annotate "$RELEASE_TAG" "$EXPECTED_SHA" --message "Release $RELEASE_TAG"
           git push origin "$tag_ref:$tag_ref"
+          echo 'created=true' >> "$GITHUB_OUTPUT"
 
       - name: Dispatch release workflow
-        if: "${{ steps.release-plan.outputs.release == 'true' }}"
+        if: "${{ steps.release-plan.outputs.release == 'true' && steps.tag.outputs.created == 'false' }}"
         shell: bash
         env:
           GH_TOKEN: "${{ github.token }}"

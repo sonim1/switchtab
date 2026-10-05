@@ -1,0 +1,6 @@
+/.github/workflows/ @sonim1
+/.github/CODEOWNERS @sonim1
+/.gitleaks.toml @sonim1
+/scripts/scan-secrets.sh @sonim1
+/scripts/setup-release-secrets.sh @sonim1
+/scripts/build-direct-distribution.sh @sonim1

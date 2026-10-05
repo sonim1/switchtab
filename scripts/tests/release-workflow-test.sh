@@ -241,6 +241,7 @@ contracts = verify_steps.fetch(verify_names.index("Run release contract tests"))
 expected_contract_tests = %w[
   scripts/tests/release-tooling-test.sh
   scripts/tests/release-local-test.sh
+  scripts/tests/release-secrets-test.sh
   scripts/tests/generate-appcast-test.sh
   scripts/tests/generate-release-manifest-test.sh
   scripts/tests/setup-update-hosting-test.sh
@@ -251,7 +252,7 @@ expected_contract_tests = %w[
   scripts/tests/plan-release-test.sh
   scripts/tests/automatic-release-workflow-test.sh
 ]
-assert(contracts.scan(%r{scripts/tests/[a-z0-9-]+-test\.sh}) == expected_contract_tests, "release verify must run the exact eleven release contract tests")
+assert(contracts.scan(%r{scripts/tests/[a-z0-9-]+-test\.sh}) == expected_contract_tests, "release verify must run the exact release contract suite")
 assert(verify_steps.fetch(verify_names.index("Run Swift tests")).fetch("run").include?("swift test"), "Swift tests are missing")
 unsigned_build = verify_steps.fetch(verify_names.index("Build unsigned Debug app")).fetch("run")
 %w[xcodebuild SwitchTab.xcodeproj SwitchTab Debug arm64 CODE_SIGNING_ALLOWED=NO].each do |token|
@@ -260,7 +261,8 @@ end
 assert(unsigned_build.include?("DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer"), "unsigned build must select Xcode.app")
 
 assert(release["needs"] == "verify", "release must depend only on verify")
-assert(release["environment"] == "release", "release must use the protected release environment")
+assert(release["environment"] == "release-signing", "release must use the signing-only environment")
+assert(release["environment"] != notify_job["environment"], "signing and tap notification must not share secret availability")
 assert(release["permissions"] == { "contents" => "write" }, "release must receive only contents: write")
 assert(release["runs-on"] == "macos-26", "release job must run on macos-26")
 assert(release["timeout-minutes"].is_a?(Integer) && release["timeout-minutes"].between?(1, 90), "release timeout must be bounded")

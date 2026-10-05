@@ -400,13 +400,14 @@ def validate_release_operations!(readme)
   assert_documented(app_setup_text.include?("The current automatic mode has no required reviewer rule"), "current automatic mode must explicitly have no required reviewer rule")
   assert_documented(app_setup_text.match?(/merging a release-relevant PR into `main` is the production release authorization point/i), "merge to main must be the production release authorization point")
   assert_documented(app_setup_text.match?(/Adding required reviewers deliberately changes.*manual approval/i), "required reviewers must be documented only as a deliberate manual-approval alternative")
-  assert_documented(app_setup_text.match?(/installed only on `sonim1\/homebrew-tap`/i), "GitHub App installation scope must be tap-only")
+  assert_documented(app_setup_text.match?(/installed on `sonim1\/homebrew-tap`/i), "tap App must be installed on the tap repository")
+  assert_documented(app_setup_text.match?(/App private key can still mint tokens for every installation/i), "shared App private-key authority must not be described as installation-isolated")
   ["`Administration: Read`", "`Contents: Read & write`", "`Pull requests: Read & write`"].each do |permission|
     assert_documented(app_setup.include?(permission), "missing unified GitHub App permission: #{permission}")
   end
   assert_documented(app_setup_text.match?(/Workflow YAML injects Apple.*Sparkle.*R2 secrets only into `release` steps/i), "release secret references must be documented")
   assert_documented(app_setup_text.match?(/tap App private key only into `notify`/i), "notify secret references must be documented")
-  assert_documented(app_setup_text.match?(/Environment itself makes all its secrets available to either job.*true availability isolation requires separate Environments/i), "separate Environment isolation boundary must be documented")
+  assert_documented(app_setup_text.match?(/Each Environment makes all its secrets available to jobs that reference it.*separate Environments/i), "Environment secret availability boundary must be documented")
 
   app_commands = fenced_blocks(app_setup).join("\n")
   required_app_commands = [
