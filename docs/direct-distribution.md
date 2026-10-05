@@ -4,6 +4,11 @@ The checked-in Xcode project stays Sparkle-free for App Store-oriented builds.
 The direct-distribution script copies the project into an isolated generated
 workspace, then adds Sparkle, the `DIRECT_DISTRIBUTION` compilation condition,
 and `Info.direct.plist` there. It does not modify `SwitchTab.xcodeproj`.
+The generated package pins Sparkle 2.9.6 at
+`ac2def288cbff5cfc7df3ffef6abdf45b72bcb0a`.
+
+`SPARKLE_PACKAGE_REVISION` optionally accepts a different full 40-character
+commit revision; normal builds use the reviewed default.
 
 ## Build
 

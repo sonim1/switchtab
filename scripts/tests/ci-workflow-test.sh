@@ -164,6 +164,7 @@ assert(verify_steps.keys == [
 expected_contract_tests = %w[
   scripts/tests/release-tooling-test.sh
   scripts/tests/release-local-test.sh
+  scripts/tests/release-secrets-test.sh
   scripts/tests/generate-appcast-test.sh
   scripts/tests/generate-release-manifest-test.sh
   scripts/tests/setup-update-hosting-test.sh

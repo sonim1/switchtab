@@ -2,7 +2,7 @@
 set -euo pipefail
 set +x
 
-readonly TARGET_ENV="release"
+readonly TARGET_ENV="release-signing"
 readonly REPO="${GITHUB_REPOSITORY:-$(git remote get-url origin | sed -E 's#(https://github.com/|git@github.com:)##; s#\.git$##')}"
 
 readonly REQUIRED_VARS=(

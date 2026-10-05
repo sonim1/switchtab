@@ -29,6 +29,7 @@ CHECKOUT_ACTION = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
 SETUP_NODE_ACTION = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
 APP_TOKEN_ACTION = "actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42"
 RELEASE_CONDITION = "${{ steps.release-plan.outputs.release == 'true' }}"
+RECOVERY_CONDITION = "${{ steps.release-plan.outputs.release == 'true' && steps.tag.outputs.created == 'false' }}"
 
 def assert(condition, message)
   raise "FAIL: #{message}" unless condition
@@ -121,6 +122,7 @@ assert(ci_install["run"] == "npm ci --ignore-scripts", "CI tooling install comma
 expected_contract_tests = %w[
   scripts/tests/release-tooling-test.sh
   scripts/tests/release-local-test.sh
+  scripts/tests/release-secrets-test.sh
   scripts/tests/generate-appcast-test.sh
   scripts/tests/generate-release-manifest-test.sh
   scripts/tests/setup-update-hosting-test.sh
@@ -137,7 +139,7 @@ ci_contracts = ci_steps.fetch("Run release contract tests")
 assert(ci_contracts["shell"] == "bash", "CI contract tests must explicitly use bash")
 contract_source = ci_contracts.fetch("run")
 assert(contract_source.include?("set -euo pipefail"), "CI contract loop must fail closed")
-assert(contract_source.scan(%r{scripts/tests/[a-z0-9-]+-test\.sh}) == expected_contract_tests, "CI must run the exact thirteen release contract tests")
+assert(contract_source.scan(%r{scripts/tests/[a-z0-9-]+-test\.sh}) == expected_contract_tests, "CI must run the exact release contract suite")
 assert(contract_source.include?('bash "$test_script"'), "CI must execute every listed contract test with bash")
 
 swift_test = ci_steps.fetch("Run Swift tests")
@@ -159,8 +161,8 @@ assert_no_release_secrets(ci_source, "CI", allowed: ["VERSION_GITHUB_APP_PRIVATE
 
 assert(automatic["name"] == "Automatic Release", "main workflow name must be Automatic Release")
 assert(automatic.fetch("on") == { "push" => { "branches" => ["main"] } }, "automatic release must run only for pushes to main")
-expected_permissions = { "contents" => "write", "actions" => "write" }
-assert(automatic["permissions"] == expected_permissions, "automatic release permissions must be exactly contents: write and actions: write")
+expected_permissions = { "contents" => "read", "actions" => "write" }
+assert(automatic["permissions"] == expected_permissions, "automatic release GITHUB_TOKEN must be read-only for contents")
 assert(automatic["concurrency"] == {
   "group" => "switchtab-automatic-release",
   "cancel-in-progress" => false,
@@ -178,6 +180,8 @@ assert(automatic_names == [
   "Checkout pushed commit",
   "Verify pushed commit",
   "Plan release",
+  "Create tagging GitHub App token",
+  "Checkout for tag publication",
   "Fetch tags",
   "Create or verify annotated release tag",
   "Dispatch release workflow"
@@ -189,9 +193,26 @@ assert(automatic_checkout["uses"] == CHECKOUT_ACTION, "automatic release checkou
 assert(automatic_checkout["with"] == {
   "ref" => "${{ github.sha }}",
   "fetch-depth" => 0,
-  "persist-credentials" => true,
+  "persist-credentials" => false,
   "token" => "${{ github.token }}"
-}, "automatic release checkout must retain repository GITHUB_TOKEN credentials for the exact pushed commit")
+}, "release planning must not retain GITHUB_TOKEN credentials")
+
+tag_token = automatic_steps.fetch("Create tagging GitHub App token")
+assert(tag_token["id"] == "tag-token" && tag_token["uses"] == APP_TOKEN_ACTION, "tagging must use the pinned App token action")
+assert(tag_token["with"] == {
+  "app-id" => "${{ vars.VERSION_GITHUB_APP_ID }}",
+  "private-key" => "${{ secrets.VERSION_GITHUB_APP_PRIVATE_KEY }}",
+  "owner" => "sonim1",
+  "repositories" => "switchtab",
+  "permission-contents" => "write"
+}, "tagging token must be scoped to switchtab Contents write")
+tag_checkout = automatic_steps.fetch("Checkout for tag publication")
+assert(tag_checkout["uses"] == CHECKOUT_ACTION && tag_checkout["with"] == {
+  "ref" => "${{ github.sha }}",
+  "fetch-depth" => 0,
+  "persist-credentials" => true,
+  "token" => "${{ steps.tag-token.outputs.token }}"
+}, "tag publication must use the App token at the exact verified commit")
 
 verify = automatic_steps.fetch("Verify pushed commit")
 assert(verify["shell"] == "bash", "pushed-commit verification must explicitly use bash")
@@ -209,7 +230,7 @@ assert(automatic_plan["env"] == {
 }, "automatic planner must receive the push before and head SHAs")
 assert(automatic_plan["run"] == 'scripts/plan-release.sh "$BASE_SHA" "$HEAD_SHA" "$GITHUB_OUTPUT"', "automatic planner must write directly to GITHUB_OUTPUT")
 
-%w[Fetch\ tags Create\ or\ verify\ annotated\ release\ tag Dispatch\ release\ workflow].each do |step_name|
+%w[Create\ tagging\ GitHub\ App\ token Checkout\ for\ tag\ publication Fetch\ tags Create\ or\ verify\ annotated\ release\ tag].each do |step_name|
   step = automatic_steps.fetch(step_name)
   assert(step["if"] == RELEASE_CONDITION, "#{step_name} must run only for release=true")
   assert(!step.key?("continue-on-error"), "#{step_name} must fail the job on error")
@@ -220,6 +241,7 @@ assert(fetch_tags["shell"] == "bash", "tag fetch must explicitly use bash")
 assert(fetch_tags["run"] == "git fetch --force --tags origin", "automatic release must fetch tags before validation")
 
 tag_step = automatic_steps.fetch("Create or verify annotated release tag")
+assert(tag_step["id"] == "tag", "tag step must expose whether it created a new tag")
 assert(tag_step["shell"] == "bash", "tag step must explicitly use bash")
 assert(tag_step["env"] == {
   "RELEASE_TAG" => "${{ steps.release-plan.outputs.tag }}",
@@ -240,6 +262,8 @@ push_lines = tag_source.lines.map(&:strip).select { |line| line.start_with?("git
 assert(push_lines == ['git push origin "$tag_ref:$tag_ref"'], "tag publication must push only the exact tag ref without force")
 
 dispatch = automatic_steps.fetch("Dispatch release workflow")
+assert(dispatch["if"] == RECOVERY_CONDITION, "dispatch must recover existing tags without duplicating App-token push releases")
+assert(!dispatch.key?("continue-on-error"), "recovery dispatch must fail on error")
 assert(dispatch["shell"] == "bash", "release dispatch must explicitly use bash")
 assert(dispatch["env"] == {
   "GH_TOKEN" => "${{ github.token }}",
@@ -247,8 +271,8 @@ assert(dispatch["env"] == {
 }, "release dispatch must use only github.token and the planned tag")
 assert(dispatch["run"] == 'gh workflow run release.yml --ref "$RELEASE_TAG" -f tag="$RELEASE_TAG"', "release workflow and source must both resolve through the planned tag")
 
-assert_sha_pinned_actions(automatic, [CHECKOUT_ACTION], "automatic release")
-assert_no_release_secrets(automatic_source, "automatic release")
+assert_sha_pinned_actions(automatic, [CHECKOUT_ACTION, APP_TOKEN_ACTION, CHECKOUT_ACTION], "automatic release")
+assert_no_release_secrets(automatic_source, "automatic release", allowed: ["VERSION_GITHUB_APP_PRIVATE_KEY"])
 assert(!automatic_source.include?("refs/heads/main:refs/tags"), "automatic release must not turn the main branch into a tag ref")
 RUBY
 
@@ -296,6 +320,7 @@ git init --quiet "$TAG_REPOSITORY"
     git push --quiet --set-upstream origin main
 )
 EXPECTED_COMMIT="$(git -C "$TAG_REPOSITORY" rev-parse HEAD)"
+export GITHUB_OUTPUT="$TEMP_ROOT/tag-output"
 
 # A missing target is created as an annotated tag on the exact commit and only that ref is pushed.
 (
@@ -306,15 +331,18 @@ EXPECTED_COMMIT="$(git -C "$TAG_REPOSITORY" rev-parse HEAD)"
     fail 'new release tag was not annotated'
 [[ "$(git --git-dir="$REMOTE_REPOSITORY" rev-parse 'refs/tags/v1.0.1^{commit}')" == "$EXPECTED_COMMIT" ]] || \
     fail 'new release tag did not resolve to the exact pushed commit'
+[[ "$(cat "$GITHUB_OUTPUT")" == 'created=true' ]] || fail 'new tag must suppress an additional recovery dispatch'
 
 # A rerun accepts the same annotated tag without replacing its tag object.
 ORIGINAL_TAG_OBJECT="$(git -C "$TAG_REPOSITORY" rev-parse refs/tags/v1.0.1)"
+: > "$GITHUB_OUTPUT"
 (
     cd -- "$TAG_REPOSITORY"
     RELEASE_TAG='v1.0.1' EXPECTED_SHA="$EXPECTED_COMMIT" /bin/bash "$TAG_HARNESS"
 )
 [[ "$(git -C "$TAG_REPOSITORY" rev-parse refs/tags/v1.0.1)" == "$ORIGINAL_TAG_OBJECT" ]] || \
     fail 'rerun replaced an existing annotated tag'
+[[ "$(cat "$GITHUB_OUTPUT")" == 'created=false' ]] || fail 'existing tag must allow an explicit recovery dispatch'
 
 # A lightweight tag must fail closed even when it resolves to the expected commit.
 git -C "$TAG_REPOSITORY" tag v1.0.1-lightweight "$EXPECTED_COMMIT"

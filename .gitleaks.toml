@@ -1,0 +1,10 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Ignore the public synthetic suffix used by the scanner regression fixture."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^scripts/tests/secret-scan-test\.sh$''']
+regexes = ['''(?m)^secret_suffix='A2B3C4D5E6F7G2H3'$''']

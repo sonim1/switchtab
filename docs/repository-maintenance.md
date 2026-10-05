@@ -37,9 +37,9 @@ scan.
 - `Package.swift` has no external SwiftPM dependencies.
 - `scripts/build-direct-distribution.sh` injects Sparkle only into a generated
   direct-distribution workspace under `.build/direct-distribution/`.
-- The generated distribution workspace pins Sparkle 2.9.4 at
-  `b6496a74a087257ef5e6da1c5b29a447a60f5bd7`:
-  https://github.com/sparkle-project/Sparkle/releases/tag/2.9.4
+- The generated distribution workspace pins Sparkle 2.9.6 at
+  `ac2def288cbff5cfc7df3ffef6abdf45b72bcb0a`:
+  https://github.com/sparkle-project/Sparkle/releases/tag/2.9.6
 - `package-lock.json` locks the repository release tooling to Wrangler 4.122.0
   and overrides its transitive `sharp` and `undici` dependencies to patched
   0.35.4 and 7.29.1, respectively; install it
