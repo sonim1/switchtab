@@ -62,12 +62,20 @@ public struct AccessibilityWindowInclusionCandidate: Equatable {
     public let role: String?
     public let subrole: String?
     public let windowNumber: UInt32?
+    public let isMinimized: Bool
 
-    public init(originalIndex: Int, role: String?, subrole: String?, windowNumber: UInt32? = nil) {
+    public init(
+        originalIndex: Int,
+        role: String?,
+        subrole: String?,
+        windowNumber: UInt32? = nil,
+        isMinimized: Bool = false
+    ) {
         self.originalIndex = originalIndex
         self.role = role
         self.subrole = subrole
         self.windowNumber = windowNumber
+        self.isMinimized = isMinimized
     }
 }
 
@@ -84,9 +92,12 @@ public struct AccessibilityWindowInclusionMapping: Equatable {
 }
 
 public enum AccessibilityWindowInclusionPolicy {
-    public static func shouldInclude(role: String?, subrole: String?) -> Bool {
-        role == (kAXWindowRole as String)
-            && subrole == (kAXStandardWindowSubrole as String)
+    public static func shouldInclude(role: String?, subrole: String?, isMinimized: Bool = false) -> Bool {
+        guard role == (kAXWindowRole as String) else { return false }
+
+        // macOS can report a minimized standard window as AXDialog.
+        return subrole == (kAXStandardWindowSubrole as String)
+            || (subrole == (kAXDialogSubrole as String) && isMinimized)
     }
 
     public static func acceptedWindowMappings(
@@ -96,7 +107,11 @@ public enum AccessibilityWindowInclusionPolicy {
         var mappings: [AccessibilityWindowInclusionMapping] = []
         mappings.reserveCapacity(candidates.count)
 
-        for candidate in candidates where shouldInclude(role: candidate.role, subrole: candidate.subrole) {
+        for candidate in candidates where shouldInclude(
+            role: candidate.role,
+            subrole: candidate.subrole,
+            isMinimized: candidate.isMinimized
+        ) {
             // A resolved CGWindowID is stable across window closes/reorders and
             // process restarts of the switcher; the positional scheme is only a
             // fallback for elements the resolver cannot identify.
@@ -425,9 +440,13 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
         var count = 0
         for windowElement in windowElements {
             let attributes = windowAttributes(windowElement, includeDetails: false)
+            let isMinimized = attributes.role == (kAXWindowRole as String)
+                && attributes.subrole == (kAXDialogSubrole as String)
+                && attributeReader.boolAttribute(windowElement, kAXMinimizedAttribute as CFString)
             if AccessibilityWindowInclusionPolicy.shouldInclude(
                 role: attributes.role,
-                subrole: attributes.subrole
+                subrole: attributes.subrole,
+                isMinimized: isMinimized
             ) {
                 count += 1
             }
@@ -470,7 +489,8 @@ public final class AXWindowSnapshotProvider: AccessibilityWindowSnapshotProvidin
                 originalIndex: index,
                 role: attributes[index].role,
                 subrole: attributes[index].subrole,
-                windowNumber: windowNumberResolver.windowNumber(for: windowElements[index])
+                windowNumber: windowNumberResolver.windowNumber(for: windowElements[index]),
+                isMinimized: attributes[index].isMinimized
             )
         }
         let mappings = AccessibilityWindowInclusionPolicy.acceptedWindowMappings(
