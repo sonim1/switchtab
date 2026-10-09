@@ -1,4 +1,5 @@
 import ApplicationServices
+import XCTest
 @testable import SwitchTab
 
 enum AccessibilityWindowProviderTests {
@@ -641,6 +642,77 @@ enum AccessibilityWindowProviderTests {
                 windowIdentifier: sharedWindowIdentifier
             ).map { CFEqual($0, secondProcessWindow) } ?? false
         )
+    }
+}
+
+final class MinimizedWindowDiscoveryTests: XCTestCase {
+    func testSnapshotsIncludeMinimizedDialogWindowsWithStableIdentity() {
+        let attributes = windowAttributes
+        let elements = attributes.indices.map { AXUIElementCreateApplication(pid_t(21_000 + $0)) }
+        let identifiers = attributes.indices.map { UInt32(21_000 + $0) }
+        defer { AXWindowElementRegistry.shared.removeAll(ownerProcessIdentifier: 21_000) }
+
+        for supportsBatch in [true, false] {
+            let reader = BatchedAXWindowAttributeReader(
+                windowElements: elements,
+                individualAttributes: attributes,
+                batchedResults: attributes.map { supportsBatch ? $0 : nil }
+            )
+            let provider = AXWindowSnapshotProvider(
+                windowNumberResolver: FixedAXWindowNumberResolver(elements: elements, identifiers: identifiers),
+                attributeReader: reader
+            )
+
+            let snapshots = provider.windows(
+                ownerProcessIdentifier: 21_000,
+                ownerName: "Notes",
+                includeScreenCaptureIdentifiers: false
+            )
+
+            XCTAssertEqual(snapshots?.map(\.windowIdentifier), [21_000, 21_001], "batch: \(supportsBatch)")
+            XCTAssertEqual(snapshots?.map(\.title), ["Standard", "Minimized"], "batch: \(supportsBatch)")
+            XCTAssertEqual(snapshots?.map(\.isMinimized), [false, true], "batch: \(supportsBatch)")
+            XCTAssertTrue(AXWindowElementRegistry.shared.element(
+                ownerProcessIdentifier: 21_000,
+                windowIdentifier: 21_001
+            ).map { CFEqual($0, elements[1]) } ?? false, "batch: \(supportsBatch)")
+        }
+    }
+
+    func testCountsIncludeMinimizedDialogWindowsWithoutReadingDetails() {
+        let attributes = windowAttributes
+        let elements = attributes.indices.map { AXUIElementCreateApplication(pid_t(22_000 + $0)) }
+
+        for supportsBatch in [true, false] {
+            let reader = BatchedAXWindowAttributeReader(
+                windowElements: elements,
+                individualAttributes: attributes,
+                batchedResults: attributes.map {
+                    supportsBatch
+                        ? .init(role: $0.role, subrole: $0.subrole, title: nil, isMinimized: false)
+                        : nil
+                }
+            )
+            let resolver = RecordingAXWindowNumberResolver()
+            let provider = AXWindowSnapshotProvider(windowNumberResolver: resolver, attributeReader: reader)
+
+            XCTAssertEqual(provider.windowCount(ownerProcessIdentifier: 22_000), 2, "batch: \(supportsBatch)")
+            XCTAssertEqual(reader.titleReadCount, 0)
+            XCTAssertEqual(reader.focusedWindowReadCount, 0)
+            XCTAssertEqual(resolver.callCount, 0)
+        }
+    }
+
+    private var windowAttributes: [AXWindowAttributeSnapshot] {
+        [
+            .init(role: "AXWindow", subrole: "AXStandardWindow", title: "Standard", isMinimized: false),
+            .init(role: "AXWindow", subrole: "AXDialog", title: "Minimized", isMinimized: true),
+            .init(role: "AXWindow", subrole: "AXDialog", title: "Dialog", isMinimized: false),
+            .init(role: "AXWindow", subrole: "AXUnknown", title: "Panel", isMinimized: true),
+            .init(role: "AXWindow", subrole: "AXSheet", title: "Sheet", isMinimized: true),
+            .init(role: "AXButton", subrole: "AXDialog", title: "Button", isMinimized: true),
+            .init(role: "AXWindow", subrole: nil, title: "Unknown", isMinimized: true)
+        ]
     }
 }
 
