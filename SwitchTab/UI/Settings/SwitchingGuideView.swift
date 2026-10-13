@@ -51,7 +51,7 @@ struct SwitchingGuideView: View {
 
                 Text(statusText)
                     .font(.callout)
-                    .foregroundStyle(model.state == .completed ? .green : .secondary)
+                    .foregroundStyle(model.state == .completed ? .primary : .secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("switching-practice-status")
             }

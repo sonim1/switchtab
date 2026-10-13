@@ -712,9 +712,15 @@ private struct ShortcutRecorderRow: View {
             .frame(maxWidth: layout.rowContentWidth, alignment: .leading)
 
             if let message = errorMessage ?? registrationMessage {
-                Label(message, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.yellow)
+                Label {
+                    Text(message)
+                        .foregroundStyle(.primary)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                        .accessibilityHidden(true)
+                }
+                .font(.caption)
             }
         }
         .onDisappear {
