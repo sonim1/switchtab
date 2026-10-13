@@ -15,8 +15,6 @@ public struct PermissionStatusView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(items, id: \.permissionName) { item in
-                let primaryDetail = item.detailText.components(separatedBy: "\n").first ?? item.detailText
-
                 HStack(spacing: 12) {
                     Image(systemName: item.isGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                         .foregroundStyle(item.isGranted ? .green : .yellow)
@@ -28,18 +26,14 @@ public struct PermissionStatusView: View {
                         Text(item.permissionName)
                             .font(.body.weight(.semibold))
 
-                        Text(primaryDetail)
+                        Text(item.detailText)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+                    .accessibilityElement(children: .combine)
 
                     Spacer(minLength: 12)
-
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(.secondary)
-                        .help(item.detailText)
-                        .accessibilityLabel(Text("\(item.permissionName) details"))
 
                     if !item.isGranted {
                         Button {
@@ -70,6 +64,8 @@ public struct PermissionStatusView: View {
                         .stroke(Color.primary.opacity(0.06))
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 8))
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(Text(item.permissionName))
             }
         }
     }
