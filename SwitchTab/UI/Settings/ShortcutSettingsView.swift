@@ -9,6 +9,7 @@ public struct ShortcutSettingsView: View {
     @StateObject private var viewModel: ShortcutSettingsViewModel
     @StateObject private var applicationSettingsViewModel: ApplicationSettingsViewModel
     @ObservedObject private var practiceModel: SwitchingPracticeModel
+    @StateObject private var recordingCoordinator: ShortcutRecordingCoordinator
     private let onBeginPractice: () -> Void
     @State private var selectedPanel = SettingsPanel.general
     @State private var hasAppeared = false
@@ -18,6 +19,7 @@ public struct ShortcutSettingsView: View {
         viewModel: ShortcutSettingsViewModel = ShortcutSettingsViewModel(),
         applicationSettingsViewModel: ApplicationSettingsViewModel? = nil,
         practiceModel: SwitchingPracticeModel? = nil,
+        recordingCoordinator: ShortcutRecordingCoordinator? = nil,
         onBeginPractice: @escaping () -> Void = {},
         showsGuide: Bool = false
     ) {
@@ -26,6 +28,7 @@ public struct ShortcutSettingsView: View {
             wrappedValue: applicationSettingsViewModel ?? ApplicationSettingsViewModel()
         )
         _practiceModel = ObservedObject(wrappedValue: practiceModel ?? SwitchingPracticeModel())
+        _recordingCoordinator = StateObject(wrappedValue: recordingCoordinator ?? ShortcutRecordingCoordinator())
         self.onBeginPractice = onBeginPractice
         _selectedPanel = State(initialValue: showsGuide ? .practice : .general)
     }
@@ -88,7 +91,7 @@ public struct ShortcutSettingsView: View {
         case .general:
             GeneralSettingsPanel(viewModel: applicationSettingsViewModel)
         case .shortcut:
-            ShortcutSettingsPanel(viewModel: viewModel)
+            ShortcutSettingsPanel(viewModel: viewModel, recordingCoordinator: recordingCoordinator)
         case .permissions:
             PermissionsSettingsPanel(viewModel: viewModel)
         case .practice:
@@ -323,7 +326,7 @@ private struct GeneralSettingsPanel: View {
 
 private struct ShortcutSettingsPanel: View {
     @ObservedObject var viewModel: ShortcutSettingsViewModel
-    @StateObject private var recordingCoordinator = ShortcutRecordingCoordinator()
+    @ObservedObject var recordingCoordinator: ShortcutRecordingCoordinator
 
     var body: some View {
         SettingsSection(
@@ -549,11 +552,7 @@ public final class ShortcutRecordingCoordinator: ObservableObject {
     public init() {}
 
     public func begin(mode: SwitcherMode, onStop: @escaping () -> Void) {
-        let previousStop = stopActiveRecording
-        stopActiveRecording = nil
-        activeMode = nil
-        previousStop?()
-
+        cancel()
         activeMode = mode
         stopActiveRecording = onStop
     }
@@ -565,6 +564,13 @@ public final class ShortcutRecordingCoordinator: ObservableObject {
 
         stopActiveRecording = nil
         activeMode = nil
+    }
+
+    public func cancel() {
+        let stopRecording = stopActiveRecording
+        stopActiveRecording = nil
+        activeMode = nil
+        stopRecording?()
     }
 }
 

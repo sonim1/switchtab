@@ -92,10 +92,12 @@ public final class NSApplicationActivationPolicyApplier: ApplicationActivationPo
 public final class SettingsWindowController {
     private let window: NSPanel
     private let activationCoordinator: SettingsActivationPolicyCoordinator
+    private let recordingCoordinator: ShortcutRecordingCoordinator
     private let windowDelegate: WindowCloseDelegate
 
     public init(
         activationCoordinator: SettingsActivationPolicyCoordinator,
+        recordingCoordinator: ShortcutRecordingCoordinator? = nil,
         updateChecker: (any UpdateChecking)? = nil,
         onShortcutChanged: @escaping (
             SwitcherShortcutConfiguration,
@@ -106,6 +108,7 @@ public final class SettingsWindowController {
         onBeginPractice: @escaping () -> Void = {},
         showsGuide: Bool = false
     ) {
+        let recordingCoordinator = recordingCoordinator ?? ShortcutRecordingCoordinator()
         let hostingController = FloatingPanelFactory.hostingController(
             rootView: ShortcutSettingsView(
                 viewModel: ShortcutSettingsViewModel(
@@ -114,6 +117,7 @@ public final class SettingsWindowController {
                 ),
                 applicationSettingsViewModel: ApplicationSettingsViewModel(updateChecker: updateChecker),
                 practiceModel: practiceModel,
+                recordingCoordinator: recordingCoordinator,
                 onBeginPractice: onBeginPractice,
                 showsGuide: showsGuide
             ),
@@ -125,12 +129,14 @@ public final class SettingsWindowController {
             contentViewController: hostingController
         )
         let windowDelegate = WindowCloseDelegate {
+            recordingCoordinator.cancel()
             activationCoordinator.settingsWindowDidClose()
         }
         window.delegate = windowDelegate
 
         self.window = window
         self.activationCoordinator = activationCoordinator
+        self.recordingCoordinator = recordingCoordinator
         self.windowDelegate = windowDelegate
     }
 
@@ -140,6 +146,7 @@ public final class SettingsWindowController {
     }
 
     public func hideForPractice() {
+        recordingCoordinator.cancel()
         window.orderOut(nil)
         activationCoordinator.settingsWindowDidClose()
     }
