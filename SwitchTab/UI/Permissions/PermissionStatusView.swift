@@ -49,7 +49,7 @@ public struct PermissionStatusView: View {
                     } else {
                         Text("Enabled")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.green)
+                            .foregroundStyle(.primary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
                             .background(Color.green.opacity(0.12))
