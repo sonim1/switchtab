@@ -44,6 +44,7 @@ enum FloatingPanelFactory {
         window.title = title
         window.contentViewController = contentViewController
         window.isReleasedWhenClosed = false
+        window.hidesOnDeactivate = false
         window.level = windowLevel
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         return window
@@ -63,21 +64,52 @@ public protocol ApplicationActivationPolicyApplying {
 }
 
 @MainActor
-public final class SettingsActivationPolicyCoordinator {
+public final class AuxiliaryWindowActivationPolicyCoordinator {
+    private enum Owner: Hashable {
+        case settings
+        case about
+    }
+
     private let policyApplier: any ApplicationActivationPolicyApplying
+    private var visibleOwners: Set<Owner> = []
 
     public init(policyApplier: any ApplicationActivationPolicyApplying) {
         self.policyApplier = policyApplier
     }
 
     public func settingsWindowWillShow() {
-        policyApplier.apply(.regular)
+        willShow(.settings)
     }
 
     public func settingsWindowDidClose() {
-        policyApplier.apply(.accessory)
+        didClose(.settings)
+    }
+
+    public func aboutWindowWillShow() {
+        willShow(.about)
+    }
+
+    public func aboutWindowDidClose() {
+        didClose(.about)
+    }
+
+    private func willShow(_ owner: Owner) {
+        let wasEmpty = visibleOwners.isEmpty
+        guard visibleOwners.insert(owner).inserted else { return }
+        if wasEmpty {
+            policyApplier.apply(.regular)
+        }
+    }
+
+    private func didClose(_ owner: Owner) {
+        guard visibleOwners.remove(owner) != nil else { return }
+        if visibleOwners.isEmpty {
+            policyApplier.apply(.accessory)
+        }
     }
 }
+
+public typealias SettingsActivationPolicyCoordinator = AuxiliaryWindowActivationPolicyCoordinator
 
 @MainActor
 public final class NSApplicationActivationPolicyApplier: ApplicationActivationPolicyApplying {
@@ -91,11 +123,13 @@ public final class NSApplicationActivationPolicyApplier: ApplicationActivationPo
 @MainActor
 public final class SettingsWindowController {
     private let window: NSPanel
-    private let activationCoordinator: SettingsActivationPolicyCoordinator
+    private let activationCoordinator: AuxiliaryWindowActivationPolicyCoordinator
+    private let recordingCoordinator: ShortcutRecordingCoordinator
     private let windowDelegate: WindowCloseDelegate
 
     public init(
-        activationCoordinator: SettingsActivationPolicyCoordinator,
+        activationCoordinator: AuxiliaryWindowActivationPolicyCoordinator,
+        recordingCoordinator: ShortcutRecordingCoordinator? = nil,
         updateChecker: (any UpdateChecking)? = nil,
         onShortcutChanged: @escaping (
             SwitcherShortcutConfiguration,
@@ -106,6 +140,7 @@ public final class SettingsWindowController {
         onBeginPractice: @escaping () -> Void = {},
         showsGuide: Bool = false
     ) {
+        let recordingCoordinator = recordingCoordinator ?? ShortcutRecordingCoordinator()
         let hostingController = FloatingPanelFactory.hostingController(
             rootView: ShortcutSettingsView(
                 viewModel: ShortcutSettingsViewModel(
@@ -114,6 +149,7 @@ public final class SettingsWindowController {
                 ),
                 applicationSettingsViewModel: ApplicationSettingsViewModel(updateChecker: updateChecker),
                 practiceModel: practiceModel,
+                recordingCoordinator: recordingCoordinator,
                 onBeginPractice: onBeginPractice,
                 showsGuide: showsGuide
             ),
@@ -125,12 +161,14 @@ public final class SettingsWindowController {
             contentViewController: hostingController
         )
         let windowDelegate = WindowCloseDelegate {
+            recordingCoordinator.cancel()
             activationCoordinator.settingsWindowDidClose()
         }
         window.delegate = windowDelegate
 
         self.window = window
         self.activationCoordinator = activationCoordinator
+        self.recordingCoordinator = recordingCoordinator
         self.windowDelegate = windowDelegate
     }
 
@@ -140,6 +178,7 @@ public final class SettingsWindowController {
     }
 
     public func hideForPractice() {
+        recordingCoordinator.cancel()
         window.orderOut(nil)
         activationCoordinator.settingsWindowDidClose()
     }

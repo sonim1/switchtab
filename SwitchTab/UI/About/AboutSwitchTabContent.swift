@@ -35,7 +35,7 @@ public struct AboutSwitchTabContent: Equatable, Sendable {
     }
 
     public var todaySummaryLine: String {
-        let suffix = usageDashboard.totalCount == 1 ? "shortcut" : "shortcuts"
-        return "SwitchTab handled \(usageDashboard.totalCount) \(suffix) today"
+        let suffix = usageDashboard.totalCount == 1 ? "use" : "uses"
+        return "\(usageDashboard.totalCount) window shortcut \(suffix) today"
     }
 }

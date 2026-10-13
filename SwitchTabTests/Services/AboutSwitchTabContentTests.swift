@@ -1,4 +1,5 @@
 import SwitchTab
+import XCTest
 
 enum AboutSwitchTabContentTests {
     @MainActor
@@ -47,7 +48,7 @@ enum AboutSwitchTabContentTests {
             )
         )
 
-        try expectEqual(content.todaySummaryLine, "SwitchTab handled 2 shortcuts today")
+        try expectEqual(content.todaySummaryLine, "2 window shortcut uses today")
     }
 
     @MainActor
@@ -64,5 +65,22 @@ enum AboutSwitchTabContentTests {
         }
 
         try expectEqual(contentProviderCallCount, 0)
+    }
+}
+
+final class AboutUsageSummaryTests: XCTestCase {
+    func testSummaryNamesWindowShortcutUsesForZeroOneAndMany() {
+        for (count, expected) in [
+            (0, "0 window shortcut uses today"),
+            (1, "1 window shortcut use today"),
+            (2, "2 window shortcut uses today")
+        ] {
+            let content = AboutSwitchTabContent(
+                version: "1.0",
+                build: "1",
+                usageDashboard: UsageDashboardSnapshot(totalCount: count, rows: [])
+            )
+            XCTAssertEqual(content.todaySummaryLine, expected)
+        }
     }
 }

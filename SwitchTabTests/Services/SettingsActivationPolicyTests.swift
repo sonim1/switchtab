@@ -24,9 +24,10 @@ enum SettingsActivationPolicyTests {
         let applier = FakeActivationPolicyApplier()
         let coordinator = SettingsActivationPolicyCoordinator(policyApplier: applier)
 
+        coordinator.settingsWindowWillShow()
         coordinator.settingsWindowDidClose()
 
-        try expectEqual(applier.appliedPolicies, [.accessory])
+        try expectEqual(applier.appliedPolicies, [.regular, .accessory])
     }
 
     static func testSettingsWindowUsesVisibleContentSize() throws {

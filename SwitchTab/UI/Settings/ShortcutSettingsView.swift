@@ -9,6 +9,7 @@ public struct ShortcutSettingsView: View {
     @StateObject private var viewModel: ShortcutSettingsViewModel
     @StateObject private var applicationSettingsViewModel: ApplicationSettingsViewModel
     @ObservedObject private var practiceModel: SwitchingPracticeModel
+    @StateObject private var recordingCoordinator: ShortcutRecordingCoordinator
     private let onBeginPractice: () -> Void
     @State private var selectedPanel = SettingsPanel.general
     @State private var hasAppeared = false
@@ -18,6 +19,7 @@ public struct ShortcutSettingsView: View {
         viewModel: ShortcutSettingsViewModel = ShortcutSettingsViewModel(),
         applicationSettingsViewModel: ApplicationSettingsViewModel? = nil,
         practiceModel: SwitchingPracticeModel? = nil,
+        recordingCoordinator: ShortcutRecordingCoordinator? = nil,
         onBeginPractice: @escaping () -> Void = {},
         showsGuide: Bool = false
     ) {
@@ -26,6 +28,7 @@ public struct ShortcutSettingsView: View {
             wrappedValue: applicationSettingsViewModel ?? ApplicationSettingsViewModel()
         )
         _practiceModel = ObservedObject(wrappedValue: practiceModel ?? SwitchingPracticeModel())
+        _recordingCoordinator = StateObject(wrappedValue: recordingCoordinator ?? ShortcutRecordingCoordinator())
         self.onBeginPractice = onBeginPractice
         _selectedPanel = State(initialValue: showsGuide ? .practice : .general)
     }
@@ -88,7 +91,7 @@ public struct ShortcutSettingsView: View {
         case .general:
             GeneralSettingsPanel(viewModel: applicationSettingsViewModel)
         case .shortcut:
-            ShortcutSettingsPanel(viewModel: viewModel)
+            ShortcutSettingsPanel(viewModel: viewModel, recordingCoordinator: recordingCoordinator)
         case .permissions:
             PermissionsSettingsPanel(viewModel: viewModel)
         case .practice:
@@ -122,7 +125,7 @@ private enum SettingsPanel: String, CaseIterable, Identifiable {
         case .general:
             "General"
         case .shortcut:
-            "Shortcut"
+            "Shortcuts"
         case .permissions:
             "Permissions"
         case .practice:
@@ -153,15 +156,18 @@ private struct SettingsHeader: View {
                 .resizable()
                 .frame(width: 42, height: 42)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("SwitchTab")
                     .font(.title2.weight(.semibold))
+                    .accessibilityHeading(.h1)
 
-                Text("Window switching for the active app.")
+                Text("Application and window switching.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+            .accessibilityElement(children: .contain)
 
             Spacer(minLength: 20)
 
@@ -173,6 +179,7 @@ private struct SettingsHeader: View {
         .padding(.horizontal, 24)
         .padding(.top, 22)
         .padding(.bottom, 18)
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -183,6 +190,7 @@ private struct SettingsStatusPill: View {
         HStack(spacing: 8) {
             Image(systemName: summary.symbolName)
                 .foregroundStyle(summary.isReady ? .green : .yellow)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(summary.title)
@@ -204,6 +212,7 @@ private struct SettingsStatusPill: View {
                 .stroke((summary.isReady ? Color.green : Color.yellow).opacity(0.22))
         )
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -323,7 +332,7 @@ private struct GeneralSettingsPanel: View {
 
 private struct ShortcutSettingsPanel: View {
     @ObservedObject var viewModel: ShortcutSettingsViewModel
-    @StateObject private var recordingCoordinator = ShortcutRecordingCoordinator()
+    @ObservedObject var recordingCoordinator: ShortcutRecordingCoordinator
 
     var body: some View {
         SettingsSection(
@@ -363,7 +372,7 @@ private struct PermissionsSettingsPanel: View {
     var body: some View {
         SettingsSection(
             title: "Permissions",
-            subtitle: "SwitchTab only asks for access needed to focus windows and show previews.",
+            subtitle: "Accessibility enables focus. Screen Recording is optional and enables previews.",
             symbolName: "lock.shield"
         ) {
             PermissionStatusView(items: viewModel.permissionState.permissionStatusItems) { destination in
@@ -395,15 +404,18 @@ struct SettingsSection<Content: View>: View {
                     .frame(width: 28, height: 28)
                     .background(Color.primary.opacity(0.06))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.headline.weight(.semibold))
+                        .accessibilityHeading(.h2)
 
                     Text(subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .accessibilityElement(children: .contain)
             }
 
             VStack(spacing: 0) {
@@ -418,6 +430,7 @@ struct SettingsSection<Content: View>: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -433,6 +446,7 @@ private struct SettingsRow<Control: View>: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.secondary)
                 .frame(width: 28, height: 28)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -549,11 +563,7 @@ public final class ShortcutRecordingCoordinator: ObservableObject {
     public init() {}
 
     public func begin(mode: SwitcherMode, onStop: @escaping () -> Void) {
-        let previousStop = stopActiveRecording
-        stopActiveRecording = nil
-        activeMode = nil
-        previousStop?()
-
+        cancel()
         activeMode = mode
         stopActiveRecording = onStop
     }
@@ -565,6 +575,13 @@ public final class ShortcutRecordingCoordinator: ObservableObject {
 
         stopActiveRecording = nil
         activeMode = nil
+    }
+
+    public func cancel() {
+        let stopRecording = stopActiveRecording
+        stopActiveRecording = nil
+        activeMode = nil
+        stopRecording?()
     }
 }
 
@@ -614,6 +631,7 @@ private struct ShortcutRecorderRow: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.secondary)
                     .frame(width: layout.rowIconWidth, height: layout.rowIconWidth)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(presentation.title)
@@ -694,9 +712,15 @@ private struct ShortcutRecorderRow: View {
             .frame(maxWidth: layout.rowContentWidth, alignment: .leading)
 
             if let message = errorMessage ?? registrationMessage {
-                Label(message, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.yellow)
+                Label {
+                    Text(message)
+                        .foregroundStyle(.primary)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                        .accessibilityHidden(true)
+                }
+                .font(.caption)
             }
         }
         .onDisappear {

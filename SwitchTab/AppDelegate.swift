@@ -377,6 +377,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarStatusItemController: MenuBarStatusItemController?
     private var settingsWindowController: SettingsWindowController?
     private var aboutWindowController: AboutWindowController?
+    private let auxiliaryWindowActivationCoordinator = AuxiliaryWindowActivationPolicyCoordinator(
+        policyApplier: NSApplicationActivationPolicyApplier()
+    )
     private var shortcutRecordingDidBeginObserver: NSObjectProtocol?
     private var shortcutRecordingDidEndObserver: NSObjectProtocol?
     private var applicationDidBecomeActiveObserver: NSObjectProtocol?
@@ -1172,9 +1175,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshSwitchingGuide()
         if settingsWindowController == nil {
             settingsWindowController = SettingsWindowController(
-                activationCoordinator: SettingsActivationPolicyCoordinator(
-                    policyApplier: NSApplicationActivationPolicyApplier()
-                ),
+                activationCoordinator: auxiliaryWindowActivationCoordinator,
                 updateChecker: updateChecker,
                 onShortcutChanged: { [weak self] candidate, previous in
                     self?.applyShortcutChange(
@@ -1273,7 +1274,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showAboutWindow() {
         if aboutWindowController == nil {
-            aboutWindowController = AboutWindowController { [weak self] in
+            aboutWindowController = AboutWindowController(
+                activationCoordinator: auxiliaryWindowActivationCoordinator
+            ) { [weak self] in
                 guard let self else {
                     return AboutSwitchTabContent.current(
                         usageDashboard: .empty

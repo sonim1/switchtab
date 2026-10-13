@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import SwitchTab
+import XCTest
 
 enum ShortcutSettingsViewModelPermissionTests {
     static func run() throws {
@@ -85,5 +86,18 @@ enum ShortcutSettingsViewModelPermissionTests {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
+    }
+}
+
+final class OptionalPreviewPermissionSummaryTests: XCTestCase {
+    func testMissingPreviewsStillCommunicatesWindowSwitchingAvailability() {
+        let state = PermissionState(accessibility: .granted, screenRecording: .missing)
+        let summary = SettingsPermissionSummary(permissionState: state)
+
+        XCTAssertFalse(state.blocksFocusChanges)
+        XCTAssertTrue(state.blocksWindowPreviews)
+        XCTAssertEqual(summary.title, "Previews off")
+        XCTAssertEqual(summary.detail, "Window switching is available.")
+        XCTAssertTrue(summary.showsStatusPill)
     }
 }

@@ -36,7 +36,7 @@ struct SwitchingGuideView: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 } else if model.windowShortcut == nil {
-                    Text("Enable and register Current App Windows in Shortcut before practicing.")
+                    Text("Enable and register Current App Windows in Shortcuts before practicing.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -51,11 +51,12 @@ struct SwitchingGuideView: View {
 
                 Text(statusText)
                     .font(.callout)
-                    .foregroundStyle(model.state == .completed ? .green : .secondary)
+                    .foregroundStyle(model.state == .completed ? .primary : .secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("switching-practice-status")
             }
             .padding(.vertical, 4)
+            .accessibilityElement(children: .contain)
         }
     }
 
@@ -68,6 +69,7 @@ struct SwitchingGuideView: View {
                 .multilineTextAlignment(.trailing)
                 .textSelection(.enabled)
         }
+        .accessibilityElement(children: .combine)
     }
 
     private var statusText: String {
@@ -87,7 +89,7 @@ struct SwitchingGuideView: View {
             case .accessibilityRequired:
                 "Accessibility is unavailable. Allow it in Permissions and try again."
             case .shortcutUnavailable:
-                "The window shortcut is unavailable or changed. Check Shortcut and try again."
+                "The window shortcut is unavailable or changed. Check Shortcuts and try again."
             case .applicationUnavailable:
                 "Open another app with a window, then return here and start practice."
             case .noWindows:

@@ -155,6 +155,9 @@ private struct SwitcherWindowTile: View {
                 Text(SwitcherOverlayAccessibilityPolicy.switchLabel(for: item, mode: mode))
             )
             .accessibilityHint(Text(windowAccessibilityHint))
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+            .accessibilityValue(Text(isSelected ? "Selected" : "Not selected"))
+            .accessibilityIdentifier(item.id)
 
             if showsCloseControl && (isSelected || isHovered) {
                 closeButton
