@@ -125,7 +125,7 @@ private enum SettingsPanel: String, CaseIterable, Identifiable {
         case .general:
             "General"
         case .shortcut:
-            "Shortcut"
+            "Shortcuts"
         case .permissions:
             "Permissions"
         case .practice:
@@ -156,15 +156,18 @@ private struct SettingsHeader: View {
                 .resizable()
                 .frame(width: 42, height: 42)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("SwitchTab")
                     .font(.title2.weight(.semibold))
+                    .accessibilityHeading(.h1)
 
-                Text("Window switching for the active app.")
+                Text("Application and window switching.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+            .accessibilityElement(children: .contain)
 
             Spacer(minLength: 20)
 
@@ -176,6 +179,7 @@ private struct SettingsHeader: View {
         .padding(.horizontal, 24)
         .padding(.top, 22)
         .padding(.bottom, 18)
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -186,6 +190,7 @@ private struct SettingsStatusPill: View {
         HStack(spacing: 8) {
             Image(systemName: summary.symbolName)
                 .foregroundStyle(summary.isReady ? .green : .yellow)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(summary.title)
@@ -207,6 +212,7 @@ private struct SettingsStatusPill: View {
                 .stroke((summary.isReady ? Color.green : Color.yellow).opacity(0.22))
         )
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -398,15 +404,18 @@ struct SettingsSection<Content: View>: View {
                     .frame(width: 28, height: 28)
                     .background(Color.primary.opacity(0.06))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.headline.weight(.semibold))
+                        .accessibilityHeading(.h2)
 
                     Text(subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .accessibilityElement(children: .contain)
             }
 
             VStack(spacing: 0) {
@@ -421,6 +430,7 @@ struct SettingsSection<Content: View>: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -436,6 +446,7 @@ private struct SettingsRow<Control: View>: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.secondary)
                 .frame(width: 28, height: 28)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -620,6 +631,7 @@ private struct ShortcutRecorderRow: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.secondary)
                     .frame(width: layout.rowIconWidth, height: layout.rowIconWidth)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(presentation.title)

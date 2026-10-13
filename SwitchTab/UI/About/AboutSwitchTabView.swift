@@ -28,11 +28,13 @@ public struct AboutSwitchTabView: View {
                         .scaledToFit()
                         .frame(width: 164, height: 164)
                         .shadow(color: .black.opacity(0.35), radius: 18, y: 10)
+                        .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 14) {
                         Text("SwitchTab")
                             .font(.system(size: 34, weight: .bold))
                             .foregroundStyle(.white)
+                            .accessibilityHeading(.h1)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(content.versionLine)
                                 .font(.system(size: 17, weight: .semibold))
@@ -43,15 +45,17 @@ public struct AboutSwitchTabView: View {
                                     .foregroundStyle(.white.opacity(0.52))
                             }
                         }
-                        Text("A keyboard-first macOS switcher for jumping between current-app windows with quick visual previews.")
+                        .accessibilityElement(children: .combine)
+                        Text("Keyboard shortcuts for switching applications and their windows, with quick visual previews.")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.9))
                             .fixedSize(horizontal: false, vertical: true)
-                        Text("SwitchTab runs locally and keeps its usage dashboard limited to shortcut counts on this Mac.")
+                        Text("The local dashboard counts window shortcut uses, including cancelled selections.")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(.white.opacity(0.68))
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    .accessibilityElement(children: .contain)
                 }
 
                 Divider()
@@ -67,6 +71,7 @@ public struct AboutSwitchTabView: View {
         }
         .frame(width: AboutWindowSizingPolicy.contentSize.width, height: AboutWindowSizingPolicy.contentSize.height)
         .background(Color(nsColor: NSColor(red: 0.16, green: 0.18, blue: 0.18, alpha: 1)))
+        .accessibilityElement(children: .contain)
     }
 
     private var usageDashboard: some View {
@@ -74,6 +79,7 @@ public struct AboutSwitchTabView: View {
             Text(content.todaySummaryLine)
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.92))
+                .accessibilityHeading(.h2)
 
             HStack(spacing: 14) {
                 ForEach(content.usageDashboard.rows, id: \.title) { row in
@@ -81,6 +87,7 @@ public struct AboutSwitchTabView: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
     }
 
     private func usageTile(_ row: UsageDashboardRow) -> some View {
@@ -105,6 +112,7 @@ public struct AboutSwitchTabView: View {
         .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
         .background(Color.white.opacity(0.07))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
     }
 
     private var bottomBar: some View {
