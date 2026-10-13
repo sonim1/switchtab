@@ -63,21 +63,52 @@ public protocol ApplicationActivationPolicyApplying {
 }
 
 @MainActor
-public final class SettingsActivationPolicyCoordinator {
+public final class AuxiliaryWindowActivationPolicyCoordinator {
+    private enum Owner: Hashable {
+        case settings
+        case about
+    }
+
     private let policyApplier: any ApplicationActivationPolicyApplying
+    private var visibleOwners: Set<Owner> = []
 
     public init(policyApplier: any ApplicationActivationPolicyApplying) {
         self.policyApplier = policyApplier
     }
 
     public func settingsWindowWillShow() {
-        policyApplier.apply(.regular)
+        willShow(.settings)
     }
 
     public func settingsWindowDidClose() {
-        policyApplier.apply(.accessory)
+        didClose(.settings)
+    }
+
+    public func aboutWindowWillShow() {
+        willShow(.about)
+    }
+
+    public func aboutWindowDidClose() {
+        didClose(.about)
+    }
+
+    private func willShow(_ owner: Owner) {
+        let wasEmpty = visibleOwners.isEmpty
+        guard visibleOwners.insert(owner).inserted else { return }
+        if wasEmpty {
+            policyApplier.apply(.regular)
+        }
+    }
+
+    private func didClose(_ owner: Owner) {
+        guard visibleOwners.remove(owner) != nil else { return }
+        if visibleOwners.isEmpty {
+            policyApplier.apply(.accessory)
+        }
     }
 }
+
+public typealias SettingsActivationPolicyCoordinator = AuxiliaryWindowActivationPolicyCoordinator
 
 @MainActor
 public final class NSApplicationActivationPolicyApplier: ApplicationActivationPolicyApplying {
@@ -91,12 +122,12 @@ public final class NSApplicationActivationPolicyApplier: ApplicationActivationPo
 @MainActor
 public final class SettingsWindowController {
     private let window: NSPanel
-    private let activationCoordinator: SettingsActivationPolicyCoordinator
+    private let activationCoordinator: AuxiliaryWindowActivationPolicyCoordinator
     private let recordingCoordinator: ShortcutRecordingCoordinator
     private let windowDelegate: WindowCloseDelegate
 
     public init(
-        activationCoordinator: SettingsActivationPolicyCoordinator,
+        activationCoordinator: AuxiliaryWindowActivationPolicyCoordinator,
         recordingCoordinator: ShortcutRecordingCoordinator? = nil,
         updateChecker: (any UpdateChecking)? = nil,
         onShortcutChanged: @escaping (

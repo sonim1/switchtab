@@ -14,10 +14,18 @@ public final class AboutWindowController {
     private let window: NSPanel
     private let hostingController: NSHostingController<AboutSwitchTabView>
     private let contentProvider: () -> AboutSwitchTabContent
+    private let activationCoordinator: AuxiliaryWindowActivationPolicyCoordinator
     private let windowDelegate: WindowCloseDelegate
 
-    public init(contentProvider: @escaping () -> AboutSwitchTabContent) {
+    public init(
+        activationCoordinator: AuxiliaryWindowActivationPolicyCoordinator? = nil,
+        contentProvider: @escaping () -> AboutSwitchTabContent
+    ) {
+        let activationCoordinator = activationCoordinator ?? AuxiliaryWindowActivationPolicyCoordinator(
+            policyApplier: NSApplicationActivationPolicyApplier()
+        )
         self.contentProvider = contentProvider
+        self.activationCoordinator = activationCoordinator
 
         let initialView = AboutSwitchTabView(
             content: Self.placeholderContent,
@@ -35,7 +43,7 @@ public final class AboutWindowController {
         )
 
         let windowDelegate = WindowCloseDelegate {
-            NSApp.setActivationPolicy(.accessory)
+            activationCoordinator.aboutWindowDidClose()
         }
         window.delegate = windowDelegate
 
@@ -50,7 +58,7 @@ public final class AboutWindowController {
             onContactSupport: Self.openSupportEmail,
             onAcknowledgments: Self.showAcknowledgments
         )
-        NSApp.setActivationPolicy(.regular)
+        activationCoordinator.aboutWindowWillShow()
         FloatingPanelFactory.show(window)
     }
 
