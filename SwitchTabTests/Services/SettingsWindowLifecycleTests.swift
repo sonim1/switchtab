@@ -4,6 +4,20 @@ import XCTest
 
 @MainActor
 final class SettingsWindowLifecycleTests: XCTestCase {
+    func testAuxiliaryPanelsDoNotHideWhenTheApplicationDeactivates() {
+        _ = NSApplication.shared
+        let controller = NSViewController()
+        controller.view = NSView(frame: NSRect(origin: .zero, size: SettingsWindowSizingPolicy.contentSize))
+        let panel = FloatingPanelFactory.panel(
+            title: "SwitchTab panel policy test",
+            contentSize: SettingsWindowSizingPolicy.contentSize,
+            contentViewController: controller
+        )
+
+        XCTAssertFalse(panel.hidesOnDeactivate)
+        panel.close()
+    }
+
     func testCancelClearsOwnershipBeforeStoppingRecordingExactlyOnce() {
         let coordinator = ShortcutRecordingCoordinator()
         var stops = 0
