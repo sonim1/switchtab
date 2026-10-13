@@ -136,8 +136,8 @@ public struct SettingsPermissionSummary: Equatable, Sendable {
             self.title = "Needs Accessibility"
             self.detail = "Focus needs access."
         case (false, true):
-            self.title = "Needs Screen Recording"
-            self.detail = "Previews need access."
+            self.title = "Previews off"
+            self.detail = "Window switching is available."
         case (true, true):
             self.title = "Needs 2 permissions"
             self.detail = "Focus and previews need access."

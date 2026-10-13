@@ -372,7 +372,7 @@ private struct PermissionsSettingsPanel: View {
     var body: some View {
         SettingsSection(
             title: "Permissions",
-            subtitle: "SwitchTab only asks for access needed to focus windows and show previews.",
+            subtitle: "Accessibility enables focus. Screen Recording is optional and enables previews.",
             symbolName: "lock.shield"
         ) {
             PermissionStatusView(items: viewModel.permissionState.permissionStatusItems) { destination in
