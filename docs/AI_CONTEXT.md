@@ -72,7 +72,9 @@
 - Defaults are Command-Backtick for current-app windows and Command-Tab for applications. Their reverse variants add Shift.
 - `ApplicationSettingsStore.swift` persists launch-at-login, menu-bar visibility, overlay size, update-check preferences, and migration state.
 - Registration errors are persisted per mode so Settings can explain why a saved shortcut is not active.
-- Settings hides the permission status pill while both permissions are healthy and shows it only when user action is required.
+- Settings owns shortcut recording across its retained window lifetime. Close and Practice hide explicitly cancel the recording coordinator; SwiftUI onDisappear is a backup, not the window-close contract.
+- Settings and About share AuxiliaryWindowActivationPolicyCoordinator. Owner membership is idempotent; the first owner makes the app regular and the last close returns accessory. Their normal-level panels remain visible on deactivation.
+- Settings hides the permission status pill while both permissions are healthy. A previews-only missing state explicitly says window switching remains available; recovery instructions are visible inline.
 
 ## Updates and Releases
 
@@ -113,6 +115,7 @@ SPARKLE_PUBLIC_ED_KEY=dummy scripts/build-direct-distribution.sh --prepare-only
 - A successful build proves compilation, not macOS permission-dependent behavior. Runtime claims require testing the built app with Accessibility permission and, for previews, Screen Recording permission.
 - Manual switching checks should cover Finder, Safari, and another multi-window app; forward/reverse traversal; release and click confirmation; Escape cancellation; both permission states; shortcut enable/disable; and restoration of native Command-Tab.
 - New model/service behavior belongs in `SwitchTabTests/`. Legacy static `run()` suites must be registered in `SwitchTabTests/TestRunner.swift`; native `XCTestCase` methods are auto-discovered.
+- `docs/native-product-qa.md` covers nonshipping view-state/owned-window fixtures and bounded System Events scenarios. Tile AX identifiers reuse existing model IDs; selected traits/values must follow the same session state as the visual selection. Native tests must validate exact owned targets and restore their changes.
 
 ## Documentation Routing
 
