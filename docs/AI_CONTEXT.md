@@ -114,7 +114,7 @@ SPARKLE_PUBLIC_ED_KEY=dummy scripts/build-direct-distribution.sh --prepare-only
 
 - A successful build proves compilation, not macOS permission-dependent behavior. Runtime claims require testing the built app with Accessibility permission and, for previews, Screen Recording permission.
 - Manual switching checks should cover Finder, Safari, and another multi-window app; forward/reverse traversal; release and click confirmation; Escape cancellation; both permission states; shortcut enable/disable; and restoration of native Command-Tab.
-- New model/service behavior belongs in `SwitchTabTests/`. Legacy static `run()` suites must be registered in `SwitchTabTests/TestRunner.swift`; native `XCTestCase` methods are auto-discovered.
+- New model/service behavior belongs in `SwitchTabTests/`. Legacy static `run()` suites each have a named XCTest method in `SwitchTabTests/TestRunner.swift`, so failures and filtered runs identify the functional suite; native `XCTestCase` methods are auto-discovered.
 - `docs/native-product-qa.md` covers nonshipping view-state/owned-window fixtures and bounded System Events scenarios. Tile AX identifiers reuse existing model IDs; selected traits/values must follow the same session state as the visual selection. Native tests must validate exact owned targets and restore their changes.
 
 ## Documentation Routing
