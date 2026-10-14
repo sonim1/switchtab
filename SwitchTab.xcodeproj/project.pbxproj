@@ -55,6 +55,7 @@
 		A00000000000000000000047 /* ShortcutCaptureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000051 /* ShortcutCaptureTests.swift */; };
 		A00000000000000000000048 /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000052 /* SettingsWindowController.swift */; };
 		A00000000000000000000051 /* SwitcherIconStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000055 /* SwitcherIconStripView.swift */; };
+		AA841621C8AA4E319E967B01 /* SwitcherAccessibleTileButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA841621C8AA4E319E967B02 /* SwitcherAccessibleTileButton.swift */; };
 		A00000000000000000000054 /* SwitcherOverlayPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000058 /* SwitcherOverlayPresentationTests.swift */; };
 		A00000000000000000000055 /* SwitcherOverlayConfirmationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000059 /* SwitcherOverlayConfirmationTests.swift */; };
 		A00000000000000000000058 /* ShortcutSettingsViewModelPermissionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000062 /* ShortcutSettingsViewModelPermissionTests.swift */; };
@@ -164,6 +165,7 @@
 		B00000000000000000000051 /* ShortcutCaptureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutCaptureTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000052 /* SettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowController.swift; sourceTree = "<group>"; };
 		B00000000000000000000055 /* SwitcherIconStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherIconStripView.swift; sourceTree = "<group>"; };
+		AA841621C8AA4E319E967B02 /* SwitcherAccessibleTileButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherAccessibleTileButton.swift; sourceTree = "<group>"; };
 		B00000000000000000000058 /* SwitcherOverlayPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayPresentationTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000059 /* SwitcherOverlayConfirmationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayConfirmationTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000062 /* ShortcutSettingsViewModelPermissionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutSettingsViewModelPermissionTests.swift; sourceTree = "<group>"; };
@@ -324,6 +326,7 @@
 				B00000000000000000000069 /* SwitcherOverlayLayoutPolicy.swift */,
 				B00000000000000000000050 /* SwitcherOverlayRootView.swift */,
 				B00000000000000000000055 /* SwitcherIconStripView.swift */,
+				AA841621C8AA4E319E967B02 /* SwitcherAccessibleTileButton.swift */,
 			);
 			path = Overlay;
 			sourceTree = "<group>";
@@ -587,6 +590,7 @@
 				A00000000000000000000070 /* AboutWindowController.swift in Sources */,
 				A00000000000000000000025 /* HotkeyService.swift in Sources */,
 				A00000000000000000000051 /* SwitcherIconStripView.swift in Sources */,
+				AA841621C8AA4E319E967B01 /* SwitcherAccessibleTileButton.swift in Sources */,
 				A00000000000000000000027 /* PermissionStatusView.swift in Sources */,
 				A00000000000000000000031 /* AccessibilityWindowProvider.swift in Sources */,
 				A00000000000000000000104 /* RunningApplicationProvider.swift in Sources */,

@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SwitcherOverlayRootView: View {
     @ObservedObject private var presentationModel: SwitcherOverlayPresentationModel
+    private let presentationID: UInt64
     private let layoutSize: CGSize
     private let layoutMetrics: SwitcherOverlayLayoutMetrics
     private let requiresSelectionScrolling: Bool
@@ -16,6 +17,7 @@ struct SwitcherOverlayRootView: View {
 
     init(
         presentationModel: SwitcherOverlayPresentationModel,
+        presentationID: UInt64,
         layoutSize: CGSize,
         layoutMetrics: SwitcherOverlayLayoutMetrics,
         requiresSelectionScrolling: Bool,
@@ -28,6 +30,7 @@ struct SwitcherOverlayRootView: View {
         onThumbnailDemand: @escaping (SwitcherListItem) -> Void
     ) {
         self.presentationModel = presentationModel
+        self.presentationID = presentationID
         self.layoutSize = layoutSize
         self.layoutMetrics = layoutMetrics
         self.requiresSelectionScrolling = requiresSelectionScrolling
@@ -71,6 +74,7 @@ struct SwitcherOverlayRootView: View {
                 switchAccessibilityHint: SwitcherOverlayAccessibilityPolicy.switchHint(for: session.mode),
                 hoverEnabled: presentationModel.isHoverSelectionEnabled,
                 scrollToken: presentationModel.scrollToken,
+                accessibilityFocusRequest: presentationModel.accessibilityFocusRequest,
                 requiresSelectionScrolling: requiresSelectionScrolling,
                 thumbnailStore: thumbnailStore,
                 applicationIconStore: applicationIconStore,
@@ -79,6 +83,8 @@ struct SwitcherOverlayRootView: View {
                 onHover: onItemHovered,
                 onThumbnailDemand: onThumbnailDemand
             )
+            .id(session.items.map(\.id))
+            .id(presentationID)
         }
     }
 }
