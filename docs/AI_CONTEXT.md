@@ -45,6 +45,7 @@
 - Window and application MRU histories remain independent. Failed or cancelled activations do not promote an item.
 - A mode switch commits nothing: it keeps the panel, the event tap, and the modifiers that opened the session, so releasing them still confirms. A switch that finds no windows, no permission, or an unregistered target mode leaves the live session untouched. Resume memory lives for one held-modifier session and is cleared on dismissal.
 - Selection identity is stable across thumbnail/icon updates and candidate refreshes. Presentation updates must not cause panel-height or tile-position jumps.
+- Overlay VoiceOver focus follows explicit selection generations through native tile buttons after layout in a key panel. Metadata refreshes must not steal focus. Accessibility traversal starts at the initial selection and wraps forward, remaining fixed until a new presentation or item-identity sequence; visual order is unchanged. Close controls remain AX-exposed without taking ordinary keyboard focus.
 - Window discovery batches AX role, subrole, title, and minimized reads when the target supports it, falling back to individual reads without changing inclusion.
 - A minimized standard window may report the `AXDialog` subrole. Include it only when its role is `AXWindow` and its minimized state is confirmed; visible dialogs, sheets, and unknown panels remain excluded from discovery and counts.
 - Application window-count enrichment is latest-wins: stale queued scans do no AX work and stale in-flight results do not publish.

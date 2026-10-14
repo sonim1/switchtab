@@ -58,3 +58,52 @@ Record actual source/build and after-state for every row. Failed acquisition, ex
 Release Command/Shift/Control/Option, close only owned fixtures and verify no helper process remains. Restore the exact public app bundle and the values changed by the test. Restore only owned preference changes; never import an entire old domain over concurrent user changes. Address the direct preferences path explicitly when macOS defaults tooling redirects a bundle identifier to an App Store container.
 
 Do not claim VoiceOver speech, TCC revocation/relaunch, actual login registration, saved-document quit refusal, other OS versions or multiple displays from these fixtures. Record those as separate verification work. Baseline and final logs belong in an ignored local evidence directory; the audit report contains sanitized conclusions.
+
+## VoiceOver regression pass
+
+Run VoiceOver separately from ordinary AX-tree inspection. Enable its caption
+panel through VoiceOver Utility > Visuals > Panels and Menus, record its previous
+state, and restore that state and VoiceOver activation afterward. Caption
+screenshots establish generated utterances, not recorded audio quality. Apple's
+[caption-panel instructions](https://support.apple.com/guide/voiceover/use-the-braille-and-caption-panel-unac078/mac)
+describe the supported controls.
+
+Use the owned three-window fixture and a signed candidate with existing
+permissions. Keep the modifier held while inspecting the overlay; modifier
+release is a real confirmation, including accidental release by an input tool.
+
+1. Open with a non-first selected tile. Compare the visual highlight, AX selected
+   value and VoiceOver caption. All must identify the same owned window.
+2. Advance and reverse, including wrapping back to the first item. Confirm each
+   selected title is read and unselected titles are not announced as the target.
+3. Escape and reopen with the same items and selection. Repeat once more; retained
+   panel/view state must not leave VoiceOver on the first unselected tile.
+4. Exercise application mode and both mode handoffs. Initial and changed focus
+   must follow the selected app/window without committing during handoff.
+5. Release to confirm the owned target. Check the exact focused window. Repeat
+   cancellation and confirm the underlying focus did not change.
+6. Let thumbnails complete without moving selection. They must not steal
+   VoiceOver focus or repeat the selection announcement.
+7. In the view fixture, use VoiceOver navigation to enter the Permissions scroll
+   area and permission groups. Verify recovery instructions and both action
+   names are read. Do not activate Allow or change host TCC for this check.
+
+Opening the VoiceOver Quickstart app after its Use VoiceOver action exits it can
+create an unrelated launch error. Observe the running VoiceOver/target app after
+that action instead of re-querying the terminated Quickstart process.
+
+## Spaces and display evidence
+
+When an off-Space window is absent, compare raw `kAXWindowsAttribute` from the
+owned application with System Events and the overlay before changing inclusion
+rules. Record fullscreen entry and exit. A CGWindow list entry alone is not an
+actionable AX window and does not prove that exact-window focusing is possible.
+
+The 2026-10-14 host returned three owned AX windows on the desktop, one in an
+owned fullscreen Space, and three again after exit. This is an observed system
+enumeration limit on that host, not a demonstrated SwitchTab role-filter bug.
+
+Synthetic negative-origin, vertically stacked and missing-screen tests validate
+coordinate policy only. Physical monitor hot-plug, mixed scaling and Space
+assignment still require real display hardware; do not label these simulations
+as a multi-monitor E2E pass.
