@@ -70,6 +70,10 @@ final class SwitcherOverlayController {
         presentationModel.scrollToken
     }
 
+    var presentationAccessibilityFocusRequest: SwitcherOverlayAccessibilityFocusRequest? {
+        presentationModel.accessibilityFocusRequest
+    }
+
     @discardableResult
     func present(
         mode: SwitcherMode,
@@ -133,6 +137,7 @@ final class SwitcherOverlayController {
                 alternateModeKeyCode: alternateModeKeyCode
             )
             updatePresentationLayout(session: session, panel: panel)
+            requestSelectedAccessibilityFocus()
         } else {
             showPanel()
         }
@@ -173,6 +178,7 @@ final class SwitcherOverlayController {
         case .updated:
             presentationModel.advanceScrollToken()
             presentationModel.update(state)
+            requestSelectedAccessibilityFocus()
             requestSelectedThumbnail()
         case .confirmed, .cancelled:
             apply(result)
@@ -197,6 +203,7 @@ final class SwitcherOverlayController {
         self.panel = panel
         updatePresentationLayout(session: session, panel: panel)
         panel.makeKeyAndOrderFront(nil)
+        requestSelectedAccessibilityFocus()
         let tapInstalled = installEventTap()
         installEventMonitor()
         eventSink.record(.presented(
@@ -239,6 +246,7 @@ final class SwitcherOverlayController {
             return
         }
 
+        let selectedItemID = state.session?.selectedItem?.id
         switch state.removeItem(withID: id) {
         case .updated:
             guard let session = state.session, let panel else {
@@ -249,6 +257,7 @@ final class SwitcherOverlayController {
             presentationPointerLocation = NSEvent.mouseLocation
             presentationModel.advanceScrollToken()
             updatePresentationLayout(session: session, panel: panel)
+            requestSelectedAccessibilityFocusIfSelectionChanged(from: selectedItemID)
         case .cancelled:
             apply(.cancelled)
         case .none, .confirmed, .closeRequested, .quitRequested, .modeSwitchRequested:
@@ -266,6 +275,7 @@ final class SwitcherOverlayController {
             return
         }
 
+        let selectedItemID = state.session?.selectedItem?.id
         switch state.removeItem(withID: id) {
         case .updated:
             guard let session = state.session, let panel else {
@@ -276,6 +286,7 @@ final class SwitcherOverlayController {
             presentationPointerLocation = NSEvent.mouseLocation
             presentationModel.advanceScrollToken()
             updatePresentationLayout(session: session, panel: panel)
+            requestSelectedAccessibilityFocusIfSelectionChanged(from: selectedItemID)
         case .cancelled:
             apply(.cancelled)
         case .none, .confirmed, .closeRequested, .quitRequested, .modeSwitchRequested:
@@ -287,12 +298,14 @@ final class SwitcherOverlayController {
         _ items: [SwitcherListItem],
         presentationID: UInt64
     ) {
+        let selectedItemID = state.session?.selectedItem?.id
         guard presentationID == self.presentationID,
               state.updateApplicationItems(items) == .updated else {
             return
         }
 
         presentationModel.update(state)
+        requestSelectedAccessibilityFocusIfSelectionChanged(from: selectedItemID)
     }
 
     @discardableResult
@@ -362,6 +375,7 @@ final class SwitcherOverlayController {
 
         let rootView = SwitcherOverlayRootView(
             presentationModel: presentationModel,
+            presentationID: presentationID,
             layoutSize: layoutSize,
             layoutMetrics: presentationLayoutMetrics,
             requiresSelectionScrolling: presentationRequiresSelectionScrolling,
@@ -683,7 +697,22 @@ final class SwitcherOverlayController {
         onThumbnailDemand?(item, .selected)
     }
 
+    private func requestSelectedAccessibilityFocus() {
+        guard let itemID = state.session?.selectedItem?.id else {
+            return
+        }
+        presentationModel.requestAccessibilityFocus(for: itemID)
+    }
+
+    private func requestSelectedAccessibilityFocusIfSelectionChanged(from previousItemID: String?) {
+        guard state.session?.selectedItem?.id != previousItemID else {
+            return
+        }
+        requestSelectedAccessibilityFocus()
+    }
+
     private func endPresentation() {
+        presentationModel.clearAccessibilityFocusRequest()
         presentationModel.update(state)
         panel?.orderOut(nil)
         removeEventTap()

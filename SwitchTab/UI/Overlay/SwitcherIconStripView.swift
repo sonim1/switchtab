@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct SwitcherIconStripView: View {
+    @State private var initialAccessibilityItemID: String?
     private let items: [SwitcherListItem]
     private let selectedIndex: Int
     private let mode: SwitcherMode
@@ -13,6 +14,7 @@ struct SwitcherIconStripView: View {
     private let onThumbnailDemand: (SwitcherListItem) -> Void
     private let hoverEnabled: Bool
     private let scrollToken: Int
+    private let accessibilityFocusRequest: SwitcherOverlayAccessibilityFocusRequest?
     private let requiresSelectionScrolling: Bool
     private let thumbnailStore: WindowThumbnailStore
     private let applicationIconStore: ApplicationIconStore
@@ -29,6 +31,7 @@ struct SwitcherIconStripView: View {
         switchAccessibilityHint: String = "Switch to this window.",
         hoverEnabled: Bool,
         scrollToken: Int,
+        accessibilityFocusRequest: SwitcherOverlayAccessibilityFocusRequest?,
         requiresSelectionScrolling: Bool = true,
         thumbnailStore: WindowThumbnailStore,
         applicationIconStore: ApplicationIconStore,
@@ -38,6 +41,7 @@ struct SwitcherIconStripView: View {
         onThumbnailDemand: @escaping (SwitcherListItem) -> Void = { _ in }
     ) {
         self.items = items
+        _initialAccessibilityItemID = State(initialValue: items.indices.contains(selectedIndex) ? items[selectedIndex].id : nil)
         self.selectedIndex = selectedIndex
         self.gridColumns = gridColumns
         self.layoutMetrics = layoutMetrics
@@ -46,6 +50,7 @@ struct SwitcherIconStripView: View {
         self.switchAccessibilityHint = switchAccessibilityHint
         self.hoverEnabled = hoverEnabled
         self.scrollToken = scrollToken
+        self.accessibilityFocusRequest = accessibilityFocusRequest
         self.requiresSelectionScrolling = requiresSelectionScrolling
         self.thumbnailStore = thumbnailStore
         self.applicationIconStore = applicationIconStore
@@ -72,6 +77,7 @@ struct SwitcherIconStripView: View {
                                 showsCloseControl: showsCloseControl,
                                 switchAccessibilityHint: switchAccessibilityHint,
                                 hoverEnabled: hoverEnabled,
+                                accessibilityFocusRequest: accessibilityFocusRequest,
                                 layoutMetrics: layoutMetrics,
                                 thumbnailStore: thumbnailStore,
                                 applicationIconStore: applicationIconStore,
@@ -79,6 +85,7 @@ struct SwitcherIconStripView: View {
                                 onClose: onClose,
                                 onHover: onHover
                             )
+                            .accessibilitySortPriority(accessibilityPriority(for: index))
                             .id(item.id)
                             .onAppear {
                                 onThumbnailDemand(item)
@@ -111,6 +118,11 @@ struct SwitcherIconStripView: View {
         )
     }
 
+    private func accessibilityPriority(for index: Int) -> Double {
+        let start = items.firstIndex { $0.id == initialAccessibilityItemID } ?? 0
+        return Double(items.count - (index - start + items.count) % items.count)
+    }
+
     private func scrollToSelected(using proxy: ScrollViewProxy) {
         guard requiresSelectionScrolling, items.count > 1 else {
             return
@@ -133,6 +145,7 @@ private struct SwitcherWindowTile: View {
     let showsCloseControl: Bool
     let switchAccessibilityHint: String
     let hoverEnabled: Bool
+    let accessibilityFocusRequest: SwitcherOverlayAccessibilityFocusRequest?
     let layoutMetrics: SwitcherOverlayLayoutMetrics
     @ObservedObject var thumbnailStore: WindowThumbnailStore
     let applicationIconStore: ApplicationIconStore
@@ -145,19 +158,22 @@ private struct SwitcherWindowTile: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Button {
-                onConfirm(item, index)
-            } label: {
+            SwitcherAccessibleTileButton(
+                identifier: item.id,
+                label: SwitcherOverlayAccessibilityPolicy.switchLabel(for: item, mode: mode),
+                hint: windowAccessibilityHint,
+                value: isSelected ? "Selected" : "Not selected",
+                isSelected: isSelected,
+                focusRequest: accessibilityFocusRequest,
+                onPress: { onConfirm(item, index) }
+            ) {
                 tileContent(for: item)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(
-                Text(SwitcherOverlayAccessibilityPolicy.switchLabel(for: item, mode: mode))
+            .frame(
+                width: layoutMetrics.tileSize.width,
+                height: layoutMetrics.tileSize.height
             )
-            .accessibilityHint(Text(windowAccessibilityHint))
-            .accessibilityAddTraits(isSelected ? .isSelected : [])
-            .accessibilityValue(Text(isSelected ? "Selected" : "Not selected"))
-            .accessibilityIdentifier(item.id)
+            .accessibilitySortPriority(1)
 
             if showsCloseControl && (isSelected || isHovered) {
                 closeButton
@@ -320,6 +336,7 @@ private struct SwitcherWindowTile: View {
                 )
         }
         .buttonStyle(.plain)
+        .focusable(false)
         .frame(
             width: layoutMetrics.closeButtonHitTargetSize.width,
             height: layoutMetrics.closeButtonHitTargetSize.height

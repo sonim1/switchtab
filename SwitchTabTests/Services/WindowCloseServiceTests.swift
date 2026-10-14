@@ -307,6 +307,7 @@ enum WindowCloseServiceTests {
             mode: .applicationSwitching,
             hoverEnabled: true,
             scrollToken: 0,
+            accessibilityFocusRequest: nil,
             thumbnailStore: WindowThumbnailStore(),
             applicationIconStore: ApplicationIconStore(),
             onConfirm: { item, _ in confirmedIDs.append(item.id) },
@@ -333,6 +334,16 @@ enum WindowCloseServiceTests {
         }
         hostingController.view.layoutSubtreeIfNeeded()
         hostingController.view.displayIfNeeded()
+        guard let tileButton = nativeTileButton(in: hostingController.view) else {
+            throw TestFailure.failed("Expected native accessible tile button")
+        }
+        try expectTrue(tileButton.isAccessibilityElement())
+        try expectEqual(tileButton.accessibilityRole(), .button)
+        try expectEqual(tileButton.accessibilityIdentifier(), "window-0")
+        try expectEqual(tileButton.accessibilityLabel(), "Window 0")
+        try expectEqual(tileButton.accessibilityHelp(), "Switch to this window.")
+        try expectEqual(tileButton.accessibilityValue() as? String, "Selected")
+        try expectTrue(tileButton.isAccessibilitySelected())
         let hitTarget = metrics.closeButtonHitTargetSize
         let localPoint = NSPoint(
             x: metrics.tileSize.width - (hitTarget.width / 2),
@@ -371,6 +382,8 @@ enum WindowCloseServiceTests {
 
         try expectEqual(confirmedIDs, [])
         try expectEqual(closedIDs, ["window-0"])
+        tileButton.performClick(nil)
+        try expectEqual(confirmedIDs, ["window-0"])
     }
 
     static func testMinimumScaleCloseTargetIsAtLeastTwentyFourPoints() throws {
@@ -401,6 +414,18 @@ enum WindowCloseServiceTests {
                 isFocused: index == 0
             )
         }
+    }
+
+    private static func nativeTileButton(in view: NSView) -> AccessibleTileButton? {
+        if let button = view as? AccessibleTileButton {
+            return button
+        }
+        for subview in view.subviews {
+            if let button = nativeTileButton(in: subview) {
+                return button
+            }
+        }
+        return nil
     }
 
 }
