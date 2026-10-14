@@ -35,6 +35,9 @@ enum SwitcherOverlayPresentationPolicyTests {
         try testHoverRemainsCorrectAfterConfirmedCloseRerender()
         try testActiveScreenFramePrefersScreenContainingPointer()
         try testActiveScreenFrameFallsBackWhenPointerOutsideAllScreens()
+        try testActiveScreenFrameHandlesNegativeAndVerticalDisplayOrigins()
+        try testPanelOriginUsesOffsetVisibleFrame()
+        try testActiveScreenFrameWithoutScreensOrFallbackIsNil()
     }
 
     static func testSwitcherOverlayDoesNotActivateApplication() throws {
@@ -948,6 +951,48 @@ enum SwitcherOverlayPresentationPolicyTests {
         )
 
         try expectEqual(frame, primary)
+    }
+
+    static func testActiveScreenFrameHandlesNegativeAndVerticalDisplayOrigins() throws {
+        let primary = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+        let left = CGRect(x: -1440, y: -200, width: 1440, height: 900)
+        let above = CGRect(x: 0, y: 1080, width: 1200, height: 1920)
+        for (pointer, expected) in [
+            (CGPoint(x: -700, y: -100), left),
+            (CGPoint(x: 600, y: 2000), above),
+            (CGPoint(x: 0, y: 400), primary)
+        ] {
+            try expectEqual(
+                SwitcherOverlayPresentationPolicy.activeScreenFrame(
+                    pointerLocation: pointer,
+                    screenFrames: [left, primary, above],
+                    fallback: primary
+                ),
+                expected
+            )
+        }
+    }
+
+    static func testPanelOriginUsesOffsetVisibleFrame() throws {
+        let visibleFrame = CGRect(x: -1400, y: -160, width: 1360, height: 820)
+        let panelSize = CGSize(width: 600, height: 300)
+        let origin = SwitcherOverlayPresentationPolicy.panelOrigin(
+            panelSize: panelSize,
+            screenFrame: visibleFrame
+        )
+        try expectEqual(origin, CGPoint(x: -1020, y: 100))
+        try expectTrue(visibleFrame.contains(CGRect(origin: origin, size: panelSize)))
+    }
+
+    static func testActiveScreenFrameWithoutScreensOrFallbackIsNil() throws {
+        try expectEqual(
+            SwitcherOverlayPresentationPolicy.activeScreenFrame(
+                pointerLocation: CGPoint(x: -500, y: 300),
+                screenFrames: [],
+                fallback: nil
+            ),
+            nil
+        )
     }
 }
 
