@@ -10,6 +10,7 @@ final class SwitcherOverlayController {
     private var state = SwitcherOverlayState()
     private let presentationModel = SwitcherOverlayPresentationModel()
     private var panel: SwitcherOverlayPanel?
+    var visiblePanelFrame: CGRect? { panel?.isVisible == true ? panel?.frame : nil }
     private var hostingController: NSHostingController<SwitcherOverlayRootView>?
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?

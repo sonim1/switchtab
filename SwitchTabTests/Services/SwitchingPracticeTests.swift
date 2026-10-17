@@ -45,7 +45,8 @@ final class SwitchingPracticeTests: XCTestCase {
         XCTAssertTrue(model.begin())
         let generation = try XCTUnwrap(model.confirm(windowID: "42-7", result: .focused))
         XCTAssertFalse(model.hasCompletedPractice)
-        model.verify(generation: generation, focusedWindowID: "42-7")
+        XCTAssertTrue(model.verify(generation: generation, focusedWindowID: "42-7"))
+        XCTAssertFalse(model.verify(generation: generation, focusedWindowID: "42-7"))
         XCTAssertTrue(model.hasCompletedPractice)
         XCTAssertEqual(model.state, .completed)
     }
@@ -54,9 +55,10 @@ final class SwitchingPracticeTests: XCTestCase {
         let model = makeModel()
         XCTAssertTrue(model.begin())
         let generation = try XCTUnwrap(model.confirm(windowID: "42-7", result: .focused))
-        model.verify(generation: generation, focusedWindowID: "42-8")
+        XCTAssertFalse(model.verify(generation: generation, focusedWindowID: "42-8"))
         XCTAssertFalse(model.hasCompletedPractice)
         XCTAssertEqual(model.state, .failed(.focusNotConfirmed))
+        XCTAssertFalse(model.verify(generation: generation, focusedWindowID: "42-7"))
     }
 
     func testUnavailableAndPermissionBlockedFocusNeverComplete() {
@@ -79,7 +81,7 @@ final class SwitchingPracticeTests: XCTestCase {
         XCTAssertTrue(model.begin())
         let generation = try XCTUnwrap(model.confirm(windowID: "42-7", result: .focused))
         model.cancel()
-        model.verify(generation: generation, focusedWindowID: "42-7")
+        XCTAssertFalse(model.verify(generation: generation, focusedWindowID: "42-7"))
         XCTAssertFalse(model.hasCompletedPractice)
         XCTAssertEqual(model.state, .cancelled)
     }
@@ -90,9 +92,9 @@ final class SwitchingPracticeTests: XCTestCase {
         let previous = try XCTUnwrap(model.confirm(windowID: "42-7", result: .focused))
         XCTAssertTrue(model.begin())
         let current = try XCTUnwrap(model.confirm(windowID: "42-9", result: .focused))
-        model.verify(generation: previous, focusedWindowID: "42-7")
+        XCTAssertFalse(model.verify(generation: previous, focusedWindowID: "42-7"))
         XCTAssertFalse(model.hasCompletedPractice)
-        model.verify(generation: current, focusedWindowID: "42-9")
+        XCTAssertTrue(model.verify(generation: current, focusedWindowID: "42-9"))
         XCTAssertTrue(model.hasCompletedPractice)
     }
 

@@ -73,17 +73,19 @@ public final class SwitchingPracticeModel: ObservableObject {
         return verificationGeneration
     }
 
-    func verify(generation: Int, focusedWindowID: String?) {
-        guard state == .verifying, generation == verificationGeneration else { return }
+    @discardableResult
+    func verify(generation: Int, focusedWindowID: String?) -> Bool {
+        guard state == .verifying, generation == verificationGeneration else { return false }
         guard focusedWindowID == expectedWindowID else {
             fail(.focusNotConfirmed)
-            return
+            return false
         }
         expectedWindowID = nil
         hasCompletedPractice = true
         hasDismissedGuide = true
         userDefaults.set(true, forKey: "SwitchTab.practice.completed")
         state = .completed
+        return true
     }
 
     func cancel() {
