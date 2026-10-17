@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        A00000000000000000000119 /* SwitchingFeedbackController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000119 /* SwitchingFeedbackController.swift */; };
 		A00000000000000000000001 /* SwitchTabApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* SwitchTabApp.swift */; };
 		A00000000000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* AppDelegate.swift */; };
 		A00000000000000000000115 /* SwitcherPerformanceTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000115 /* SwitcherPerformanceTrace.swift */; };
@@ -113,6 +114,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+        B00000000000000000000119 /* SwitchingFeedbackController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchingFeedbackController.swift; sourceTree = "<group>"; };
 		B00000000000000000000001 /* SwitchTabApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchTabApp.swift; sourceTree = "<group>"; };
 		B00000000000000000000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		B00000000000000000000004 /* SwitcherMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherMode.swift; sourceTree = "<group>"; };
@@ -321,6 +323,7 @@
 			children = (
 				B00000000000000000000015 /* SwitcherOverlayState.swift */,
 				B00000000000000000000016 /* SwitcherOverlayController.swift */,
+                B00000000000000000000119 /* SwitchingFeedbackController.swift */,
 				B00000000000000000000098 /* SwitcherOverlayPresentationModel.swift */,
 				B00000000000000000000066 /* SwitcherOverlayPresentationPolicy.swift */,
 				B00000000000000000000069 /* SwitcherOverlayLayoutPolicy.swift */,
@@ -581,6 +584,7 @@
 				A00000000000000000000064 /* PermissionSettingsDestination.swift in Sources */,
 				A00000000000000000000015 /* SwitcherOverlayState.swift in Sources */,
 				A00000000000000000000016 /* SwitcherOverlayController.swift in Sources */,
+                A00000000000000000000119 /* SwitchingFeedbackController.swift in Sources */,
 				A00000000000000000000098 /* SwitcherOverlayPresentationModel.swift in Sources */,
 				A00000000000000000000062 /* SwitcherOverlayPresentationPolicy.swift in Sources */,
 				A00000000000000000000065 /* SwitcherOverlayLayoutPolicy.swift in Sources */,
@@ -755,7 +759,7 @@
 				CODE_SIGN_ENTITLEMENTS = SwitchTab/Resources/SwitchTab.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 42;
+				CURRENT_PROJECT_VERSION = 43;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -764,7 +768,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.31;
+				MARKETING_VERSION = 1.1.32;
 				PRODUCT_BUNDLE_IDENTIFIER = com.royjen.switchtab;
 				PRODUCT_NAME = SwitchTab;
 				SWIFT_VERSION = 5.0;
@@ -779,7 +783,7 @@
 				CODE_SIGN_ENTITLEMENTS = SwitchTab/Resources/SwitchTab.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 42;
+				CURRENT_PROJECT_VERSION = 43;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -788,7 +792,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.31;
+				MARKETING_VERSION = 1.1.32;
 				PRODUCT_BUNDLE_IDENTIFIER = com.royjen.switchtab;
 				PRODUCT_NAME = SwitchTab;
 				SWIFT_VERSION = 5.0;

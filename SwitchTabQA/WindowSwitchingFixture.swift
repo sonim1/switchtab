@@ -23,7 +23,8 @@ final class QALaunchDelegate: NSObject, NSApplicationDelegate {
         diagnostics.submenu = submenu
         mainMenu.addItem(diagnostics)
         NSApp.mainMenu = mainMenu
-        for (index, name) in ["A", "B", "C"].enumerated() {
+        let windowNames = CommandLine.arguments.contains("--empty-windows") ? [] : ["A", "B", "C"]
+        for (index, name) in windowNames.enumerated() {
             let window = NSWindow(contentRect: NSRect(x: 350 + index * 90, y: 320 + index * 50, width: 380, height: 220),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable],
                                   backing: .buffered, defer: false)

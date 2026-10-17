@@ -25,6 +25,13 @@ rtk proxy osascript -e 'tell application "System Events" to get unix id of first
 
 The fixture creates three disposable standard windows named SwitchTab Security QA A/B/C, a text field, a local Command-K probe and a Carbon Control-Option-F12 oracle. A successfully registered oracle plus an actual increment from external input verifies the input path. Pressing Verify probe handler checks only the handler and is not evidence of global delivery.
 
+For empty-list feedback, quit only the owned fixture and launch its built app
+with `open <fixture-app-path> --args --empty-windows`. This creates the same
+eligible regular application with no windows. Test fresh window switching and
+an application-to-window handoff; the latter must retain its selected app and
+held-modifier session. Relaunch without the argument for the normal three-window
+scenarios.
+
 Run a signed SwitchTab candidate with the same existing identity/path when testing established permissions. Preserve the installed bundle and relevant preferences first. Record source commit, binary hash, signature, permissions and original shortcuts. An unsigned app build is compilation evidence, not a replacement for this runtime check.
 
 ## Bounded global scenarios

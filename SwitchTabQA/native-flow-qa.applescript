@@ -14,6 +14,11 @@ on overlaySnapshot()
         if (count windows) is 0 then return resultText
         set nodes to entire contents of window 1
         repeat with node in nodes
+            if role of node is "AXStaticText" then
+                try
+                    if (value of attribute "AXIdentifier" of node) as text is "switching-feedback" then set resultText to resultText & "feedback=" & ((value of node) as text) & linefeed
+                end try
+            end if
             if role of node is "AXButton" then
                 set nodeValue to ""
                 set nodeLabel to ""

@@ -26,7 +26,7 @@ struct SwitchingGuideView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Text("Start Practice hides Settings and returns to your previous app. Use its window shortcut, then reopen How to Use to see the result. Screen Recording is optional; choosing a minimized window restores it.")
+                Text("Start Practice hides Settings and returns to your previous app. Use its window shortcut; a brief confirmation appears when the selected window receives focus. If you don't see it, reopen How to Use to check the result and try again. Screen Recording is optional; choosing a minimized window restores it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

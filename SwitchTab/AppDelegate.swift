@@ -342,6 +342,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private let applicationRecencyStore = SwitcherRecencyStore(mode: .applicationSwitching)
     private let usageMetricsStore = UsageMetricsStore()
     private let switchingPracticeModel = SwitchingPracticeModel()
+    private let switchingFeedbackController = SwitchingFeedbackController()
     private var practiceVerificationTask: Task<Void, Never>?
     private var lastExternalApplication: NSRunningApplication?
     private let hotkeyService = HotkeyService()
@@ -431,6 +432,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func applicationWillTerminate(_ _: Notification) {
+        switchingFeedbackController.dismiss()
         cancelSwitchingPractice()
         applicationForegroundCorrection.cancel()
         cancelThumbnailLoadingIfNeeded(preservingCachedThumbnails: false)
@@ -656,13 +658,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         debugLog("window count=\(windows.count)")
         guard !windows.isEmpty else {
             debugLog("no windows; leaving overlay unchanged=\(retainingSession)")
+            switchingFeedbackController.show(.noWindows, above: overlayController.visiblePanelFrame)
             guard !retainingSession else {
                 SwitcherPerformanceTrace.endInvocation(performanceInterval, itemCount: 0)
                 return false
             }
 
-            overlayController.dismiss()
             if switchingPracticeModel.isActive { switchingPracticeModel.fail(.noWindows) }
+            overlayController.dismiss()
             SwitcherPerformanceTrace.endInvocation(performanceInterval, itemCount: 0)
             return false
         }
@@ -683,6 +686,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             viewportPixelSize: viewportPixelSize,
             preservingCachedThumbnails: true
         )
+        switchingFeedbackController.dismiss()
         overlayController.present(
             mode: .currentAppWindowSwitching,
             items: snapshot.listItems,
@@ -782,6 +786,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { application in
             application.switcherListItem
         }
+        switchingFeedbackController.dismiss()
         guard let presentationID = overlayController.present(
             mode: .applicationSwitching,
             items: snapshot.listItems,
@@ -1170,6 +1175,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showSettingsWindow(showsGuide: Bool = false) {
+        switchingFeedbackController.dismiss()
         rememberExternalApplication(NSWorkspace.shared.frontmostApplication)
         cancelSwitchingPractice()
         refreshSwitchingGuide()
@@ -1223,6 +1229,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func beginSwitchingPractice() {
+        switchingFeedbackController.dismiss()
         cancelSwitchingPractice()
         overlayController?.dismiss()
         refreshSwitchingGuide()
@@ -1267,7 +1274,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 didVerifyFocus = false
             }
-            self.switchingPracticeModel.verify(generation: generation, focusedWindowID: didVerifyFocus ? window.id : nil)
+            if self.switchingPracticeModel.verify(generation: generation, focusedWindowID: didVerifyFocus ? window.id : nil) {
+                self.switchingFeedbackController.show(.practiceCompleted)
+            }
             self.practiceVerificationTask = nil
         }
     }
