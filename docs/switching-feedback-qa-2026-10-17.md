@@ -33,8 +33,8 @@ Host: Apple M1, macOS 26.5.1, one display. The Debug candidate was signed with
 the existing Developer ID and run at the established installation path using
 existing Accessibility and Screen Recording permissions.
 
-Candidate executable SHA-256:
-`e6c904a4ba5e481337bc4fc20d8b2a01e820432d895ceff823d34e38a6bb8bc4`.
+Final candidate executable SHA-256:
+`f884c159f512a67bdf5cf505ebb7e1bb5bc3d977947b5fa23490d13693dfc66c`.
 
 | Scenario | Observed result |
 | --- | --- |
@@ -45,19 +45,28 @@ Candidate executable SHA-256:
 | Practice cancellation and reopen | Original window and next MRU selection retained; no success notice; guide reports cancellation. |
 | Application traversal/cancel and successful mode handoff | Existing bounded native drivers pass. |
 | Visual and AX inspection | Both messages fit in the panel; static text exposes identifier `switching-feedback`. Updated guide remains readable. |
+| VoiceOver announcement | Native screenshot captures show the empty notice and the full Practice completion sentence in VoiceOver's caption panel. |
 
 The nonshipping window fixture accepts `--empty-windows`; ordinary launches
 still create three owned disposable windows. The existing driver records
 feedback text after confirmation. Raw logs are kept locally under the ignored
 `.omo/evidence/switching-feedback-2026-10-17/` directory.
 
-## Limits
+## VoiceOver correction and limits
 
-VoiceOver was enabled and ordinary switching was exercised, but its caption
-window could not be acquired by the automation tool. **Actual announcement
-delivery and absence of repeated speech are unverified.** AX text visibility
-and a deduplicated announcement callback are not speech evidence. The code uses
-Apple's documented [announcementRequested notification](https://developer.apple.com/documentation/appkit/nsaccessibility-swift.struct/notification/announcementrequested).
+The caption window was unavailable through the automation tool's accessibility
+tree. Native macOS screenshot capture provided separate evidence of generated
+utterances. Initial Practice captures at 0.5 and 1.2 seconds showed only “system
+dialog”: AppKit classified the passive NSPanel as `AXSystemDialog`. Explicitly
+assigning `AXFloatingWindow` corrected the classification. The same 1.2-second
+scenario then displayed the complete success sentence while the owned target
+retained keyboard focus. Announcement timing and priority were unchanged.
+
+A regression assertion failed for the original subrole and passed after the
+correction. Duplicate visible announcement requests are covered by tests;
+captures do not establish audible voice quality or every possible speech
+interruption. The code uses Apple's documented
+[announcementRequested notification](https://developer.apple.com/documentation/appkit/nsaccessibility-swift.struct/notification/announcementrequested).
 
 Other macOS versions, physical multi-monitor placement, TCC revocation, and
 large-list performance were not tested in this change. No permissions were

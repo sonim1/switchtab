@@ -10,6 +10,7 @@ final class SwitchingFeedbackTests: XCTestCase {
         defer { controller.dismiss() }
         XCTAssertFalse(controller.panel.canBecomeKey)
         XCTAssertFalse(controller.panel.canBecomeMain)
+        XCTAssertEqual(controller.panel.accessibilitySubrole(), .floatingWindow)
         XCTAssertTrue(controller.panel.ignoresMouseEvents)
         XCTAssertTrue(controller.panel.styleMask.contains(.nonactivatingPanel))
         XCTAssertEqual(controller.label.stringValue, SwitchingFeedbackController.Notice.noWindows.message)

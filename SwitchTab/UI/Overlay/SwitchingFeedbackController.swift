@@ -26,6 +26,7 @@ final class SwitchingFeedbackController {
             defer: false
         )
         panel.ignoresMouseEvents = true
+        panel.setAccessibilitySubrole(.floatingWindow)
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.level = .floating

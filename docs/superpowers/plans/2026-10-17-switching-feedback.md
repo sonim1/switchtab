@@ -10,7 +10,7 @@
 
 Implementation and local verification are complete. See
 [`switching-feedback-qa-2026-10-17.md`](../../switching-feedback-qa-2026-10-17.md)
-for evidence, restoration, and the unverified VoiceOver announcement limitation.
+for evidence, restoration, and the VoiceOver classification correction.
 The checklist below preserves the execution plan; delivery status is recorded
 in the pull request.
 
